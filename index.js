@@ -297,8 +297,6 @@ client.on("interactionCreate",async interaction=>{
 
 if(!interaction.isChatInputCommand()) return
 
-/* HELP */
-
 if(interaction.commandName==="help"){
 
 return safeReply(interaction,`
@@ -315,8 +313,6 @@ return safeReply(interaction,`
 
 }
 
-/* AI */
-
 if(interaction.commandName==="ai"){
 
 const q = interaction.options.getString("question")
@@ -328,8 +324,6 @@ const answer = await askAI(q)
 return safeEdit(interaction,answer)
 
 }
-
-/* IMAGE */
 
 if(interaction.commandName==="image"){
 
@@ -347,6 +341,22 @@ return safeEdit(interaction,img)
 
 }
 
+})
+
+/* =================
+EXPRESS SERVER FOR RENDER
+================= */
+
+const app = express()
+
+const PORT = process.env.PORT
+
+app.get("/",(req,res)=>{
+res.send("Bot is running")
+})
+
+app.listen(PORT,()=>{
+console.log("🌐 Web server running on port",PORT)
 })
 
 /* =================
