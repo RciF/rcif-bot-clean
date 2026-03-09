@@ -182,8 +182,7 @@ messages:[
 
 const data = await res.json()
 
-// حماية لو API رجع شيء غير متوقع
-if(!data || !data.choices || !data.choices[0]){
+if(!data || !data.choices){
 console.log("OpenAI response:",data)
 return "تعذر الحصول على رد من الذكاء الاصطناعي."
 }
@@ -222,9 +221,15 @@ size:"1024x1024"
 
 const data = await res.json()
 
+if(!data || !data.data){
+console.log("Image API response:",data)
+return null
+}
+
 return data.data[0].url
 
-}catch{
+}catch(err){
+console.log("IMAGE ERROR:",err)
 return null
 }
 
@@ -355,7 +360,7 @@ EXPRESS SERVER FOR RENDER
 
 const app = express()
 
-const PORT = process.env.PORT
+const PORT = process.env.PORT || 10000
 
 app.get("/",(req,res)=>{
 res.send("Bot is running")
