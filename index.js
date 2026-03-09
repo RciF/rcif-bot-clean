@@ -7,12 +7,118 @@ const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require("@d
 const play = require("play-dl")
 const express = require("express")
 const fs = require("fs")
+const fetch = require("node-fetch")
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 const CLIENT_ID = process.env.CLIENT_ID
 const OWNER_ID = process.env.OWNER_ID
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 const BOT_NAME = "لين"
+
+/* =================
+SAFE INTERACTION SYSTEM
+================= */
+
+async function safeReply(interaction, content){
+
+try{
+
+if(interaction.deferred || interaction.replied){
+return interaction.followUp(content)
+}else{
+return interaction.reply(content)
+}
+
+}catch(e){
+console.log("Reply prevented error")
+}
+
+}
+
+async function safeEdit(interaction, content){
+
+try{
+
+if(interaction.deferred){
+return interaction.editReply(content)
+}else if(!interaction.replied){
+return interaction.reply(content)
+}else{
+return interaction.followUp(content)
+}
+
+}catch(e){
+console.log("Edit prevented error")
+}
+
+}
+
+/* =================
+LOG SYSTEM
+================= */
+
+function logEvent(text){
+const log = `[${new Date().toLocaleString()}] ${text}\n`
+fs.appendFileSync("logs.txt",log)
+}
+
+/* =================
+OWNER SYSTEM
+================= */
+
+function isOwner(id){
+return id === OWNER_ID
+}
+
+/* =================
+ANTI SPAM
+================= */
+
+const spamMap = new Map()
+
+function checkSpam(userId){
+
+const now = Date.now()
+
+if(!spamMap.has(userId)){
+spamMap.set(userId,{count:1,time:now})
+return false
+}
+
+const data = spamMap.get(userId)
+
+if(now - data.time < 5000){
+
+data.count++
+
+if(data.count > 10){
+return true
+}
+
+}else{
+
+data.count = 1
+data.time = now
+
+}
+
+return false
+}
+
+/* =================
+MEMORY SYSTEM
+================= */
+
+let memory={}
+
+if(fs.existsSync("memory.json")){
+memory = JSON.parse(fs.readFileSync("memory.json"))
+}
+
+function saveMemory(){
+fs.writeFileSync("memory.json",JSON.stringify(memory,null,2))
+}
 
 /* =================
 DISCORD CLIENT
@@ -39,18 +145,82 @@ async function playMusic(guild, song){
 const serverQueue = queue.get(guild.id)
 
 if(!song){
-
 serverQueue.connection.destroy()
 queue.delete(guild.id)
 return
-
 }
 
 const stream = await play.stream(song.url)
-
 const resource = createAudioResource(stream.stream)
 
 serverQueue.player.play(resource)
+
+}
+
+/* =================
+AI CHAT
+================= */
+
+async function askAI(prompt){
+
+try{
+
+const res = await fetch("https://api.openai.com/v1/chat/completions",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":`Bearer ${OPENAI_API_KEY}`
+},
+body:JSON.stringify({
+model:"gpt-4.1-mini",
+messages:[
+{role:"system",content:`اسمك ${BOT_NAME} روبوت ديسكورد لطيف.`},
+{role:"user",content:prompt}
+]
+})
+})
+
+const data = await res.json()
+
+return data.choices?.[0]?.message?.content || "ما قدرت أفهم."
+
+}catch(err){
+
+console.log("AI ERROR:", err)
+return "حدث خطأ في الذكاء الاصطناعي"
+
+}
+
+}
+
+/* =================
+IMAGE GENERATION
+================= */
+
+async function generateImage(prompt){
+
+try{
+
+const res = await fetch("https://api.openai.com/v1/images/generations",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":`Bearer ${OPENAI_API_KEY}`
+},
+body:JSON.stringify({
+model:"gpt-image-1",
+prompt:prompt,
+size:"1024x1024"
+})
+})
+
+const data = await res.json()
+
+return data.data[0].url
+
+}catch{
+return null
+}
 
 }
 
@@ -60,30 +230,30 @@ SLASH COMMANDS
 
 const commands = [
 
-new SlashCommandBuilder()
-.setName("help")
-.setDescription("عرض الأوامر"),
+new SlashCommandBuilder().setName("help").setDescription("عرض الأوامر"),
 
 new SlashCommandBuilder()
 .setName("play")
 .setDescription("تشغيل موسيقى")
-.addStringOption(o=>
-o.setName("song")
-.setDescription("اسم الأغنية")
-.setRequired(true)
-),
+.addStringOption(o=>o.setName("song").setDescription("اسم الأغنية").setRequired(true)),
+
+new SlashCommandBuilder().setName("skip").setDescription("تخطي الأغنية"),
+
+new SlashCommandBuilder().setName("stop").setDescription("إيقاف الموسيقى"),
+
+new SlashCommandBuilder().setName("level").setDescription("عرض اللفل"),
 
 new SlashCommandBuilder()
-.setName("skip")
-.setDescription("تخطي الأغنية"),
+.setName("ai")
+.setDescription("سؤال الذكاء الاصطناعي")
+.addStringOption(o=>o.setName("question").setDescription("السؤال").setRequired(true)),
 
 new SlashCommandBuilder()
-.setName("stop")
-.setDescription("إيقاف الموسيقى"),
+.setName("image")
+.setDescription("إنشاء صورة")
+.addStringOption(o=>o.setName("prompt").setDescription("وصف الصورة").setRequired(true)),
 
-new SlashCommandBuilder()
-.setName("level")
-.setDescription("عرض اللفل")
+new SlashCommandBuilder().setName("join").setDescription("دخول الفويس")
 
 ]
 
@@ -107,70 +277,13 @@ console.log(err)
 }
 
 /* =================
-XP SYSTEM
-================= */
-
-let xpData={}
-
-if(fs.existsSync("xp.json")){
-xpData = JSON.parse(fs.readFileSync("xp.json"))
-}
-
-function saveXP(){
-fs.writeFileSync("xp.json",JSON.stringify(xpData,null,2))
-}
-
-function addXP(id){
-
-if(!xpData[id]){
-xpData[id]={xp:0,level:1}
-}
-
-xpData[id].xp+=Math.floor(Math.random()*10)+5
-
-if(xpData[id].xp>=xpData[id].level*100){
-
-xpData[id].xp=0
-xpData[id].level++
-
-return xpData[id].level
-
-}
-
-return null
-
-}
-
-/* =================
-DASHBOARD
-================= */
-
-const app = express()
-
-app.get("/",(req,res)=>{
-
-res.send(`
-<h1>${BOT_NAME} Bot</h1>
-<p>Servers: ${client.guilds.cache.size}</p>
-`)
-
-})
-
-const PORT = process.env.PORT || 3000
-
-app.listen(PORT,()=>{
-
-console.log("🌐 Dashboard running on port",PORT)
-
-})
-
-/* =================
 READY
 ================= */
 
 client.once("clientReady",()=>{
 
 console.log("✅ Bot is online")
+logEvent("Bot started")
 
 registerCommands()
 
@@ -188,146 +301,49 @@ if(!interaction.isChatInputCommand()) return
 
 if(interaction.commandName==="help"){
 
-return interaction.reply(`
+return safeReply(interaction,`
 🤖 أوامر ${BOT_NAME}
 
 /play تشغيل موسيقى
 /skip تخطي
 /stop إيقاف
 /level اللفل
+/ai سؤال الذكاء الاصطناعي
+/image إنشاء صورة
+/join دخول الفويس
 `)
 
 }
 
-/* LEVEL */
+/* AI */
 
-if(interaction.commandName==="level"){
+if(interaction.commandName==="ai"){
 
-const data = xpData[interaction.user.id]
+const q = interaction.options.getString("question")
 
-if(!data){
-return interaction.reply("ما عندك XP")
-}
+await interaction.deferReply()
 
-return interaction.reply(
-`Level: ${data.level} | XP: ${data.xp}`
-)
+const answer = await askAI(q)
+
+return safeEdit(interaction,answer)
 
 }
 
-/* PLAY */
+/* IMAGE */
 
-if(interaction.commandName==="play"){
+if(interaction.commandName==="image"){
 
-const query = interaction.options.getString("song")
+const prompt = interaction.options.getString("prompt")
 
-const voiceChannel = interaction.member.voice.channel
+await interaction.deferReply()
 
-if(!voiceChannel){
-return interaction.reply("ادخل فويس")
+const img = await generateImage(prompt)
+
+if(!img){
+return safeEdit(interaction,"❌ فشل إنشاء الصورة")
 }
 
-let serverQueue = queue.get(interaction.guild.id)
-
-if(!serverQueue){
-
-const connection = joinVoiceChannel({
-channelId:voiceChannel.id,
-guildId:voiceChannel.guild.id,
-adapterCreator:voiceChannel.guild.voiceAdapterCreator
-})
-
-const player = createAudioPlayer()
-
-serverQueue = {
-connection,
-player,
-songs:[]
-}
-
-queue.set(interaction.guild.id,serverQueue)
-
-connection.subscribe(player)
-
-}
-
-let song
-
-if(play.yt_validate(query)==="video"){
-
-song = {url:query}
-
-}else{
-
-const result = await play.search(query,{limit:1})
-
-song = {url:result[0].url}
-
-}
-
-serverQueue.songs.push(song)
-
-if(serverQueue.songs.length===1){
-playMusic(interaction.guild,song)
-}
-
-interaction.reply("🎵 تم تشغيل الأغنية")
-
-}
-
-/* SKIP */
-
-if(interaction.commandName==="skip"){
-
-const serverQueue = queue.get(interaction.guild.id)
-
-if(!serverQueue){
-return interaction.reply("لا يوجد موسيقى")
-}
-
-serverQueue.player.stop()
-
-interaction.reply("⏭️ تم التخطي")
-
-}
-
-/* STOP */
-
-if(interaction.commandName==="stop"){
-
-const serverQueue = queue.get(interaction.guild.id)
-
-if(!serverQueue){
-return interaction.reply("لا يوجد موسيقى")
-}
-
-serverQueue.connection.destroy()
-
-queue.delete(interaction.guild.id)
-
-interaction.reply("⏹️ تم الإيقاف")
-
-}
-
-})
-
-/* =================
-XP MESSAGES
-================= */
-
-client.on("messageCreate",message=>{
-
-if(message.author.bot) return
-
-const levelUp = addXP(message.author.id)
-
-if(levelUp){
-
-message.channel.send(
-`🎉 ${message.author} وصلت لفل ${levelUp}`
-)
-
-saveXP()
+return safeEdit(interaction,img)
 
 }
 
