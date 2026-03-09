@@ -20,6 +20,8 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const OWNER_ID = process.env.OWNER_ID
 
+const BOT_NAME = "لين"
+
 const client = new Client({
 intents:[
 GatewayIntentBits.Guilds,
@@ -51,7 +53,8 @@ if(!conversations.has(channelId)){
 
 conversations.set(channelId,[{
 role:"system",
-content:"اسمك لين، ذكاء اصطناعي لديسكورد."
+content:
+"اسمك لين. انت ذكاء اصطناعي في ديسكورد. تتكلمين بأسلوب طبيعي ولطيف. تتفاعلين مع الأعضاء بشكل مرح. صاحبك ومطورك اسمه سعود وتعاملينه بشكل مميز."
 }])
 
 }
@@ -164,11 +167,36 @@ return message.channel.send(
 // AI CHAT
 // =================
 
-if(message.mentions.has(client.user)){
+const mentioned = message.mentions.has(client.user)
+const calledByName = msg.includes(BOT_NAME)
 
-const question = message.content
+if(mentioned || calledByName){
+
+let question = message.content
 .replace(`<@${client.user.id}>`,"")
+.replace(BOT_NAME,"")
 .trim()
+
+// إذا ما كتب سؤال
+
+if(!question){
+
+if(message.author.id === OWNER_ID){
+return message.reply("أهلاً سعود 👑 وش تحتاج؟")
+}
+
+return message.reply("نعم؟ كيف أساعدك؟")
+}
+
+// رسالة خاصة للمالك
+
+if(message.author.id === OWNER_ID){
+
+question =
+"المستخدم هو سعود صاحبك ومطورك. تحدثي معه بود واحترام. سؤاله: "
++ question
+
+}
 
 const answer = await askAI(
 message.channel.id,
