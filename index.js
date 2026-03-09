@@ -1,286 +1,340 @@
 require("dotenv").config()
 
-const {
-Client,
-GatewayIntentBits
-} = require("discord.js")
+const { Client, GatewayIntentBits } = require("discord.js")
+const { REST, Routes, SlashCommandBuilder } = require("discord.js")
+const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require("@discordjs/voice")
 
-const {
-joinVoiceChannel,
-createAudioPlayer,
-createAudioResource
-} = require("@discordjs/voice")
-
+const play = require("play-dl")
+const express = require("express")
 const fs = require("fs")
 
-const fetch = (...args) =>
-import("node-fetch").then(({default: fetch}) => fetch(...args))
-
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const CLIENT_ID = process.env.CLIENT_ID
 const OWNER_ID = process.env.OWNER_ID
 
 const BOT_NAME = "لين"
+
+/* =================
+DISCORD CLIENT
+================= */
 
 const client = new Client({
 intents:[
 GatewayIntentBits.Guilds,
 GatewayIntentBits.GuildMessages,
 GatewayIntentBits.MessageContent,
-GatewayIntentBits.GuildVoiceStates
+GatewayIntentBits.GuildVoiceStates,
+GatewayIntentBits.GuildMembers
 ]
 })
 
-let premiumServers = {}
+/* =================
+MUSIC SYSTEM
+================= */
 
-if(fs.existsSync("premium.json")){
-premiumServers = JSON.parse(fs.readFileSync("premium.json"))
-}
+const queue = new Map()
 
-function savePremium(){
-fs.writeFileSync("premium.json",JSON.stringify(premiumServers,null,2))
-}
+async function playMusic(guild, song){
 
-const conversations = new Map()
+const serverQueue = queue.get(guild.id)
 
-// =================
-// AI
-// =================
+if(!song){
 
-async function askAI(channelId,question){
-
-if(!conversations.has(channelId)){
-
-conversations.set(channelId,[{
-role:"system",
-content:
-"اسمك لين. انت ذكاء اصطناعي في ديسكورد. تتكلمين بأسلوب طبيعي ولطيف. تتفاعلين مع الأعضاء بشكل مرح. صاحبك ومطورك اسمه سعود وتعاملينه بشكل مميز."
-}])
+serverQueue.connection.destroy()
+queue.delete(guild.id)
+return
 
 }
 
-const history = conversations.get(channelId)
+const stream = await play.stream(song.url)
 
-history.push({
-role:"user",
-content:question
-})
+const resource = createAudioResource(stream.stream)
 
-const response = await fetch(
-"https://api.openai.com/v1/chat/completions",
-{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-Authorization:"Bearer "+OPENAI_API_KEY
-},
-body:JSON.stringify({
-model:"gpt-4o-mini",
-messages:history
-})
-})
-
-const data = await response.json()
-
-if(!data.choices) return "⚠️ حدث خطأ في الذكاء الاصطناعي"
-
-const text = data.choices[0].message.content
-
-history.push({
-role:"assistant",
-content:text
-})
-
-return text
+serverQueue.player.play(resource)
 
 }
 
-// =================
-// IMAGE
-// =================
+/* =================
+SLASH COMMANDS
+================= */
 
-async function generateImage(prompt){
+const commands = [
 
-const response = await fetch(
-"https://api.openai.com/v1/images/generations",
-{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-Authorization:"Bearer "+OPENAI_API_KEY
-},
-body:JSON.stringify({
-model:"gpt-image-1",
-prompt:prompt
-})
-})
+new SlashCommandBuilder()
+.setName("help")
+.setDescription("عرض الأوامر"),
 
-const data = await response.json()
+new SlashCommandBuilder()
+.setName("play")
+.setDescription("تشغيل موسيقى")
+.addStringOption(o=>
+o.setName("song")
+.setDescription("اسم الأغنية")
+.setRequired(true)
+),
 
-if(!data.data) return null
+new SlashCommandBuilder()
+.setName("skip")
+.setDescription("تخطي الأغنية"),
 
-return data.data[0].url
+new SlashCommandBuilder()
+.setName("stop")
+.setDescription("إيقاف الموسيقى"),
+
+new SlashCommandBuilder()
+.setName("level")
+.setDescription("عرض اللفل")
+
+]
+
+const rest = new REST({version:"10"}).setToken(DISCORD_TOKEN)
+
+async function registerCommands(){
+
+try{
+
+await rest.put(
+Routes.applicationCommands(CLIENT_ID),
+{body:commands}
+)
+
+console.log("✅ Slash commands registered")
+
+}catch(err){
+console.log(err)
+}
 
 }
 
-// =================
-// READY
-// =================
+/* =================
+XP SYSTEM
+================= */
+
+let xpData={}
+
+if(fs.existsSync("xp.json")){
+xpData = JSON.parse(fs.readFileSync("xp.json"))
+}
+
+function saveXP(){
+fs.writeFileSync("xp.json",JSON.stringify(xpData,null,2))
+}
+
+function addXP(id){
+
+if(!xpData[id]){
+xpData[id]={xp:0,level:1}
+}
+
+xpData[id].xp+=Math.floor(Math.random()*10)+5
+
+if(xpData[id].xp>=xpData[id].level*100){
+
+xpData[id].xp=0
+xpData[id].level++
+
+return xpData[id].level
+
+}
+
+return null
+
+}
+
+/* =================
+DASHBOARD
+================= */
+
+const app = express()
+
+app.get("/",(req,res)=>{
+
+res.send(`
+<h1>${BOT_NAME} Bot</h1>
+<p>Servers: ${client.guilds.cache.size}</p>
+`)
+
+})
+
+const PORT = process.env.PORT || 3000
+
+app.listen(PORT,()=>{
+
+console.log("🌐 Dashboard running on port",PORT)
+
+})
+
+/* =================
+READY
+================= */
 
 client.once("clientReady",()=>{
 
 console.log("✅ Bot is online")
 
+registerCommands()
+
 })
 
-// =================
-// MESSAGE
-// =================
+/* =================
+INTERACTIONS
+================= */
 
-client.on("messageCreate",async message=>{
+client.on("interactionCreate",async interaction=>{
 
-if(message.author.bot) return
+if(!interaction.isChatInputCommand()) return
 
-const msg = message.content.toLowerCase()
+/* HELP */
 
-// =================
-// AUTO MODERATION
-// =================
+if(interaction.commandName==="help"){
 
-const bannedWords = ["سب","شتم","قذف"]
+return interaction.reply(`
+🤖 أوامر ${BOT_NAME}
 
-for(const word of bannedWords){
+/play تشغيل موسيقى
+/skip تخطي
+/stop إيقاف
+/level اللفل
+`)
 
-if(msg.includes(word)){
+}
 
-await message.delete()
+/* LEVEL */
 
-return message.channel.send(
-`${message.author} 🚫 يمنع السب`
+if(interaction.commandName==="level"){
+
+const data = xpData[interaction.user.id]
+
+if(!data){
+return interaction.reply("ما عندك XP")
+}
+
+return interaction.reply(
+`Level: ${data.level} | XP: ${data.xp}`
 )
 
 }
 
+/* PLAY */
+
+if(interaction.commandName==="play"){
+
+const query = interaction.options.getString("song")
+
+const voiceChannel = interaction.member.voice.channel
+
+if(!voiceChannel){
+return interaction.reply("ادخل فويس")
 }
 
-// =================
-// AI CHAT
-// =================
+let serverQueue = queue.get(interaction.guild.id)
 
-const mentioned = message.mentions.has(client.user)
-const calledByName = msg.includes(BOT_NAME)
-
-if(mentioned || calledByName){
-
-let question = message.content
-.replace(`<@${client.user.id}>`,"")
-.replace(BOT_NAME,"")
-.trim()
-
-// إذا ما كتب سؤال
-
-if(!question){
-
-if(message.author.id === OWNER_ID){
-return message.reply("أهلاً سعود 👑 وش تحتاج؟")
-}
-
-return message.reply("نعم؟ كيف أساعدك؟")
-}
-
-// رسالة خاصة للمالك
-
-if(message.author.id === OWNER_ID){
-
-question =
-"المستخدم هو سعود صاحبك ومطورك. تحدثي معه بود واحترام. سؤاله: "
-+ question
-
-}
-
-const answer = await askAI(
-message.channel.id,
-question
-)
-
-return message.channel.send(answer)
-
-}
-
-// =================
-// IMAGE
-// =================
-
-if(msg.startsWith("!image")){
-
-const prompt = message.content.replace("!image","")
-
-const img = await generateImage(prompt)
-
-if(!img) return message.channel.send("فشل إنشاء الصورة")
-
-return message.channel.send(img)
-
-}
-
-// =================
-// SERVER STATS
-// =================
-
-if(msg === "!stats"){
-
-return message.channel.send(
-`📊 السيرفرات: ${client.guilds.cache.size}`
-)
-
-}
-
-// =================
-// PREMIUM
-// =================
-
-if(msg.startsWith("!premium")){
-
-if(message.author.id !== OWNER_ID) return
-
-const guildId = message.guild.id
-
-premiumServers[guildId] = true
-
-savePremium()
-
-return message.channel.send("💎 تم تفعيل بريميوم")
-
-}
-
-// =================
-// JOIN VOICE
-// =================
-
-if(msg === "!join"){
-
-const channel = message.member.voice.channel
-
-if(!channel) return message.reply("ادخل فويس اول")
+if(!serverQueue){
 
 const connection = joinVoiceChannel({
-channelId:channel.id,
-guildId:channel.guild.id,
-adapterCreator:channel.guild.voiceAdapterCreator
+channelId:voiceChannel.id,
+guildId:voiceChannel.guild.id,
+adapterCreator:voiceChannel.guild.voiceAdapterCreator
 })
 
 const player = createAudioPlayer()
 
-const resource = createAudioResource("./voice.mp3")
+serverQueue = {
+connection,
+player,
+songs:[]
+}
 
-player.play(resource)
+queue.set(interaction.guild.id,serverQueue)
 
 connection.subscribe(player)
 
-message.reply("🎤 دخلت الفويس وشغلت الصوت")
+}
+
+let song
+
+if(play.yt_validate(query)==="video"){
+
+song = {url:query}
+
+}else{
+
+const result = await play.search(query,{limit:1})
+
+song = {url:result[0].url}
+
+}
+
+serverQueue.songs.push(song)
+
+if(serverQueue.songs.length===1){
+playMusic(interaction.guild,song)
+}
+
+interaction.reply("🎵 تم تشغيل الأغنية")
+
+}
+
+/* SKIP */
+
+if(interaction.commandName==="skip"){
+
+const serverQueue = queue.get(interaction.guild.id)
+
+if(!serverQueue){
+return interaction.reply("لا يوجد موسيقى")
+}
+
+serverQueue.player.stop()
+
+interaction.reply("⏭️ تم التخطي")
+
+}
+
+/* STOP */
+
+if(interaction.commandName==="stop"){
+
+const serverQueue = queue.get(interaction.guild.id)
+
+if(!serverQueue){
+return interaction.reply("لا يوجد موسيقى")
+}
+
+serverQueue.connection.destroy()
+
+queue.delete(interaction.guild.id)
+
+interaction.reply("⏹️ تم الإيقاف")
 
 }
 
 })
+
+/* =================
+XP MESSAGES
+================= */
+
+client.on("messageCreate",message=>{
+
+if(message.author.bot) return
+
+const levelUp = addXP(message.author.id)
+
+if(levelUp){
+
+message.channel.send(
+`🎉 ${message.author} وصلت لفل ${levelUp}`
+)
+
+saveXP()
+
+}
+
+})
+
+/* =================
+LOGIN
+================= */
 
 client.login(DISCORD_TOKEN)
