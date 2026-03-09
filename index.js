@@ -182,9 +182,10 @@ messages:[
 
 const data = await res.json()
 
-if(!data.choices){
+// حماية لو API رجع شيء غير متوقع
+if(!data || !data.choices || !data.choices[0]){
 console.log("OpenAI response:",data)
-return "حدث خطأ في رد الذكاء الاصطناعي."
+return "تعذر الحصول على رد من الذكاء الاصطناعي."
 }
 
 return data.choices[0].message.content
