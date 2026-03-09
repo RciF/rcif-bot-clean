@@ -165,6 +165,33 @@ async function askAI(prompt){
 
 try{
 
+const res = await fetch("https://api.openai.com/v1/responses",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":`Bearer ${OPENAI_API_KEY}`
+},
+body:JSON.stringify({
+model:"gpt-4o-mini",
+input:prompt
+})
+})
+
+const data = await res.json()
+
+return data.output?.[0]?.content?.[0]?.text || "ما قدرت أفهم."
+
+}catch(err){
+
+console.log("AI ERROR:", err)
+return "حدث خطأ في الذكاء الاصطناعي"
+
+}
+
+}
+
+try{
+
 const res = await fetch("https://api.openai.com/v1/chat/completions",{
 method:"POST",
 headers:{
