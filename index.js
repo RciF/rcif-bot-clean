@@ -172,7 +172,7 @@ headers:{
 "Authorization":`Bearer ${OPENAI_API_KEY}`
 },
 body:JSON.stringify({
-model:"gpt-4o-mini",
+model:"gpt-4.1-mini",
 messages:[
 {role:"system",content:`اسمك ${BOT_NAME} روبوت ديسكورد لطيف.`},
 {role:"user",content:prompt}
