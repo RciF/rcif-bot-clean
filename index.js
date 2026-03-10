@@ -28,6 +28,12 @@ const fs = require("fs")
 const fetch = require("node-fetch")
 const ffmpeg = require("ffmpeg-static")
 
+/* =================
+MUSIC STREAM LIBRARY
+================= */
+
+const play = require("play-dl")
+
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 const CLIENT_ID = process.env.CLIENT_ID
 const OWNER_ID = process.env.OWNER_ID
@@ -55,36 +61,6 @@ LAVALINK MANAGER (DISABLED)
 /*
 تم تعطيل هذا القسم بالكامل لأن نظام الموسيقى الآن
 يعتمد على @discordjs/voice مباشرة بدون Lavalink
-
-const manager = new Manager({
-  nodes:[
-    {
-      identifier:"main-lavalink",
-      host:"lavalinkv4-idle.fly.dev",
-      port:443,
-      password:"youshallnotpass",
-      secure:true,
-      retryAmount:10,
-      retryDelay:5000
-    }
-  ],
-  send:(id,payload)=>{
-    const guild = client.guilds.cache.get(id)
-    if(guild) guild.shard.send(payload)
-  }
-})
-
-manager.on("nodeConnect", node=>{
-  console.log(`Lavalink node connected: ${node.options.identifier}`)
-})
-
-manager.on("nodeError", (node, error)=>{
-  console.log(`Lavalink node error: ${error.message}`)
-})
-
-client.on("raw",(d)=>{
-  manager.updateVoiceState(d)
-})
 */
 
 /* =====================================================
@@ -108,9 +84,6 @@ app.get("/", (req,res)=>{
 app.listen(process.env.PORT || 10000, ()=>{
   console.log("Web server ready")
 })
-
-
-
 
 /* =====================================================
 PART 2 - AI SYSTEM
@@ -164,8 +137,6 @@ return "حدث خطأ في الذكاء الاصطناعي"
 
 }
 
-
-
 /* =====================================================
 PART 3 - IMAGE GENERATION
 ===================================================== */
@@ -206,168 +177,6 @@ return null
 }
 
 }
-
-
-
-/* =====================================================
-PART 4 - XP + WARNINGS + SERVER PROTECTION
-===================================================== */
-
-let xp = {}
-
-if(fs.existsSync("xp.json")){
-xp = JSON.parse(fs.readFileSync("xp.json"))
-}
-
-function addXP(user){
-
-if(!xp[user]) xp[user] = { xp:0, level:1 }
-
-xp[user].xp += 10
-
-if(xp[user].xp >= xp[user].level * 100){
-xp[user].level++
-}
-
-fs.writeFileSync("xp.json", JSON.stringify(xp,null,2))
-
-}
-
-
-
-let warnings = {}
-
-if(fs.existsSync("warnings.json")){
-warnings = JSON.parse(fs.readFileSync("warnings.json"))
-}
-
-function addWarn(user){
-
-if(!warnings[user]) warnings[user] = 0
-
-warnings[user]++
-
-fs.writeFileSync("warnings.json", JSON.stringify(warnings,null,2))
-
-return warnings[user]
-
-}
-
-
-
-function containsLink(text){
-
-return text.includes("http://") || text.includes("https://")
-
-}
-
-
-
-/* =====================================================
-PART 5 - SAFE + LOG + MEMORY
-===================================================== */
-
-async function safeReply(interaction, content){
-
-try{
-
-if(interaction.deferred || interaction.replied){
-
-return interaction.followUp(content)
-
-}else{
-
-return interaction.reply(content)
-
-}
-
-}catch(e){
-
-console.log(e)
-
-}
-
-}
-
-
-
-async function safeEdit(interaction, content){
-
-try{
-
-if(interaction.deferred){
-
-return interaction.editReply(content)
-
-}else{
-
-return interaction.reply(content)
-
-}
-
-}catch(e){
-
-console.log(e)
-
-}
-
-}
-
-
-
-function logEvent(text){
-
-const log = `[${new Date().toLocaleString()}] ${text}\n`
-
-fs.appendFileSync("logs.txt", log)
-
-}
-
-
-
-let memory = {}
-
-if(fs.existsSync("memory.json")){
-
-memory = JSON.parse(fs.readFileSync("memory.json"))
-
-}
-
-
-
-function saveMemory(){
-
-fs.writeFileSync("memory.json", JSON.stringify(memory,null,2))
-
-}
-
-
-
-function getChatHistory(userId){
-
-if(!memory[userId]) memory[userId] = []
-
-return memory[userId]
-
-}
-
-
-
-function addChatHistory(userId, role, content){
-
-if(!memory[userId]) memory[userId] = []
-
-memory[userId].push({role,content})
-
-if(memory[userId].length > 12) memory[userId].shift()
-
-saveMemory()
-
-}
-
-
-
-
 
 /* =====================================================
 PART 7 - MUSIC SYSTEM
@@ -431,80 +240,6 @@ new ButtonBuilder()
 )
 
 }
-
-/* =================
-PLAY SONG ENGINE
-================= */
-
-async function playSong(guildId, connection){
-
-const queue = queues.get(guildId)
-
-if(!queue || queue.length === 0) return
-
-const song = queue[0]
-
-let stream
-
-try{
-
-stream = await play.stream(song.url,{
-discordPlayerCompatibility:true
-})
-
-}catch(err){
-
-console.log("STREAM ERROR:", err)
-
-queue.shift()
-
-return playSong(guildId, connection)
-
-}
-
-const resource = createAudioResource(stream.stream,{
-inputType: stream.type,
-inlineVolume: true
-})
-
-const player = getPlayer(guildId)
-
-const vol = volumes.get(guildId) || 1
-
-resource.volume.setVolume(vol)
-
-connection.subscribe(player)
-
-player.play(resource)
-
-/* عند انتهاء الأغنية */
-
-player.once(AudioPlayerStatus.Idle,()=>{
-
-if(loops.get(guildId)){
-
-playSong(guildId, connection)
-
-return
-
-}
-
-queue.shift()
-
-if(queue.length === 0){
-
-return
-
-}else{
-
-playSong(guildId, connection)
-
-}
-
-})
-
-}
-
 
 /* =====================================================
 PART 8 - PLAY SONG SYSTEM
