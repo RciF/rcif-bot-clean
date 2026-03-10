@@ -50,6 +50,12 @@ const ffmpeg = require("ffmpeg-static")
 /* مكتبة تشغيل الصوت من يوتيوب */
 const play = require("play-dl")
 
+play.setToken({
+youtube: {
+cookie: fs.readFileSync("cookies.txt").toString()
+}
+})
+
 /* =====================================================
 ENV VARIABLES
 ===================================================== */
