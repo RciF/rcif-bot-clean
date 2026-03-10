@@ -435,7 +435,13 @@ let stream
 
 try{
 
-stream = await play.stream(song.url,{
+/* جلب معلومات الفيديو أولاً لتجنب خطأ 429 */
+
+const info = await play.video_basic_info(song.url)
+
+/* إنشاء الستريم من المعلومات */
+
+stream = await play.stream_from_info(info.video_details,{
 discordPlayerCompatibility:true
 })
 
@@ -460,6 +466,7 @@ const vol = volumes.get(guildId) || 1
 resource.volume.setVolume(vol)
 
 connection.subscribe(player)
+
 player.play(resource)
 
 player.once(AudioPlayerStatus.Idle, ()=>{
@@ -480,8 +487,6 @@ playSong(guildId, connection)
 })
 
 }
-
-
 
 /* =====================================================
 PART 9 - SLASH COMMANDS
