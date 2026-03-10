@@ -2,7 +2,7 @@ require("dotenv").config()
 
 const { Client, GatewayIntentBits } = require("discord.js")
 const { REST, Routes, SlashCommandBuilder } = require("discord.js")
-const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require("@discordjs/voice")
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, getVoiceConnection } = require("@discordjs/voice")
 
 const play = require("play-dl")
 const express = require("express")
@@ -21,25 +21,19 @@ SAFE INTERACTION SYSTEM
 ================= */
 
 async function safeReply(interaction, content){
-
 try{
-
 if(interaction.deferred || interaction.replied){
 return interaction.followUp(content)
 }else{
 return interaction.reply(content)
 }
-
 }catch(e){
 console.log("Reply prevented error")
 }
-
 }
 
 async function safeEdit(interaction, content){
-
 try{
-
 if(interaction.deferred){
 return interaction.editReply(content)
 }else if(!interaction.replied){
@@ -47,11 +41,9 @@ return interaction.reply(content)
 }else{
 return interaction.followUp(content)
 }
-
 }catch(e){
 console.log("Edit prevented error")
 }
-
 }
 
 /* =================
@@ -78,7 +70,6 @@ ANTI SPAM
 const spamMap = new Map()
 
 function checkSpam(userId){
-
 const now = Date.now()
 
 if(!spamMap.has(userId)){
@@ -89,18 +80,13 @@ return false
 const data = spamMap.get(userId)
 
 if(now - data.time < 5000){
-
 data.count++
-
 if(data.count > 10){
 return true
 }
-
 }else{
-
 data.count = 1
 data.time = now
-
 }
 
 return false
@@ -121,21 +107,17 @@ fs.writeFileSync("memory.json",JSON.stringify(memory,null,2))
 }
 
 /* =================
-CHAT MEMORY (NEW)
+CHAT MEMORY
 ================= */
 
 function getChatHistory(userId){
-
 if(!memory[userId]){
 memory[userId] = []
 }
-
 return memory[userId]
-
 }
 
 function addChatHistory(userId,role,content){
-
 if(!memory[userId]){
 memory[userId] = []
 }
@@ -147,7 +129,6 @@ memory[userId].shift()
 }
 
 saveMemory()
-
 }
 
 /* =================
@@ -168,27 +149,18 @@ GatewayIntentBits.GuildMembers
 MUSIC SYSTEM
 ================= */
 
-const queue = new Map()
+const players = new Map()
 
-async function playMusic(guild, song){
-
-const serverQueue = queue.get(guild.id)
-
-if(!song){
-serverQueue.connection.destroy()
-queue.delete(guild.id)
-return
+function getPlayer(guildId){
+if(!players.has(guildId)){
+const player = createAudioPlayer()
+players.set(guildId,player)
 }
-
-const stream = await play.stream(song.url)
-const resource = createAudioResource(stream.stream)
-
-serverQueue.player.play(resource)
-
+return players.get(guildId)
 }
 
 /* =================
-AI CHAT (UPGRADED)
+AI CHAT
 ================= */
 
 async function askAI(prompt,userId){
@@ -317,20 +289,15 @@ new SlashCommandBuilder().setName("join").setDescription("دخول الفويس"
 const rest = new REST({version:"10"}).setToken(DISCORD_TOKEN)
 
 async function registerCommands(){
-
 try{
-
 await rest.put(
 Routes.applicationCommands(CLIENT_ID),
 {body:commands}
 )
-
 console.log("✅ Slash commands registered")
-
 }catch(err){
 console.log(err)
 }
-
 }
 
 /* =================
@@ -338,12 +305,9 @@ READY
 ================= */
 
 client.once("clientReady",()=>{
-
 console.log("✅ Bot is online")
 logEvent("Bot started")
-
 registerCommands()
-
 })
 
 /* =================
@@ -354,8 +318,9 @@ client.on("interactionCreate",async interaction=>{
 
 if(!interaction.isChatInputCommand()) return
 
-if(interaction.commandName==="help"){
+/* HELP */
 
+if(interaction.commandName==="help"){
 return safeReply(interaction,`
 🤖 أوامر ${BOT_NAME}
 
@@ -367,27 +332,22 @@ return safeReply(interaction,`
 /image إنشاء صورة
 /join دخول الفويس
 `)
-
 }
+
+/* AI */
 
 if(interaction.commandName==="ai"){
-
 const q = interaction.options.getString("question")
-
 await interaction.deferReply()
-
 const answer = await askAI(q,interaction.user.id)
-
 return safeEdit(interaction,answer)
-
 }
 
+/* IMAGE */
+
 if(interaction.commandName==="image"){
-
 const prompt = interaction.options.getString("prompt")
-
 await interaction.deferReply()
-
 const img = await generateImage(prompt)
 
 if(!img){
@@ -395,13 +355,100 @@ return safeEdit(interaction,"❌ فشل إنشاء الصورة")
 }
 
 return safeEdit(interaction,img)
+}
 
+/* JOIN */
+
+if(interaction.commandName==="join"){
+
+const channel = interaction.member.voice.channel
+
+if(!channel){
+return safeReply(interaction,"❌ ادخل روم صوتي أولاً")
+}
+
+joinVoiceChannel({
+channelId:channel.id,
+guildId:interaction.guild.id,
+adapterCreator:interaction.guild.voiceAdapterCreator
+})
+
+return safeReply(interaction,"🎧 دخلت الروم الصوتي")
+}
+
+/* PLAY */
+
+if(interaction.commandName==="play"){
+
+const query = interaction.options.getString("song")
+const voiceChannel = interaction.member.voice.channel
+
+if(!voiceChannel){
+return safeReply(interaction,"❌ ادخل روم صوتي أولاً")
+}
+
+await interaction.deferReply()
+
+const connection = joinVoiceChannel({
+channelId:voiceChannel.id,
+guildId:interaction.guild.id,
+adapterCreator:interaction.guild.voiceAdapterCreator
+})
+
+const player = getPlayer(interaction.guild.id)
+
+connection.subscribe(player)
+
+try{
+
+const result = await play.search(query,{limit:1})
+
+if(!result.length){
+return safeEdit(interaction,"❌ لم أجد الأغنية")
+}
+
+const stream = await play.stream(result[0].url)
+
+const resource = createAudioResource(stream.stream)
+
+player.play(resource)
+
+return safeEdit(interaction,`🎶 الآن يشغل: **${result[0].title}**`)
+
+}catch(err){
+console.log(err)
+return safeEdit(interaction,"❌ خطأ أثناء تشغيل الأغنية")
+}
+
+}
+
+/* SKIP */
+
+if(interaction.commandName==="skip"){
+const player = players.get(interaction.guild.id)
+if(player){
+player.stop()
+return safeReply(interaction,"⏭️ تم تخطي الأغنية")
+}
+return safeReply(interaction,"❌ لا توجد أغنية تعمل")
+}
+
+/* STOP */
+
+if(interaction.commandName==="stop"){
+const connection = getVoiceConnection(interaction.guild.id)
+if(connection){
+connection.destroy()
+players.delete(interaction.guild.id)
+return safeReply(interaction,"⏹️ تم إيقاف الموسيقى")
+}
+return safeReply(interaction,"❌ لا يوجد اتصال صوتي")
 }
 
 })
 
 /* =================
-MENTION AI SYSTEM
+MENTION AI
 ================= */
 
 client.on("messageCreate", async (message)=>{
@@ -438,9 +485,7 @@ message.reply(reply)
 logEvent(`AI mention used by ${message.author.tag}`)
 
 }catch(err){
-
 console.log("MENTION AI ERROR:",err)
-
 }
 
 })
