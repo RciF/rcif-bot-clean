@@ -525,105 +525,67 @@ playSong(guildId, connection)
 
 }
 /* =====================================================
-PART 7 - PLAY SONG SYSTEM
+PART 7 - PLAY SONG SYSTEM (LAVALINK)
 ===================================================== */
 
-async function playSong(guildId, connection){
+async function playSong(guildId, voiceChannel){
 
 const queue = queues.get(guildId)
 
 if(!queue || queue.length === 0) return
 
-if(!connection) return
-
 let song = queue[0]
-
-let stream
-let video
 
 try{
 
-/* إذا لم يكن رابط يوتيوب نقوم بالبحث */
+/* إنشاء player */
 
-if(!song.url.startsWith("http")){
+let player = manager.players.get(guildId)
 
-const result = await play.search(song.url,{ limit:1 })
+if(!player){
 
-if(!result || result.length === 0){
-queue.shift()
-return playSong(guildId, connection)
-}
-
-video = result[0]
-
-song.url = video.url
-song.title = video.title
-
-}
-
-/* جلب معلومات الفيديو */
-
-const info = await play.video_basic_info(song.url)
-
-/* إنشاء الستريم */
-
-stream = await play.stream_from_info(info.video_details,{
-discordPlayerCompatibility:true,
-cookie: process.env.YT_COOKIE?.replace(/[\r\n\t]/g,"").trim()
+player = manager.create({
+guild: guildId,
+voiceChannel: voiceChannel.id,
+textChannel: voiceChannel.guild.systemChannelId,
+selfDeafen: true
 })
+
+player.connect()
+
+}
+
+/* البحث عن الأغنية */
+
+const res = await manager.search(song.url, {
+requester: "user"
+})
+
+if(!res || !res.tracks || res.tracks.length === 0){
+
+queue.shift()
+
+return playSong(guildId, voiceChannel)
+
+}
+
+/* إضافة للمشغل */
+
+player.queue.add(res.tracks[0])
+
+if(!player.playing && !player.paused){
+player.play()
+}
 
 }catch(err){
 
-console.log("STREAM ERROR:", err)
+console.log("LAVALINK PLAY ERROR:", err)
 
 queue.shift()
 
-return playSong(guildId, connection)
+return playSong(guildId, voiceChannel)
 
 }
-
-if(!stream){
-queue.shift()
-return playSong(guildId, connection)
-}
-
-const resource = createAudioResource(stream.stream,{
-inputType: stream.type,
-inlineVolume:true
-})
-
-const player = getPlayer(guildId)
-
-const vol = volumes.get(guildId) || 1
-
-if(resource.volume){
-resource.volume.setVolume(vol)
-}
-
-/* انتظار اتصال الصوت */
-
-await entersState(connection, VoiceConnectionStatus.Ready, 20000)
-
-connection.subscribe(player)
-
-player.play(resource)
-
-player.once(AudioPlayerStatus.Idle, ()=>{
-
-if(loops.get(guildId)){
-playSong(guildId, connection)
-return
-}
-
-queue.shift()
-
-if(queue.length === 0){
-return
-}else{
-playSong(guildId, connection)
-}
-
-})
 
 }
 
@@ -788,7 +750,7 @@ const query = interaction.options.getString("song")
 const voice = interaction.member.voice.channel
 
 if(!voice){
-return interaction.reply({content:"❌ ادخل روم صوتي أولاً",ephemeral:true})
+return interaction.reply({content:"❌ ادخل روم صوتي أولاً",flags:64})
 }
 
 await interaction.deferReply()
@@ -796,19 +758,21 @@ await interaction.deferReply()
 let player = manager.players.get(guildId)
 
 if(!player){
+
 player = manager.create({
 guild: guildId,
 voiceChannel: voice.id,
 textChannel: interaction.channel.id,
 selfDeafen: true
 })
+
 }
 
 if(player.state !== "CONNECTED") player.connect()
 
 const res = await manager.search(query, interaction.user)
 
-if(res.loadType === "NO_MATCHES"){
+if(!res || !res.tracks || res.tracks.length === 0){
 return interaction.editReply("❌ لم يتم العثور على نتيجة")
 }
 
@@ -832,7 +796,7 @@ if(interaction.commandName === "skip"){
 const player = manager.players.get(guildId)
 
 if(!player || !player.queue.current){
-return interaction.reply({content:"❌ لا يوجد شيء يعمل",ephemeral:true})
+return interaction.reply({content:"❌ لا يوجد شيء يعمل",flags:64})
 }
 
 player.stop()
@@ -920,15 +884,15 @@ return interaction.reply("🤖 نظام الذكاء الصناعي مغلق")
 
 await interaction.deferReply()
 
-const question=interaction.options.getString("question")
+const question = interaction.options.getString("question")
 
 addChatHistory(interaction.user.id,"user",question)
 
-const history=getChatHistory(interaction.user.id)
+const history = getChatHistory(interaction.user.id)
 
-const prompt=history.map(m=>`${m.role}: ${m.content}`).join("\n")
+const prompt = history.map(m=>`${m.role}: ${m.content}`).join("\n")
 
-const answer=await askAI(prompt)
+const answer = await askAI(prompt)
 
 addChatHistory(interaction.user.id,"assistant",answer)
 
@@ -943,9 +907,9 @@ if(interaction.commandName === "image"){
 
 await interaction.deferReply()
 
-const prompt=interaction.options.getString("prompt")
+const prompt = interaction.options.getString("prompt")
 
-const img=await generateImage(prompt)
+const img = await generateImage(prompt)
 
 if(!img){
 return interaction.editReply("فشل إنشاء الصورة")
@@ -960,9 +924,9 @@ WARN
 
 if(interaction.commandName === "warn"){
 
-const user=interaction.options.getUser("user")
+const user = interaction.options.getUser("user")
 
-const count=addWarn(user.id)
+const count = addWarn(user.id)
 
 return interaction.reply(`⚠️ تم تحذير ${user.tag} (${count})`)
 }
@@ -973,7 +937,7 @@ KICK
 
 if(interaction.commandName === "kick"){
 
-const member=interaction.options.getMember("user")
+const member = interaction.options.getMember("user")
 
 await member.kick()
 
@@ -986,7 +950,7 @@ BAN
 
 if(interaction.commandName === "ban"){
 
-const member=interaction.options.getMember("user")
+const member = interaction.options.getMember("user")
 
 await member.ban()
 
@@ -1006,7 +970,7 @@ else if(interaction.replied){
 await interaction.followUp("حدث خطأ أثناء تنفيذ الأمر")
 }
 else{
-await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر",ephemeral:true})
+await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر",flags:64})
 }
 
 }catch(e){}
@@ -1014,6 +978,7 @@ await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر
 }
 
 })
+
 
 /* =====================================================
 PART 10 - MESSAGE EVENTS
