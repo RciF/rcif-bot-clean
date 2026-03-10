@@ -493,7 +493,6 @@ playSong(guildId, connection)
 })
 
 }
-
 /* =====================================================
 PART 7 - PLAY SONG SYSTEM
 ===================================================== */
@@ -539,7 +538,7 @@ const info = await play.video_basic_info(song.url)
 
 stream = await play.stream_from_info(info.video_details,{
 discordPlayerCompatibility:true,
-cookie: process.env.YT_COOKIE
+cookie: process.env.YT_COOKIE?.replace(/[\r\n\t]/g,"").trim()
 })
 
 }catch(err){
