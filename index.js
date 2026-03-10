@@ -1,6 +1,6 @@
 require("dotenv").config()
 
-const { Client, GatewayIntentBits } = require("discord.js")
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const { REST, Routes, SlashCommandBuilder } = require("discord.js")
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection, AudioPlayerStatus } = require("@discordjs/voice")
 
@@ -145,6 +145,42 @@ players.set(guildId,player)
 return players.get(guildId)
 }
 
+/* =================
+EMBED + BUTTONS
+================= */
+
+function musicEmbed(song){
+
+return new EmbedBuilder()
+.setColor("#2b2d31")
+.setTitle("🎶 Now Playing")
+.setDescription(`[${song.title}](${song.url})`)
+.setFooter({text:"Music System"})
+}
+
+function controls(){
+
+return new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("pause")
+.setLabel("⏯")
+.setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("skip")
+.setLabel("⏭")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("stop")
+.setLabel("⏹")
+.setStyle(ButtonStyle.Danger)
+
+)
+
+}
+
 async function playSong(guildId,connection){
 
 const queue = queues.get(guildId)
@@ -170,6 +206,16 @@ resource.volume.setVolume(vol)
 
 connection.subscribe(player)
 player.play(resource)
+
+const guild = client.guilds.cache.get(guildId)
+const channel = guild.channels.cache.find(c=>c.type===0)
+
+if(channel){
+channel.send({
+embeds:[musicEmbed(song)],
+components:[controls()]
+})
+}
 
 player.once(AudioPlayerStatus.Idle,()=>{
 
@@ -316,104 +362,29 @@ registerCommands()
 })
 
 /* =================
-INTERACTIONS
+BUTTON SYSTEM
 ================= */
 
 client.on("interactionCreate",async interaction=>{
 
-if(!interaction.isChatInputCommand()) return
+if(!interaction.isButton()) return
 
-/* PLAY */
-
-if(interaction.commandName==="play"){
-
-const query = interaction.options.getString("song")
-const voiceChannel = interaction.member.voice.channel
-
-if(!voiceChannel){
-return safeReply(interaction,"ادخل روم صوتي أولاً")
-}
-
-await interaction.deferReply()
-
-let results = await play.search(query,{limit:1})
-
-if(!results.length){
-return safeEdit(interaction,"لم أجد الأغنية")
-}
-
-const song = results[0]
-
-if(!queues.has(interaction.guild.id)){
-queues.set(interaction.guild.id,[])
-}
-
-queues.get(interaction.guild.id).push(song)
-
-const connection = joinVoiceChannel({
-channelId:voiceChannel.id,
-guildId:interaction.guild.id,
-adapterCreator:interaction.guild.voiceAdapterCreator
-})
-
-if(queues.get(interaction.guild.id).length===1){
-playSong(interaction.guild.id,connection)
-}
-
-return safeEdit(interaction,`🎶 أضيف إلى الطابور: ${song.title}`)
-
-}
-
-/* QUEUE */
-
-if(interaction.commandName==="queue"){
-const queue = queues.get(interaction.guild.id)
-
-if(!queue || queue.length===0){
-return safeReply(interaction,"الطابور فارغ")
-}
-
-let list = queue.map((s,i)=>`${i+1}. ${s.title}`).join("\n")
-
-return safeReply(interaction,`📜 الطابور:\n${list}`)
-}
-
-/* VOLUME */
-
-if(interaction.commandName==="volume"){
-const v = interaction.options.getInteger("value")
-
-volumes.set(interaction.guild.id,v/100)
-
-return safeReply(interaction,`🔊 الصوت: ${v}%`)
-}
-
-/* LOOP */
-
-if(interaction.commandName==="loop"){
-loops.set(interaction.guild.id,!loops.get(interaction.guild.id))
-return safeReply(interaction,"🔁 تم تغيير حالة التكرار")
-}
-
-/* SKIP */
-
-if(interaction.commandName==="skip"){
 const player = players.get(interaction.guild.id)
-if(player){
+
+if(interaction.customId==="pause"){
+player.pause()
+interaction.reply({content:"⏸ Paused",ephemeral:true})
+}
+
+if(interaction.customId==="skip"){
 player.stop()
-return safeReply(interaction,"⏭️ تخطي")
-}
+interaction.reply({content:"⏭ Skipped",ephemeral:true})
 }
 
-/* STOP */
-
-if(interaction.commandName==="stop"){
+if(interaction.customId==="stop"){
 const connection = getVoiceConnection(interaction.guild.id)
-if(connection){
-connection.destroy()
-queues.delete(interaction.guild.id)
-return safeReply(interaction,"⏹️ تم الإيقاف")
-}
+if(connection) connection.destroy()
+interaction.reply({content:"⏹ Stopped",ephemeral:true})
 }
 
 })
