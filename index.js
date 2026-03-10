@@ -9,9 +9,10 @@ const { REST, Routes, SlashCommandBuilder } = require("discord.js")
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection, AudioPlayerStatus, entersState, VoiceConnectionStatus } = require("@discordjs/voice")
 
 /* =================
-LAVALINK IMPORT
+LAVALINK IMPORT (DISABLED)
 ================= */
 
+// تم تعطيل Lavalink بالكامل لأننا نستخدم نظام الصوت المباشر
 // const { Manager } = require("erela.js")
 
 /* =================
@@ -19,7 +20,7 @@ KEEP RENDER ALIVE
 ================= */
 
 setInterval(()=>{
-console.log("Bot alive")
+  console.log("Bot alive")
 },300000)
 
 const express = require("express")
@@ -39,58 +40,50 @@ DISCORD CLIENT
 ===================================================== */
 
 const client = new Client({
-intents:[
-GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMessages,
-GatewayIntentBits.GuildVoiceStates,
-GatewayIntentBits.MessageContent
-]
+  intents:[
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.MessageContent
+  ]
 })
 
 /* =====================================================
-LAVALINK MANAGER (DISABLED - NOT NEEDED)
+LAVALINK MANAGER (DISABLED)
 ===================================================== */
 
 /*
+تم تعطيل هذا القسم بالكامل لأن نظام الموسيقى الآن
+يعتمد على @discordjs/voice مباشرة بدون Lavalink
+
 const manager = new Manager({
-
-nodes:[
-{
-identifier:"main-lavalink",
-host:"lavalinkv4-idle.fly.dev",
-port:443,
-password:"youshallnotpass",
-secure:true,
-retryAmount:10,
-retryDelay:5000
-}
-],
-
-send:(id,payload)=>{
-const guild = client.guilds.cache.get(id)
-if(guild) guild.shard.send(payload)
-}
-
+  nodes:[
+    {
+      identifier:"main-lavalink",
+      host:"lavalinkv4-idle.fly.dev",
+      port:443,
+      password:"youshallnotpass",
+      secure:true,
+      retryAmount:10,
+      retryDelay:5000
+    }
+  ],
+  send:(id,payload)=>{
+    const guild = client.guilds.cache.get(id)
+    if(guild) guild.shard.send(payload)
+  }
 })
 
 manager.on("nodeConnect", node=>{
-console.log(`Lavalink node connected: ${node.options.identifier}`)
+  console.log(`Lavalink node connected: ${node.options.identifier}`)
 })
 
 manager.on("nodeError", (node, error)=>{
-console.log(`Lavalink node error: ${error.message}`)
-})
-
-client.once("ready",()=>{
-
-console.log("Bot online")
-
-manager.init(client.user.id)
-
+  console.log(`Lavalink node error: ${error.message}`)
 })
 
 client.on("raw",(d)=>{
-manager.updateVoiceState(d)
+  manager.updateVoiceState(d)
 })
 */
 
@@ -99,7 +92,21 @@ READY EVENT
 ===================================================== */
 
 client.once("ready",()=>{
-console.log("Bot online")
+  console.log("Bot online")
+})
+
+/* =====================================================
+WEB SERVER (Render Port Binding)
+===================================================== */
+
+const app = express()
+
+app.get("/", (req,res)=>{
+  res.send("Bot running")
+})
+
+app.listen(process.env.PORT || 10000, ()=>{
+  console.log("Web server ready")
 })
 
 
