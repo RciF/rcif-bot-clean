@@ -50,10 +50,10 @@ const ffmpeg = require("ffmpeg-static")
 /* مكتبة تشغيل الصوت من يوتيوب */
 const play = require("play-dl")
 
-play.setToken({
-youtube: {
-cookie: fs.readFileSync("cookies.txt").toString()
-}
+await play.setToken({
+  youtube: {
+    cookie: process.env.YT_COOKIE
+  }
 })
 
 /* =====================================================
@@ -538,7 +538,7 @@ const info = await play.video_basic_info(song.url)
 
 stream = await play.stream_from_info(info.video_details,{
 discordPlayerCompatibility:true,
-cookie: fs.readFileSync("cookies.txt").toString()
+cookie: process.env.YT_COOKIE
 })
 
 }catch(err){
