@@ -343,27 +343,15 @@ saveMemory()
 PART 6.5 - LAVALINK MANAGER
 ===================================================== */
 
-const manager = new Manager({
-  nodes: [
-    {
-      host: "lavalink.lexnet.cc",
-      port: 443,
-      password: "lexnet",
-      secure: true
-    }
-  ],
-  send(id, payload) {
-    const guild = client.guilds.cache.get(id)
-    if (guild) guild.shard.send(payload)
-  }
-})
+/* استخدام نفس Lavalink Manager الموجود بالأعلى */
 
 client.on("ready", () => {
-  manager.init(client.user.id)
+console.log("Lavalink Manager Ready")
 })
 
-client.on("raw", (d) => manager.updateVoiceState(d))
-
+client.on("raw", (packet) => {
+manager.updateVoiceState(packet)
+})
 
 /* =====================================================
 PART 7 - MUSIC SYSTEM
@@ -512,20 +500,14 @@ const queue = queues.get(guildId)
 
 if(!queue || queue.length === 0) return
 
-
-
 const song = queue[0]
 
 let stream
 
-
-
 try{
 
 stream = await play.stream(song.url,{
-
 discordPlayerCompatibility:true
-
 })
 
 }catch(err){
@@ -538,63 +520,33 @@ return playSong(guildId, connection)
 
 }
 
-
-
 const resource = createAudioResource(stream.stream,{
-
 inputType: stream.type,
-
 inlineVolume:true
-
 })
-
-
 
 const player = getPlayer(guildId)
 
-
-
 const vol = volumes.get(guildId) || 1
-
 resource.volume.setVolume(vol)
 
-
-
 connection.subscribe(player)
-
 player.play(resource)
-
-
 
 player.once(AudioPlayerStatus.Idle, ()=>{
 
-
-
 if(loops.get(guildId)){
-
 playSong(guildId, connection)
-
 return
-
 }
-
-
 
 queue.shift()
 
-
-
 if(queue.length === 0){
-
 return
-
 }else{
-
 playSong(guildId, connection)
-
 }
-
-
 
 })
 
@@ -706,11 +658,8 @@ const rest = new REST({version:"10"}).setToken(DISCORD_TOKEN)
 async function registerCommands(){
 
 await rest.put(
-
 Routes.applicationCommands(CLIENT_ID),
-
 {body:commands}
-
 )
 
 }
@@ -733,29 +682,14 @@ client.on("messageCreate", async message=>{
 
 if(message.author.bot) return
 
-
-
-/* XP SYSTEM */
-
 addXP(message.author.id)
 
-
-
-/* ANTI LINK PROTECTION */
-
 if(containsLink(message.content)){
-
 message.delete().catch(()=>{})
-
 message.channel.send("🚫 الروابط غير مسموحة")
-
 }
 
-
-
 })
-
-
 
 
 
@@ -893,7 +827,7 @@ if(res.loadType === "TRACK_LOADED" || res.loadType === "SEARCH_RESULT"){
 
 player.queue.add(res.tracks[0])
 
-if(!player.playing && !player.paused && !player.queue.size){
+if(!player.playing && !player.paused && player.queue.size === 1){
 player.play()
 }
 
@@ -905,7 +839,7 @@ if(res.loadType === "PLAYLIST_LOADED"){
 
 player.queue.add(res.tracks)
 
-if(!player.playing && !player.paused){
+if(!player.playing && !player.paused && player.queue.size === res.tracks.length){
 player.play()
 }
 
@@ -1078,23 +1012,14 @@ PART 12 - WEB SERVER + LOGIN
 
 const app = express()
 
-
-
 app.get("/", (req,res)=>{
-
 res.send("Bot running")
-
 })
 
-
-
 app.listen(process.env.PORT || 10000)
-
-
 
 /* =================
 LOGIN
 ================= */
 
 client.login(DISCORD_TOKEN)
-
