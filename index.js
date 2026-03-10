@@ -367,19 +367,7 @@ saveMemory()
 
 
 
-/* =====================================================
-PART 6.5 - LAVALINK MANAGER
-===================================================== */
 
-/* استخدام نفس Lavalink Manager الموجود بالأعلى */
-
-client.on("ready", () => {
-console.log("Lavalink Manager Ready")
-})
-
-client.on("raw", (packet) => {
-manager.updateVoiceState(packet)
-})
 
 /* =====================================================
 PART 7 - MUSIC SYSTEM
@@ -1016,19 +1004,7 @@ interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
 })
 
 /* =====================================================
-PART 12 - WEB SERVER + LOGIN
+PART 12 - LOGIN
 ===================================================== */
-
-const app = express()
-
-app.get("/", (req,res)=>{
-res.send("Bot running")
-})
-
-app.listen(process.env.PORT || 10000)
-
-/* =================
-LOGIN
-================= */
 
 client.login(DISCORD_TOKEN)
