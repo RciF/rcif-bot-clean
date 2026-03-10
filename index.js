@@ -28,11 +28,10 @@ VoiceConnectionStatus
 } = require("@discordjs/voice")
 
 /* =================
-LAVALINK IMPORT (DISABLED)
+LAVALINK IMPORT
 ================= */
 
-// تم تعطيل Lavalink بالكامل لأننا نستخدم نظام الصوت المباشر
-// const { Manager } = require("erela.js")
+const { Manager } = require("erela.js")
 
 /* =================
 KEEP RENDER ALIVE
@@ -47,13 +46,13 @@ const fs = require("fs")
 const fetch = require("node-fetch")
 const ffmpeg = require("ffmpeg-static")
 
-/* مكتبة تشغيل الصوت من يوتيوب */
+/* مكتبة تشغيل الصوت القديمة (لن نحذفها) */
 const play = require("play-dl")
 
 play.setToken({
-  youtube: {
-    cookie: process.env.YT_COOKIE
-  }
+youtube:{
+cookie:process.env.YT_COOKIE
+}
 })
 
 /* =====================================================
@@ -81,13 +80,18 @@ GatewayIntentBits.MessageContent
 })
 
 /* =====================================================
-LAVALINK MANAGER (DISABLED)
+WEB SERVER (Render Port Binding)
 ===================================================== */
 
-/*
-تم تعطيل هذا القسم بالكامل لأن نظام الموسيقى الآن
-يعتمد على @discordjs/voice مباشرة بدون Lavalink
-*/
+const app = express()
+
+app.get("/",(req,res)=>{
+res.send("Bot running")
+})
+
+app.listen(process.env.PORT || 10000,()=>{
+console.log("Web server ready")
+})
 
 /* =====================================================
 READY EVENT
@@ -95,22 +99,11 @@ READY EVENT
 
 client.once("clientReady",()=>{
 console.log("Bot online")
+
+/* تشغيل Lavalink بعد اتصال البوت */
+manager.init(client.user.id)
+
 })
-
-/* =====================================================
-WEB SERVER (Render Port Binding)
-===================================================== */
-
-const app = express()
-
-app.get("/", (req,res)=>{
-res.send("Bot running")
-})
-
-app.listen(process.env.PORT || 10000, ()=>{
-console.log("Web server ready")
-})
-
 
 /* =====================================================
 PART 2 - AI SYSTEM
@@ -126,7 +119,7 @@ method:"POST",
 
 headers:{
 "Content-Type":"application/json",
-"Authorization":"Bearer " + OPENAI_API_KEY
+"Authorization":"Bearer "+OPENAI_API_KEY
 },
 
 body:JSON.stringify({
@@ -147,18 +140,15 @@ max_tokens:500
 const data = await res.json()
 
 if(!data || !data.choices || !data.choices[0]){
-
-console.log("AI ERROR:", data)
-
+console.log("AI ERROR:",data)
 return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي"
-
 }
 
 return data.choices[0].message.content
 
 }catch(err){
 
-console.log("AI ERROR:", err)
+console.log("AI ERROR:",err)
 
 return "حدث خطأ في الذكاء الاصطناعي"
 
@@ -196,7 +186,7 @@ size:"1024x1024"
 const data = await res.json()
 
 if(!data || !data.data || !data.data[0]){
-console.log("IMAGE ERROR:", data)
+console.log("IMAGE ERROR:",data)
 return null
 }
 
@@ -204,7 +194,7 @@ return data.data[0].url
 
 }catch(err){
 
-console.log("IMAGE ERROR:", err)
+console.log("IMAGE ERROR:",err)
 
 return null
 
@@ -212,9 +202,8 @@ return null
 
 }
 
-
 /* =====================================================
-PART 4 - XP + WARNINGS + SERVER PROTECTION
+PART 4 - XP + WARNINGS
 ===================================================== */
 
 let xp = {}
@@ -223,22 +212,21 @@ if(fs.existsSync("xp.json")){
 try{
 xp = JSON.parse(fs.readFileSync("xp.json"))
 }catch(e){
-console.log("XP FILE ERROR")
 xp = {}
 }
 }
 
 function addXP(user){
 
-if(!xp[user]) xp[user] = { xp:0, level:1 }
+if(!xp[user]) xp[user] = {xp:0,level:1}
 
 xp[user].xp += 10
 
-if(xp[user].xp >= xp[user].level * 100){
+if(xp[user].xp >= xp[user].level*100){
 xp[user].level++
 }
 
-fs.writeFileSync("xp.json", JSON.stringify(xp,null,2))
+fs.writeFileSync("xp.json",JSON.stringify(xp,null,2))
 
 }
 
@@ -248,7 +236,6 @@ if(fs.existsSync("warnings.json")){
 try{
 warnings = JSON.parse(fs.readFileSync("warnings.json"))
 }catch(e){
-console.log("WARN FILE ERROR")
 warnings = {}
 }
 }
@@ -259,7 +246,7 @@ if(!warnings[user]) warnings[user] = 0
 
 warnings[user]++
 
-fs.writeFileSync("warnings.json", JSON.stringify(warnings,null,2))
+fs.writeFileSync("warnings.json",JSON.stringify(warnings,null,2))
 
 return warnings[user]
 
@@ -274,10 +261,10 @@ return text.includes("http://") || text.includes("https://")
 }
 
 /* =====================================================
-PART 5 - SAFE + LOG + MEMORY
+PART 5 - SAFE + MEMORY
 ===================================================== */
 
-async function safeReply(interaction, content){
+async function safeReply(interaction,content){
 
 try{
 
@@ -288,40 +275,20 @@ return interaction.reply(content)
 }
 
 }catch(e){
-console.log("SAFE REPLY ERROR:", e)
-}
-
-}
-
-async function safeEdit(interaction, content){
-
-try{
-
-if(interaction.deferred){
-return interaction.editReply(content)
-}
-
-if(!interaction.replied){
-return interaction.reply(content)
-}
-
-}catch(e){
-console.log("SAFE EDIT ERROR:", e)
+console.log("SAFE REPLY ERROR:",e)
 }
 
 }
 
 function logEvent(text){
 
-const log = `[${new Date().toLocaleString()}] ${text}\n`
+const log=`[${new Date().toLocaleString()}] ${text}\n`
 
-fs.appendFileSync("logs.txt", log)
+fs.appendFileSync("logs.txt",log)
 
 }
 
-/* =================
-MEMORY SYSTEM
-================= */
+/* MEMORY */
 
 let memory = {}
 
@@ -329,13 +296,12 @@ if(fs.existsSync("memory.json")){
 try{
 memory = JSON.parse(fs.readFileSync("memory.json"))
 }catch(e){
-console.log("MEMORY FILE ERROR")
 memory = {}
 }
 }
 
 function saveMemory(){
-fs.writeFileSync("memory.json", JSON.stringify(memory,null,2))
+fs.writeFileSync("memory.json",JSON.stringify(memory,null,2))
 }
 
 function getChatHistory(userId){
@@ -346,13 +312,11 @@ return memory[userId]
 
 }
 
-function addChatHistory(userId, role, content){
+function addChatHistory(userId,role,content){
 
 if(!memory[userId]) memory[userId] = []
 
 memory[userId].push({role,content})
-
-/* الحد الأقصى للذاكرة */
 
 if(memory[userId].length > 12){
 memory[userId].shift()
@@ -363,39 +327,47 @@ saveMemory()
 }
 
 /* =====================================================
-PART 6 - MUSIC SYSTEM
+PART 6 - MUSIC SYSTEM (LAVALINK)
 ===================================================== */
 
-const { Manager } = require("erela.js")
-
-/* =================
-LAVALINK MANAGER
-================= */
-
 const manager = new Manager({
-  nodes: [
-    {
-      host: "lavalink.lexnet.cc",
-      port: 443,
-      password: "lexnet",
-      secure: true
-    }
-  ],
-  send(id, payload) {
-    const guild = client.guilds.cache.get(id)
-    if (guild) guild.shard.send(payload)
-  }
+
+nodes:[
+{
+host:"lavalink.lexnet.cc",
+port:443,
+password:"lexnet",
+secure:true
+}
+],
+
+send(id,payload){
+
+const guild = client.guilds.cache.get(id)
+
+if(guild) guild.shard.send(payload)
+
+}
+
 })
 
-client.on("raw", (d) => manager.updateVoiceState(d))
+/* اتصال الصوت */
 
-client.once("ready", () => {
-  manager.init(client.user.id)
+client.on("raw",(d)=>manager.updateVoiceState(d))
+
+/* logs لمعرفة الاتصال */
+
+manager.on("nodeConnect", node=>{
+console.log("Lavalink connected")
 })
 
-/* =================
-OLD LOCAL PLAYER SYSTEM (KEEPED)
-================= */
+manager.on("nodeError",(node,error)=>{
+console.log("Lavalink error:",error)
+})
+
+/* =====================================================
+OLD LOCAL PLAYER SYSTEM (لم نحذفه)
+===================================================== */
 
 const queues = new Map()
 const players = new Map()
@@ -408,7 +380,7 @@ if(!players.has(guildId)){
 
 const player = createAudioPlayer()
 
-players.set(guildId, player)
+players.set(guildId,player)
 
 }
 
@@ -416,114 +388,6 @@ return players.get(guildId)
 
 }
 
-/* =================
-MUSIC EMBED
-================= */
-
-function createMusicEmbed(song){
-
-return new EmbedBuilder()
-.setColor("#2b2d31")
-.setTitle("🎶 Now Playing")
-.setDescription(`[${song.title}](${song.url})`)
-
-}
-
-/* =================
-CONTROL BUTTONS
-================= */
-
-function createButtons(){
-
-return new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("pause")
-.setLabel("⏯")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("skip")
-.setLabel("⏭")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("stop")
-.setLabel("⏹")
-.setStyle(ButtonStyle.Danger)
-
-)
-
-}
-
-/* =================
-PLAY SONG ENGINE (OLD)
-================= */
-
-async function playSongOld(guildId, connection){
-
-const queue = queues.get(guildId)
-
-if(!queue || queue.length === 0) return
-
-if(!connection) return
-
-const song = queue[0]
-
-let stream
-
-try{
-
-stream = await play.stream(song.url,{
-  discordPlayerCompatibility:true,
-  cookie: process.env.YT_COOKIE?.replace(/[\r\n\t]/g, "").trim()
-})
-
-}catch(err){
-
-console.log("STREAM ERROR:", err)
-
-queue.shift()
-
-return playSong(guildId, connection)
-
-}
-
-const resource = createAudioResource(stream.stream,{
-inputType: stream.type,
-inlineVolume:true
-})
-
-const player = getPlayer(guildId)
-
-const vol = volumes.get(guildId) || 1
-
-if(resource.volume){
-resource.volume.setVolume(vol)
-}
-
-connection.subscribe(player)
-
-player.play(resource)
-
-player.once(AudioPlayerStatus.Idle,()=>{
-
-if(loops.get(guildId)){
-playSong(guildId, connection)
-return
-}
-
-queue.shift()
-
-if(queue.length === 0){
-return
-}else{
-playSong(guildId, connection)
-}
-
-})
-
-}
 /* =====================================================
 PART 7 - PLAY SONG SYSTEM (LAVALINK)
 ===================================================== */
