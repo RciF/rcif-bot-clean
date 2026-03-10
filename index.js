@@ -134,6 +134,8 @@ MUSIC SYSTEM
 
 const queues = new Map()
 const players = new Map()
+const volumes = new Map()
+const loops = new Map()
 
 function getPlayer(guildId){
 if(!players.has(guildId)){
@@ -163,13 +165,49 @@ inlineVolume:true
 
 const player = getPlayer(guildId)
 
+const vol = volumes.get(guildId) || 1
+resource.volume.setVolume(vol)
+
 connection.subscribe(player)
 player.play(resource)
 
 player.once(AudioPlayerStatus.Idle,()=>{
-queue.shift()
+
+if(loops.get(guildId)){
 playSong(guildId,connection)
+return
+}
+
+queue.shift()
+
+if(queue.length===0){
+autoPlay(guildId,connection)
+}else{
+playSong(guildId,connection)
+}
+
 })
+
+}
+
+/* =================
+AUTOPLAY
+================= */
+
+async function autoPlay(guildId,connection){
+
+const queue = queues.get(guildId)
+if(!queue || queue.length===0) return
+
+const last = queue[0]
+
+let related = await play.search(last.title,{limit:5})
+
+if(!related.length) return
+
+queue.push(related[Math.floor(Math.random()*related.length)])
+
+playSong(guildId,connection)
 
 }
 
@@ -244,6 +282,15 @@ new SlashCommandBuilder().setName("pause").setDescription("إيقاف مؤقت")
 
 new SlashCommandBuilder().setName("resume").setDescription("استكمال"),
 
+new SlashCommandBuilder().setName("queue").setDescription("عرض الطابور"),
+
+new SlashCommandBuilder().setName("loop").setDescription("تكرار الأغنية"),
+
+new SlashCommandBuilder()
+.setName("volume")
+.setDescription("تغيير الصوت")
+.addIntegerOption(o=>o.setName("value").setDescription("1-100").setRequired(true)),
+
 new SlashCommandBuilder().setName("nowplaying").setDescription("الأغنية الحالية"),
 
 new SlashCommandBuilder()
@@ -309,10 +356,43 @@ guildId:interaction.guild.id,
 adapterCreator:interaction.guild.voiceAdapterCreator
 })
 
+if(queues.get(interaction.guild.id).length===1){
 playSong(interaction.guild.id,connection)
+}
 
 return safeEdit(interaction,`🎶 أضيف إلى الطابور: ${song.title}`)
 
+}
+
+/* QUEUE */
+
+if(interaction.commandName==="queue"){
+const queue = queues.get(interaction.guild.id)
+
+if(!queue || queue.length===0){
+return safeReply(interaction,"الطابور فارغ")
+}
+
+let list = queue.map((s,i)=>`${i+1}. ${s.title}`).join("\n")
+
+return safeReply(interaction,`📜 الطابور:\n${list}`)
+}
+
+/* VOLUME */
+
+if(interaction.commandName==="volume"){
+const v = interaction.options.getInteger("value")
+
+volumes.set(interaction.guild.id,v/100)
+
+return safeReply(interaction,`🔊 الصوت: ${v}%`)
+}
+
+/* LOOP */
+
+if(interaction.commandName==="loop"){
+loops.set(interaction.guild.id,!loops.get(interaction.guild.id))
+return safeReply(interaction,"🔁 تم تغيير حالة التكرار")
 }
 
 /* SKIP */
@@ -336,61 +416,6 @@ return safeReply(interaction,"⏹️ تم الإيقاف")
 }
 }
 
-/* PAUSE */
-
-if(interaction.commandName==="pause"){
-const player = players.get(interaction.guild.id)
-if(player){
-player.pause()
-return safeReply(interaction,"⏸️ تم الإيقاف المؤقت")
-}
-}
-
-/* RESUME */
-
-if(interaction.commandName==="resume"){
-const player = players.get(interaction.guild.id)
-if(player){
-player.unpause()
-return safeReply(interaction,"▶️ استكمال")
-}
-}
-
-/* NOW PLAYING */
-
-if(interaction.commandName==="nowplaying"){
-const queue = queues.get(interaction.guild.id)
-if(queue && queue.length>0){
-return safeReply(interaction,`🎶 الآن: ${queue[0].title}`)
-}else{
-return safeReply(interaction,"لا توجد أغنية")
-}
-}
-
-/* AI */
-
-if(interaction.commandName==="ai"){
-const q = interaction.options.getString("question")
-await interaction.deferReply()
-const answer = await askAI(q,interaction.user.id)
-return safeEdit(interaction,answer)
-}
-
-})
-
-/* =================
-MENTION AI
-================= */
-
-client.on("messageCreate",async message=>{
-if(message.author.bot) return
-if(!message.mentions.has(client.user)) return
-
-let question = message.content.replace(`<@${client.user.id}>`,"").trim()
-
-const reply = await askAI(question,message.author.id)
-
-message.reply(reply)
 })
 
 /* =================
