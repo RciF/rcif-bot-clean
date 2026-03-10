@@ -11,7 +11,8 @@ EmbedBuilder,
 ActionRowBuilder, 
 ButtonBuilder, 
 ButtonStyle, 
-PermissionFlagsBits 
+PermissionFlagsBits,
+StringSelectMenuBuilder
 } = require("discord.js")
 
 const { REST, Routes, SlashCommandBuilder } = require("discord.js")
@@ -103,6 +104,7 @@ res.send("Bot running")
 app.listen(process.env.PORT || 10000, ()=>{
 console.log("Web server ready")
 })
+
 
 /* =====================================================
 PART 2 - AI SYSTEM
@@ -732,41 +734,47 @@ if(!interaction.isChatInputCommand()) return
 
 try{
 
+const guildId = interaction.guild.id
+const settings = getSettings(guildId)
+
 /* =================
 PLAY
 ================= */
 
 if(interaction.commandName === "play"){
 
-const query = interaction.options.getString("song")
+if(!settings.music){
+return interaction.reply("🎵 نظام الموسيقى مغلق")
+}
 
+const query = interaction.options.getString("song")
 const voice = interaction.member.voice.channel
 
 if(!voice){
-return interaction.reply({ content:"❌ ادخل روم صوتي أولاً", ephemeral:true })
+return interaction.reply({content:"❌ ادخل روم صوتي أولاً",ephemeral:true})
 }
 
 await interaction.deferReply()
 
 const connection = joinVoiceChannel({
-channelId: voice.id,
-guildId: interaction.guild.id,
-adapterCreator: interaction.guild.voiceAdapterCreator
+channelId:voice.id,
+guildId:guildId,
+adapterCreator:interaction.guild.voiceAdapterCreator
 })
 
-let queue = queues.get(interaction.guild.id)
+let queue = queues.get(guildId)
 
 if(!queue){
-queue = []
-queues.set(interaction.guild.id, queue)
+queue=[]
+queues.set(guildId,queue)
 }
 
 queue.push({
-title: query,
-url: query
+title:query,
+url:query
 })
 
-await playSong(interaction.guild.id, connection)
+await playSong(guildId,connection)
 
 return interaction.editReply(`🎵 تمت إضافة ${query}`)
 }
@@ -777,10 +785,10 @@ SKIP
 
 if(interaction.commandName === "skip"){
 
-const player = getPlayer(interaction.guild.id)
+const player=getPlayer(guildId)
 
 if(!player){
-return interaction.reply({ content:"❌ لا يوجد شيء يعمل", ephemeral:true })
+return interaction.reply({content:"❌ لا يوجد شيء يعمل",ephemeral:true})
 }
 
 player.stop()
@@ -794,10 +802,9 @@ STOP
 
 if(interaction.commandName === "stop"){
 
-queues.set(interaction.guild.id, [])
+queues.set(guildId,[])
 
-const connection = getVoiceConnection(interaction.guild.id)
-
+const connection=getVoiceConnection(guildId)
 if(connection) connection.destroy()
 
 return interaction.reply("⏹ تم الإيقاف")
@@ -809,7 +816,7 @@ PAUSE
 
 if(interaction.commandName === "pause"){
 
-const player = getPlayer(interaction.guild.id)
+const player=getPlayer(guildId)
 
 player.pause()
 
@@ -822,7 +829,7 @@ RESUME
 
 if(interaction.commandName === "resume"){
 
-const player = getPlayer(interaction.guild.id)
+const player=getPlayer(guildId)
 
 player.unpause()
 
@@ -835,13 +842,13 @@ QUEUE
 
 if(interaction.commandName === "queue"){
 
-const queue = queues.get(interaction.guild.id)
+const queue=queues.get(guildId)
 
-if(!queue || queue.length === 0){
+if(!queue || queue.length===0){
 return interaction.reply("📭 الطابور فارغ")
 }
 
-const list = queue.map((s,i)=>`${i+1}. ${s.title}`).join("\n")
+const list=queue.map((s,i)=>`${i+1}. ${s.title}`).join("\n")
 
 return interaction.reply(`🎶 الطابور:\n${list}`)
 }
@@ -852,9 +859,9 @@ LOOP
 
 if(interaction.commandName === "loop"){
 
-const current = loops.get(interaction.guild.id)
+const current=loops.get(guildId)
 
-loops.set(interaction.guild.id, !current)
+loops.set(guildId,!current)
 
 return interaction.reply(`🔁 التكرار: ${!current ? "مفعل" : "متوقف"}`)
 }
@@ -865,9 +872,9 @@ VOLUME
 
 if(interaction.commandName === "volume"){
 
-const value = interaction.options.getInteger("value")
+const value=interaction.options.getInteger("value")
 
-volumes.set(interaction.guild.id, value/100)
+volumes.set(guildId,value/100)
 
 return interaction.reply(`🔊 الصوت: ${value}%`)
 }
@@ -878,13 +885,13 @@ NOW PLAYING
 
 if(interaction.commandName === "nowplaying"){
 
-const queue = queues.get(interaction.guild.id)
+const queue=queues.get(guildId)
 
-if(!queue || queue.length === 0){
+if(!queue || queue.length===0){
 return interaction.reply("لا يوجد شيء يعمل")
 }
 
-const song = queue[0]
+const song=queue[0]
 
 return interaction.reply({
 embeds:[createMusicEmbed(song)]
@@ -897,11 +904,23 @@ AI
 
 if(interaction.commandName === "ask"){
 
+if(!settings.ai){
+return interaction.reply("🤖 نظام الذكاء الصناعي مغلق")
+}
+
 await interaction.deferReply()
 
-const question = interaction.options.getString("question")
+const question=interaction.options.getString("question")
 
-const answer = await askAI(question)
+addChatHistory(interaction.user.id,"user",question)
+
+const history=getChatHistory(interaction.user.id)
+
+const prompt=history.map(m=>`${m.role}: ${m.content}`).join("\n")
+
+const answer=await askAI(prompt)
+
+addChatHistory(interaction.user.id,"assistant",answer)
 
 return interaction.editReply(answer)
 }
@@ -914,9 +933,9 @@ if(interaction.commandName === "image"){
 
 await interaction.deferReply()
 
-const prompt = interaction.options.getString("prompt")
+const prompt=interaction.options.getString("prompt")
 
-const img = await generateImage(prompt)
+const img=await generateImage(prompt)
 
 if(!img){
 return interaction.editReply("فشل إنشاء الصورة")
@@ -931,9 +950,9 @@ WARN
 
 if(interaction.commandName === "warn"){
 
-const user = interaction.options.getUser("user")
+const user=interaction.options.getUser("user")
 
-const count = addWarn(user.id)
+const count=addWarn(user.id)
 
 return interaction.reply(`⚠️ تم تحذير ${user.tag} (${count})`)
 }
@@ -944,7 +963,7 @@ KICK
 
 if(interaction.commandName === "kick"){
 
-const member = interaction.options.getMember("user")
+const member=interaction.options.getMember("user")
 
 await member.kick()
 
@@ -957,7 +976,7 @@ BAN
 
 if(interaction.commandName === "ban"){
 
-const member = interaction.options.getMember("user")
+const member=interaction.options.getMember("user")
 
 await member.ban()
 
@@ -966,20 +985,18 @@ return interaction.reply("تم حظر العضو")
 
 }catch(err){
 
-console.log("INTERACTION ERROR:", err)
+console.log("INTERACTION ERROR:",err)
 
 try{
 
 if(interaction.deferred){
 await interaction.editReply("حدث خطأ أثناء تنفيذ الأمر")
 }
-
 else if(interaction.replied){
 await interaction.followUp("حدث خطأ أثناء تنفيذ الأمر")
 }
-
 else{
-await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر", ephemeral:true})
+await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر",ephemeral:true})
 }
 
 }catch(e){}
@@ -987,7 +1004,6 @@ await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر
 }
 
 })
-
 
 /* =====================================================
 PART 10 - MESSAGE EVENTS
@@ -998,13 +1014,48 @@ client.on("messageCreate", async message=>{
 if(message.author.bot) return
 if(!message.content) return
 
-/* نظام XP */
+const guildId = message.guild?.id
+if(!guildId) return
 
+const settings = getSettings(guildId)
+
+/* =================
+ROOMS ALLOWED LINKS
+=================
+
+ضع هنا ID الرومات التي تريد السماح بالروابط فيها
+
+مثال:
+Right Click Channel
+Copy Channel ID
+*/
+
+const allowedLinkChannels = [
+"1415931124290555935",
+"1461018572259197018"
+"1461018682569527587",
+"1461019087483441285"
+"1461019802301894900",
+"1461020003854712962"
+]
+
+/* =================
+XP SYSTEM
+================= */
+
+if(settings.xp){
 addXP(message.author.id)
+}
 
-/* حماية الروابط */
+/* =================
+ANTI LINK SYSTEM
+================= */
 
-if(containsLink(message.content)){
+if(
+settings.antilink &&
+containsLink(message.content) &&
+!allowedLinkChannels.includes(message.channel.id)
+){
 
 try{
 await message.delete()
@@ -1026,19 +1077,19 @@ if(!interaction.isButton()) return
 
 try{
 
-const guildId = interaction.guild?.id
+const guildId=interaction.guild?.id
 if(!guildId) return
 
-const player = getPlayer(guildId)
+const player=getPlayer(guildId)
 
 /* =================
 PAUSE BUTTON
 ================= */
 
-if(interaction.customId === "pause"){
+if(interaction.customId==="pause" || interaction.customId==="music_pause"){
 
 if(!player){
-return interaction.reply({content:"لا يوجد تشغيل", ephemeral:true})
+return interaction.reply({content:"لا يوجد تشغيل",ephemeral:true})
 }
 
 player.pause()
@@ -1047,17 +1098,16 @@ return interaction.reply({
 content:"⏸ تم الإيقاف المؤقت",
 ephemeral:true
 })
-
 }
 
 /* =================
 SKIP BUTTON
 ================= */
 
-if(interaction.customId === "skip"){
+if(interaction.customId==="skip" || interaction.customId==="music_skip"){
 
 if(!player){
-return interaction.reply({content:"لا يوجد تشغيل", ephemeral:true})
+return interaction.reply({content:"لا يوجد تشغيل",ephemeral:true})
 }
 
 player.stop()
@@ -1066,18 +1116,17 @@ return interaction.reply({
 content:"⏭ تم التخطي",
 ephemeral:true
 })
-
 }
 
 /* =================
 STOP BUTTON
 ================= */
 
-if(interaction.customId === "stop"){
+if(interaction.customId==="stop" || interaction.customId==="music_stop"){
 
-queues.set(guildId, [])
+queues.set(guildId,[])
 
-const connection = getVoiceConnection(guildId)
+const connection=getVoiceConnection(guildId)
 
 if(connection) connection.destroy()
 
@@ -1085,12 +1134,11 @@ return interaction.reply({
 content:"⏹ تم إيقاف التشغيل",
 ephemeral:true
 })
-
 }
 
 }catch(err){
 
-console.log("BUTTON HANDLER ERROR:", err)
+console.log("BUTTON HANDLER ERROR:",err)
 
 }
 
@@ -1249,8 +1297,299 @@ console.log("PANEL ERROR:",err)
 
 })
 
+
 /* =====================================================
-PART 14 - LOGIN
+PART 14 - PANEL SYSTEM
+===================================================== */
+
+client.on("interactionCreate", async interaction => {
+
+if(!interaction.isStringSelectMenu()) return
+if(interaction.customId !== "panel_menu") return
+
+try{
+
+const guildId = interaction.guild.id
+
+const settings = getSettings(guildId)
+
+/* تحديد اللغة */
+
+const locale = interaction.locale || "en"
+const isArabic = locale.startsWith("ar")
+
+/* النصوص */
+
+const text = isArabic ? {
+
+music:"🎵 لوحة الموسيقى",
+ai:"🤖 لوحة الذكاء الصناعي",
+protection:"🛡 لوحة الحماية",
+xp:"📊 لوحة XP",
+
+loop:"تفعيل / إيقاف التكرار",
+volume:"مستوى الصوت",
+queue:"عرض الطابور",
+
+ai_toggle:"تشغيل / إيقاف AI",
+memory_clear:"مسح الذاكرة",
+
+antilink:"تشغيل / إيقاف منع الروابط",
+
+xp_toggle:"تشغيل / إيقاف XP"
+
+} : {
+
+music:"🎵 Music Panel",
+ai:"🤖 AI Panel",
+protection:"🛡 Protection Panel",
+xp:"📊 XP Panel",
+
+loop:"Toggle Loop",
+volume:"Volume",
+queue:"Queue",
+
+ai_toggle:"Toggle AI",
+memory_clear:"Clear Memory",
+
+antilink:"Toggle Anti Link",
+
+xp_toggle:"Toggle XP"
+
+}
+
+/* =================
+MUSIC PANEL
+================= */
+
+if(interaction.values[0] === "panel_music"){
+
+const embed = new EmbedBuilder()
+.setColor("#2b2d31")
+.setTitle(text.music)
+
+const row = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("music_pause")
+.setLabel("⏯")
+.setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("music_skip")
+.setLabel("⏭")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("music_stop")
+.setLabel("⏹")
+.setStyle(ButtonStyle.Danger)
+
+)
+
+return interaction.update({
+embeds:[embed],
+components:[row]
+})
+
+}
+
+/* =================
+AI PANEL
+================= */
+
+if(interaction.values[0] === "panel_ai"){
+
+const embed = new EmbedBuilder()
+.setColor("#2b2d31")
+.setTitle(text.ai)
+
+const row = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("ai_toggle")
+.setLabel(text.ai_toggle)
+.setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("memory_clear")
+.setLabel(text.memory_clear)
+.setStyle(ButtonStyle.Secondary)
+
+)
+
+return interaction.update({
+embeds:[embed],
+components:[row]
+})
+
+}
+
+/* =================
+PROTECTION PANEL
+================= */
+
+if(interaction.values[0] === "panel_protection"){
+
+const embed = new EmbedBuilder()
+.setColor("#2b2d31")
+.setTitle(text.protection)
+
+const row = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("antilink_toggle")
+.setLabel(text.antilink)
+.setStyle(ButtonStyle.Primary)
+
+)
+
+return interaction.update({
+embeds:[embed],
+components:[row]
+})
+
+}
+
+/* =================
+XP PANEL
+================= */
+
+if(interaction.values[0] === "panel_xp"){
+
+const embed = new EmbedBuilder()
+.setColor("#2b2d31")
+.setTitle(text.xp)
+
+const row = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("xp_toggle")
+.setLabel(text.xp_toggle)
+.setStyle(ButtonStyle.Primary)
+
+)
+
+return interaction.update({
+embeds:[embed],
+components:[row]
+})
+
+}
+
+}catch(err){
+
+console.log("PANEL SYSTEM ERROR:",err)
+
+}
+
+})
+
+/* =====================================================
+PART 15 - PANEL BUTTON ACTIONS
+===================================================== */
+
+client.on("interactionCreate", async interaction => {
+
+if(!interaction.isButton()) return
+
+try{
+
+const guildId = interaction.guild?.id
+if(!guildId) return
+
+const settings = getSettings(guildId)
+
+/* تحديد اللغة */
+
+const locale = interaction.locale || "en"
+const isArabic = locale.startsWith("ar")
+
+/* =================
+AI TOGGLE
+================= */
+
+if(interaction.customId === "ai_toggle"){
+
+const newValue = !settings.ai
+
+updateSetting(guildId,"ai",newValue)
+
+return interaction.reply({
+content: isArabic
+? `🤖 الذكاء الصناعي: ${newValue ? "مفعل" : "متوقف"}`
+: `🤖 AI is now ${newValue ? "enabled" : "disabled"}`,
+ephemeral:true
+})
+
+}
+
+/* =================
+CLEAR MEMORY
+================= */
+
+if(interaction.customId === "memory_clear"){
+
+memory = {}
+saveMemory()
+
+return interaction.reply({
+content: isArabic
+? "🧹 تم مسح ذاكرة الذكاء الصناعي"
+: "🧹 AI memory cleared",
+ephemeral:true
+})
+
+}
+
+/* =================
+ANTILINK TOGGLE
+================= */
+
+if(interaction.customId === "antilink_toggle"){
+
+const newValue = !settings.antilink
+
+updateSetting(guildId,"antilink",newValue)
+
+return interaction.reply({
+content: isArabic
+? `🔗 منع الروابط: ${newValue ? "مفعل" : "متوقف"}`
+: `🔗 Anti Link is now ${newValue ? "enabled" : "disabled"}`,
+ephemeral:true
+})
+
+}
+
+/* =================
+XP TOGGLE
+================= */
+
+if(interaction.customId === "xp_toggle"){
+
+const newValue = !settings.xp
+
+updateSetting(guildId,"xp",newValue)
+
+return interaction.reply({
+content: isArabic
+? `📊 نظام XP: ${newValue ? "مفعل" : "متوقف"}`
+: `📊 XP system is now ${newValue ? "enabled" : "disabled"}`,
+ephemeral:true
+})
+
+}
+
+}catch(err){
+
+console.log("PANEL BUTTON ERROR:", err)
+
+}
+
+})
+
+/* =====================================================
+PART 16 - LOGIN
 ===================================================== */
 
 if(!DISCORD_TOKEN){
