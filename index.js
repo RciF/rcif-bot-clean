@@ -53,12 +53,14 @@ LAVALINK MANAGER
 
 const manager = new Manager({
 
-nodes:[{
+nodes:[
+{
 host:"lava.link",
 port:80,
 password:"anything",
 secure:false
-}],
+}
+],
 
 send:(id,payload)=>{
 const guild = client.guilds.cache.get(id)
@@ -67,7 +69,7 @@ if(guild) guild.shard.send(payload)
 
 })
 
-client.on("ready",()=>{
+client.once("ready",()=>{
 
 console.log("Bot online")
 
@@ -341,22 +343,8 @@ saveMemory()
 PART 6 - DISCORD CLIENT
 ===================================================== */
 
-const client = new Client({
-
-intents:[
-
-GatewayIntentBits.Guilds,
-
-GatewayIntentBits.GuildMessages,
-
-GatewayIntentBits.MessageContent,
-
-GatewayIntentBits.GuildVoiceStates
-
-]
-
-})
-
+// (تم حذف تعريف client لأنّه موجود في الأعلى)
+// يمكن إضافة كود هنا لاحقًا إذا احتجنا
 
 
 /* =====================================================
