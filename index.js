@@ -1024,19 +1024,29 @@ ROOMS ALLOWED LINKS
 =================
 
 ضع هنا ID الرومات التي تريد السماح بالروابط فيها
-
-مثال:
-Right Click Channel
-Copy Channel ID
 */
 
 const allowedLinkChannels = [
 "1415931124290555935",
-"1461018572259197018"
+"1461018572259197018",
 "1461018682569527587",
-"1461019087483441285"
+"1461019087483441285",
 "1461019802301894900",
 "1461020003854712962"
+]
+
+/* =================
+ROLES ALLOWED LINKS
+=================
+
+ضع هنا ID الرتب التي يسمح لها بالروابط
+Right Click Role
+Copy Role ID
+*/
+
+const allowedLinkRoles = [
+"1481053486241026179",
+"ايدي_الرتبة_هنا"
 ]
 
 /* =================
@@ -1051,11 +1061,15 @@ addXP(message.author.id)
 ANTI LINK SYSTEM
 ================= */
 
-if(
-settings.antilink &&
-containsLink(message.content) &&
-!allowedLinkChannels.includes(message.channel.id)
-){
+if(settings.antilink && containsLink(message.content)){
+
+/* السماح إذا كان الروم ضمن القائمة */
+
+if(allowedLinkChannels.includes(message.channel.id)) return
+
+/* السماح إذا كان العضو لديه رتبة مسموحة */
+
+if(message.member.roles.cache.some(role => allowedLinkRoles.includes(role.id))) return
 
 try{
 await message.delete()
