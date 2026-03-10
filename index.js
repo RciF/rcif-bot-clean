@@ -12,7 +12,7 @@ const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnec
 LAVALINK IMPORT
 ================= */
 
-const { Manager } = require("erela.js")
+// const { Manager } = require("erela.js")
 
 /* =================
 KEEP RENDER ALIVE
@@ -48,9 +48,10 @@ GatewayIntentBits.MessageContent
 })
 
 /* =====================================================
-LAVALINK MANAGER
+LAVALINK MANAGER (DISABLED - NOT NEEDED)
 ===================================================== */
 
+/*
 const manager = new Manager({
 
 nodes:[
@@ -72,10 +73,6 @@ if(guild) guild.shard.send(payload)
 
 })
 
-/* =================
-LAVALINK EVENTS
-================= */
-
 manager.on("nodeConnect", node=>{
 console.log(`Lavalink node connected: ${node.options.identifier}`)
 })
@@ -83,10 +80,6 @@ console.log(`Lavalink node connected: ${node.options.identifier}`)
 manager.on("nodeError", (node, error)=>{
 console.log(`Lavalink node error: ${error.message}`)
 })
-
-/* =================
-READY
-================= */
 
 client.once("ready",()=>{
 
@@ -98,6 +91,15 @@ manager.init(client.user.id)
 
 client.on("raw",(d)=>{
 manager.updateVoiceState(d)
+})
+*/
+
+/* =====================================================
+READY EVENT
+===================================================== */
+
+client.once("ready",()=>{
+console.log("Bot online")
 })
 
 
