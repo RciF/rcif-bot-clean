@@ -28,10 +28,7 @@ const fs = require("fs")
 const fetch = require("node-fetch")
 const ffmpeg = require("ffmpeg-static")
 
-/* =================
-MUSIC STREAM LIBRARY
-================= */
-
+/* مكتبة تشغيل الصوت من يوتيوب */
 const play = require("play-dl")
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
@@ -179,6 +176,123 @@ return null
 }
 
 /* =====================================================
+PART 4 - XP + WARNINGS + SERVER PROTECTION
+===================================================== */
+
+let xp = {}
+
+if(fs.existsSync("xp.json")){
+xp = JSON.parse(fs.readFileSync("xp.json"))
+}
+
+function addXP(user){
+
+if(!xp[user]) xp[user] = { xp:0, level:1 }
+
+xp[user].xp += 10
+
+if(xp[user].xp >= xp[user].level * 100){
+xp[user].level++
+}
+
+fs.writeFileSync("xp.json", JSON.stringify(xp,null,2))
+
+}
+
+let warnings = {}
+
+if(fs.existsSync("warnings.json")){
+warnings = JSON.parse(fs.readFileSync("warnings.json"))
+}
+
+function addWarn(user){
+
+if(!warnings[user]) warnings[user] = 0
+
+warnings[user]++
+
+fs.writeFileSync("warnings.json", JSON.stringify(warnings,null,2))
+
+return warnings[user]
+
+}
+
+function containsLink(text){
+return text.includes("http://") || text.includes("https://")
+}
+
+/* =====================================================
+PART 5 - SAFE + LOG + MEMORY
+===================================================== */
+
+async function safeReply(interaction, content){
+
+try{
+
+if(interaction.deferred || interaction.replied){
+return interaction.followUp(content)
+}else{
+return interaction.reply(content)
+}
+
+}catch(e){
+console.log(e)
+}
+
+}
+
+async function safeEdit(interaction, content){
+
+try{
+
+if(interaction.deferred){
+return interaction.editReply(content)
+}else{
+return interaction.reply(content)
+}
+
+}catch(e){
+console.log(e)
+}
+
+}
+
+function logEvent(text){
+
+const log = `[${new Date().toLocaleString()}] ${text}\n`
+
+fs.appendFileSync("logs.txt", log)
+
+}
+
+let memory = {}
+
+if(fs.existsSync("memory.json")){
+memory = JSON.parse(fs.readFileSync("memory.json"))
+}
+
+function saveMemory(){
+fs.writeFileSync("memory.json", JSON.stringify(memory,null,2))
+}
+
+function getChatHistory(userId){
+if(!memory[userId]) memory[userId] = []
+return memory[userId]
+}
+
+function addChatHistory(userId, role, content){
+
+if(!memory[userId]) memory[userId] = []
+
+memory[userId].push({role,content})
+
+if(memory[userId].length > 12) memory[userId].shift()
+
+saveMemory()
+
+}
+
+/* =====================================================
 PART 7 - MUSIC SYSTEM
 ===================================================== */
 
@@ -238,6 +352,70 @@ new ButtonBuilder()
 .setStyle(ButtonStyle.Danger)
 
 )
+
+}
+
+/* =================
+PLAY SONG ENGINE
+================= */
+
+async function playSong(guildId, connection){
+
+const queue = queues.get(guildId)
+
+if(!queue || queue.length === 0) return
+
+const song = queue[0]
+
+let stream
+
+try{
+
+stream = await play.stream(song.url,{
+discordPlayerCompatibility:true
+})
+
+}catch(err){
+
+console.log("STREAM ERROR:", err)
+
+queue.shift()
+
+return playSong(guildId, connection)
+
+}
+
+const resource = createAudioResource(stream.stream,{
+inputType: stream.type,
+inlineVolume:true
+})
+
+const player = getPlayer(guildId)
+
+const vol = volumes.get(guildId) || 1
+
+resource.volume.setVolume(vol)
+
+connection.subscribe(player)
+
+player.play(resource)
+
+player.once(AudioPlayerStatus.Idle,()=>{
+
+if(loops.get(guildId)){
+playSong(guildId, connection)
+return
+}
+
+queue.shift()
+
+if(queue.length === 0){
+return
+}else{
+playSong(guildId, connection)
+}
+
+})
 
 }
 
