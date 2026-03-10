@@ -667,7 +667,7 @@ url: query
 
 await playSong(interaction.guild.id, connection)
 
-interaction.editReply(`🎵 تمت إضافة ${query}`)
+await interaction.editReply(`🎵 تمت إضافة ${query}`)
 
 return
 }
@@ -704,8 +704,20 @@ return interaction.reply("⏹ تم الإيقاف")
 
 console.log("INTERACTION ERROR:",err)
 
-if(!interaction.replied){
-interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
+/* إصلاح خطأ 40060 */
+
+if(interaction.deferred || interaction.replied){
+
+try{
+await interaction.followUp("حدث خطأ أثناء تنفيذ الأمر")
+}catch(e){}
+
+}else{
+
+try{
+await interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
+}catch(e){}
+
 }
 
 }
