@@ -531,7 +531,8 @@ const info = await play.video_basic_info(song.url)
 /* إنشاء الستريم */
 
 stream = await play.stream_from_info(info.video_details,{
-discordPlayerCompatibility:true
+discordPlayerCompatibility:true,
+cookie: fs.readFileSync("cookies.txt").toString()
 })
 
 }catch(err){
