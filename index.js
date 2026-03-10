@@ -340,11 +340,31 @@ saveMemory()
 
 
 /* =====================================================
-PART 6 - DISCORD CLIENT
+PART 6.5 - LAVALINK MANAGER
 ===================================================== */
 
-// (تم حذف تعريف client لأنّه موجود في الأعلى)
-// يمكن إضافة كود هنا لاحقًا إذا احتجنا
+const { Manager } = require("erela.js")
+
+const manager = new Manager({
+  nodes: [
+    {
+      host: "lavalink.lexnet.cc",
+      port: 443,
+      password: "lexnet",
+      secure: true
+    }
+  ],
+  send(id, payload) {
+    const guild = client.guilds.cache.get(id)
+    if (guild) guild.shard.send(payload)
+  }
+})
+
+client.on("ready", () => {
+  manager.init(client.user.id)
+})
+
+client.on("raw", (d) => manager.updateVoiceState(d))
 
 
 /* =====================================================
