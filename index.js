@@ -359,7 +359,7 @@ new ButtonBuilder()
 PLAY SONG ENGINE
 ================= */
 
-async function playSong(guildId, connection){
+async function playSongOld(guildId, connection){
 
 const queue = queues.get(guildId)
 
