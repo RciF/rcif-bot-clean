@@ -331,24 +331,18 @@ PART 6 - MUSIC SYSTEM (LAVALINK)
 ===================================================== */
 
 const manager = new Manager({
-
-nodes:[
+nodes: [
 {
-host:"lavalink.lexnet.cc",
-port:443,
-password:"lexnet",
-secure:true
+host: "lava-v4.ajieblogs.eu.org",
+port: 443,
+password: "https://dsc.gg/ajidevserver",
+secure: true
 }
 ],
-
-send(id,payload){
-
+send(id, payload) {
 const guild = client.guilds.cache.get(id)
-
-if(guild) guild.shard.send(payload)
-
+if (guild) guild.shard.send(payload)
 }
-
 })
 
 /* اتصال الصوت */
