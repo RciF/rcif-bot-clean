@@ -343,8 +343,6 @@ saveMemory()
 PART 6.5 - LAVALINK MANAGER
 ===================================================== */
 
-const { Manager } = require("erela.js")
-
 const manager = new Manager({
   nodes: [
     {
