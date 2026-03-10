@@ -311,8 +311,6 @@ const players = new Map()
 const volumes = new Map()
 const loops = new Map()
 
-
-
 function getPlayer(guildId){
 
 if(!players.has(guildId)){
@@ -327,54 +325,118 @@ return players.get(guildId)
 
 }
 
-
+/* =================
+MUSIC EMBED
+================= */
 
 function createMusicEmbed(song){
 
 return new EmbedBuilder()
-
 .setColor("#2b2d31")
-
 .setTitle("🎶 Now Playing")
-
 .setDescription(`[${song.title}](${song.url})`)
 
 }
 
-
+/* =================
+CONTROL BUTTONS
+================= */
 
 function createButtons(){
 
 return new ActionRowBuilder().addComponents(
 
 new ButtonBuilder()
-
 .setCustomId("pause")
-
 .setLabel("⏯")
-
 .setStyle(ButtonStyle.Primary),
 
 new ButtonBuilder()
-
 .setCustomId("skip")
-
 .setLabel("⏭")
-
 .setStyle(ButtonStyle.Secondary),
 
 new ButtonBuilder()
-
 .setCustomId("stop")
-
 .setLabel("⏹")
-
 .setStyle(ButtonStyle.Danger)
 
 )
 
 }
 
+/* =================
+PLAY SONG ENGINE
+================= */
+
+async function playSong(guildId, connection){
+
+const queue = queues.get(guildId)
+
+if(!queue || queue.length === 0) return
+
+const song = queue[0]
+
+let stream
+
+try{
+
+stream = await play.stream(song.url,{
+discordPlayerCompatibility:true
+})
+
+}catch(err){
+
+console.log("STREAM ERROR:", err)
+
+queue.shift()
+
+return playSong(guildId, connection)
+
+}
+
+const resource = createAudioResource(stream.stream,{
+inputType: stream.type,
+inlineVolume: true
+})
+
+const player = getPlayer(guildId)
+
+const vol = volumes.get(guildId) || 1
+
+resource.volume.setVolume(vol)
+
+connection.subscribe(player)
+
+player.play(resource)
+
+/* عند انتهاء الأغنية */
+
+player.once(AudioPlayerStatus.Idle,()=>{
+
+if(loops.get(guildId)){
+
+playSong(guildId, connection)
+
+return
+
+}
+
+queue.shift()
+
+if(queue.length === 0){
+
+return
+
+}else{
+
+playSong(guildId, connection)
+
+}
+
+})
+
+}
 
 
 /* =====================================================
