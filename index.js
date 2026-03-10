@@ -1,5 +1,3 @@
-
-
 /* =====================================================
 PART 1 - CONFIG + IMPORTS
 ===================================================== */
@@ -10,17 +8,11 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const { REST, Routes, SlashCommandBuilder } = require("discord.js")
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection, AudioPlayerStatus, entersState, VoiceConnectionStatus } = require("@discordjs/voice")
 
-const play = require("play-dl")
-
 /* =================
-YOUTUBE COOKIE FIX
+LAVALINK IMPORT
 ================= */
 
-play.setToken({
-youtube:{
-cookie:"SID=g.a0007Ajbk0Ruyk1FRIePku8_vR1wnY48XQBu1BrPzmo7lLmgUxaTQwhzPXpvliHKP_mgNvQqSQACgYKAeYSARUSFQHGX2MiIDz9qRRYgQai2PfB9mWysxoVAUF8yKqa74iwyV-AiKFHVOUKFy1A0076; SAPISID=NaKhXdVdkQLGCa6z/AVfu14g818eRpEEDw; PREF=f6=40000080&f7=100&tz=Asia.Riyadh&f5=30000&f4=4000000;"
-}
-})
+const { Manager } = require("erela.js")
 
 /* =================
 KEEP RENDER ALIVE
@@ -41,6 +33,51 @@ const OWNER_ID = process.env.OWNER_ID
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 const BOT_NAME = "لين"
+
+/* =====================================================
+DISCORD CLIENT
+===================================================== */
+
+const client = new Client({
+intents:[
+GatewayIntentBits.Guilds,
+GatewayIntentBits.GuildMessages,
+GatewayIntentBits.GuildVoiceStates,
+GatewayIntentBits.MessageContent
+]
+})
+
+/* =====================================================
+LAVALINK MANAGER
+===================================================== */
+
+const manager = new Manager({
+
+nodes:[{
+host:"lava.link",
+port:80,
+password:"anything",
+secure:false
+}],
+
+send:(id,payload)=>{
+const guild = client.guilds.cache.get(id)
+if(guild) guild.shard.send(payload)
+}
+
+})
+
+client.on("ready",()=>{
+
+console.log("Bot online")
+
+manager.init(client.user.id)
+
+})
+
+client.on("raw",(d)=>{
+manager.updateVoiceState(d)
+})
 
 
 
@@ -76,8 +113,6 @@ messages:[
 })
 
 const data = await res.json()
-
-/* حماية إذا فشل الرد */
 
 if(!data || !data.choices){
 
@@ -195,7 +230,6 @@ function containsLink(text){
 return text.includes("http://") || text.includes("https://")
 
 }
-
 
 
 
