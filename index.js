@@ -55,9 +55,9 @@ const manager = new Manager({
 
 nodes:[
 {
-host:"lavalink.lexnet.cc",
+host:"lavalinkv4-idle.fly.dev",
 port:443,
-password:"lexnet",
+password:"youshallnotpass",
 secure:true
 }
 ],
