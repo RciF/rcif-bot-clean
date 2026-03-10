@@ -55,10 +55,13 @@ const manager = new Manager({
 
 nodes:[
 {
+identifier:"main-lavalink",
 host:"lavalinkv4-idle.fly.dev",
 port:443,
 password:"youshallnotpass",
-secure:true
+secure:true,
+retryAmount:10,
+retryDelay:5000
 }
 ],
 
@@ -68,6 +71,22 @@ if(guild) guild.shard.send(payload)
 }
 
 })
+
+/* =================
+LAVALINK EVENTS
+================= */
+
+manager.on("nodeConnect", node=>{
+console.log(`Lavalink node connected: ${node.options.identifier}`)
+})
+
+manager.on("nodeError", (node, error)=>{
+console.log(`Lavalink node error: ${error.message}`)
+})
+
+/* =================
+READY
+================= */
 
 client.once("ready",()=>{
 
