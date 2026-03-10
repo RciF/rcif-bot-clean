@@ -818,50 +818,55 @@ PLAY MUSIC
 if(interaction.commandName === "play"){
 
 const query = interaction.options.getString("song")
-
 const voiceChannel = interaction.member.voice.channel
 
 if(!voiceChannel){
-
 return interaction.reply("ادخل روم صوتي أولاً")
-
 }
 
 await interaction.deferReply()
 
+try{
+
 if(!queues.has(interaction.guild.id)){
-
 queues.set(interaction.guild.id,[])
-
 }
 
 const connection = joinVoiceChannel({
-
 channelId: voiceChannel.id,
 guildId: interaction.guild.id,
 adapterCreator: interaction.guild.voiceAdapterCreator
-
 })
 
 await entersState(connection, VoiceConnectionStatus.Ready, 20000)
 
-let results = await play.search(query,{limit:1})
+let results
 
-if(!results.length){
+try{
+results = await play.search(query,{limit:1})
+}catch(searchErr){
+console.log("SEARCH ERROR:",searchErr)
+return interaction.editReply("❌ فشل البحث في يوتيوب حاول لاحقاً")
+}
 
+if(!results || !results.length){
 return interaction.editReply("لم يتم العثور على الأغنية")
-
 }
 
 queues.get(interaction.guild.id).push(results[0])
 
 if(queues.get(interaction.guild.id).length === 1){
-
 await playSong(interaction.guild.id, connection)
-
 }
 
 return interaction.editReply(`🎶 تمت إضافة: ${results[0].title}`)
+
+}catch(err){
+
+console.log("PLAY ERROR:",err)
+return interaction.editReply("❌ حدث خطأ أثناء تشغيل الموسيقى")
+
+}
 
 }
 
@@ -1015,15 +1020,12 @@ return interaction.reply(`🎶 الآن: ${queue[0].title}`)
 console.log("INTERACTION ERROR:",err)
 
 if(!interaction.replied){
-
 interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
-
 }
 
 }
 
 })
-
 
 
 /* =====================================================
