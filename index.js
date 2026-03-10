@@ -5,9 +5,17 @@ const { REST, Routes, SlashCommandBuilder } = require("discord.js")
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, getVoiceConnection } = require("@discordjs/voice")
 
 const play = require("play-dl")
+
+play.setToken({
+youtube:{
+cookie:""
+}
+})
+
 const express = require("express")
 const fs = require("fs")
 const fetch = require("node-fetch")
+const ffmpeg = require("ffmpeg-static")
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 const CLIENT_ID = process.env.CLIENT_ID
@@ -318,8 +326,6 @@ client.on("interactionCreate",async interaction=>{
 
 if(!interaction.isChatInputCommand()) return
 
-/* HELP */
-
 if(interaction.commandName==="help"){
 return safeReply(interaction,`
 🤖 أوامر ${BOT_NAME}
@@ -334,16 +340,12 @@ return safeReply(interaction,`
 `)
 }
 
-/* AI */
-
 if(interaction.commandName==="ai"){
 const q = interaction.options.getString("question")
 await interaction.deferReply()
 const answer = await askAI(q,interaction.user.id)
 return safeEdit(interaction,answer)
 }
-
-/* IMAGE */
 
 if(interaction.commandName==="image"){
 const prompt = interaction.options.getString("prompt")
@@ -356,8 +358,6 @@ return safeEdit(interaction,"❌ فشل إنشاء الصورة")
 
 return safeEdit(interaction,img)
 }
-
-/* JOIN */
 
 if(interaction.commandName==="join"){
 
@@ -375,8 +375,6 @@ adapterCreator:interaction.guild.voiceAdapterCreator
 
 return safeReply(interaction,"🎧 دخلت الروم الصوتي")
 }
-
-/* PLAY */
 
 if(interaction.commandName==="play"){
 
@@ -409,7 +407,9 @@ return safeEdit(interaction,"❌ لم أجد الأغنية")
 
 const stream = await play.stream(result[0].url)
 
-const resource = createAudioResource(stream.stream)
+const resource = createAudioResource(stream.stream,{
+inputType: stream.type
+})
 
 player.play(resource)
 
@@ -422,8 +422,6 @@ return safeEdit(interaction,"❌ خطأ أثناء تشغيل الأغنية")
 
 }
 
-/* SKIP */
-
 if(interaction.commandName==="skip"){
 const player = players.get(interaction.guild.id)
 if(player){
@@ -432,8 +430,6 @@ return safeReply(interaction,"⏭️ تم تخطي الأغنية")
 }
 return safeReply(interaction,"❌ لا توجد أغنية تعمل")
 }
-
-/* STOP */
 
 if(interaction.commandName==="stop"){
 const connection = getVoiceConnection(interaction.guild.id)
