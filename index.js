@@ -55,10 +55,10 @@ const manager = new Manager({
 
 nodes:[
 {
-host:"lava.link",
-port:80,
-password:"anything",
-secure:false
+host:"lavalink.lexnet.cc",
+port:443,
+password:"lexnet",
+secure:true
 }
 ],
 
