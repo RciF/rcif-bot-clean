@@ -444,8 +444,8 @@ let stream
 try{
 
 stream = await play.stream(song.url,{
-discordPlayerCompatibility:true,
-cookie: process.env.YT_COOKIE
+  discordPlayerCompatibility:true,
+  cookie: process.env.YT_COOKIE?.replace(/[\r\n\t]/g, "").trim()
 })
 
 }catch(err){
