@@ -637,15 +637,15 @@ PLAY
 
 if(interaction.commandName === "play"){
 
-await interaction.deferReply()
-
 const query = interaction.options.getString("song")
 
 const voice = interaction.member.voice.channel
 
 if(!voice){
-return interaction.editReply("❌ ادخل روم صوتي أولاً")
+return interaction.reply({ content: "❌ ادخل روم صوتي أولاً", ephemeral: true })
 }
+
+await interaction.deferReply()
 
 const connection = joinVoiceChannel({
 channelId: voice.id,
@@ -667,9 +667,7 @@ url: query
 
 await playSong(interaction.guild.id, connection)
 
-await interaction.editReply(`🎵 تمت إضافة ${query}`)
-
-return
+return interaction.editReply(`🎵 تمت إضافة ${query}`)
 }
 
 /* =================
@@ -679,6 +677,10 @@ SKIP
 if(interaction.commandName === "skip"){
 
 const player = getPlayer(interaction.guild.id)
+
+if(!player){
+return interaction.reply({ content: "❌ لا يوجد شيء يعمل", ephemeral: true })
+}
 
 player.stop()
 
@@ -702,23 +704,25 @@ return interaction.reply("⏹ تم الإيقاف")
 
 }catch(err){
 
-console.log("INTERACTION ERROR:",err)
+console.log("INTERACTION ERROR:", err)
 
-/* إصلاح خطأ 40060 */
-
-if(interaction.deferred || interaction.replied){
+/* معالجة آمنة للرد */
 
 try{
-await interaction.followUp("حدث خطأ أثناء تنفيذ الأمر")
-}catch(e){}
 
-}else{
-
-try{
-await interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
-}catch(e){}
-
+if(interaction.deferred){
+await interaction.editReply("حدث خطأ أثناء تنفيذ الأمر")
 }
+
+else if(interaction.replied){
+await interaction.followUp("حدث خطأ أثناء تنفيذ الأمر")
+}
+
+else{
+await interaction.reply({ content:"حدث خطأ أثناء تنفيذ الأمر", ephemeral:true })
+}
+
+}catch(e){}
 
 }
 
@@ -727,7 +731,7 @@ await interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
 
 
 /* =====================================================
-PART 10 - MESSAGE EVENTS
+PART 11 - MESSAGE EVENTS
 ===================================================== */
 
 client.on("messageCreate", async message=>{
@@ -744,113 +748,6 @@ message.channel.send("🚫 الروابط غير مسموحة")
 })
 
 
-
-/* =====================================================
-PART 11 - INTERACTIONS
-===================================================== */
-
-client.on("interactionCreate", async interaction=>{
-
-if(!interaction.isChatInputCommand()) return
-
-/* إذا تم الرد مسبقاً لا تنفذ مرة أخرى */
-
-if(interaction.replied || interaction.deferred) return
-
-try{
-
-
-/* =================
-AI COMMAND
-================= */
-
-if(interaction.commandName === "ask"){
-
-const question = interaction.options.getString("question")
-
-await interaction.deferReply()
-
-const reply = await askAI(question)
-
-return interaction.editReply(reply)
-
-}
-
-
-/* =================
-IMAGE COMMAND
-================= */
-
-if(interaction.commandName === "image"){
-
-const prompt = interaction.options.getString("prompt")
-
-await interaction.deferReply()
-
-const img = await generateImage(prompt)
-
-if(!img) return interaction.editReply("فشل توليد الصورة")
-
-return interaction.editReply(img)
-
-}
-
-
-/* =================
-WARN
-================= */
-
-if(interaction.commandName === "warn"){
-
-const user = interaction.options.getUser("user")
-
-const count = addWarn(user.id)
-
-return interaction.reply(`⚠️ تم تحذير ${user.tag} (${count})`)
-
-}
-
-
-/* =================
-KICK
-================= */
-
-if(interaction.commandName === "kick"){
-
-const member = interaction.options.getMember("user")
-
-await member.kick()
-
-return interaction.reply("تم طرد العضو")
-
-}
-
-
-/* =================
-BAN
-================= */
-
-if(interaction.commandName === "ban"){
-
-const member = interaction.options.getMember("user")
-
-await member.ban()
-
-return interaction.reply("تم حظر العضو")
-
-}
-
-}catch(err){
-
-console.log("INTERACTION ERROR:",err)
-
-if(!interaction.replied){
-interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
-}
-
-}
-
-})
 
 /* =====================================================
 PART 12 - LOGIN
