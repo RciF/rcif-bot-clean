@@ -676,10 +676,20 @@ const rest = new REST({version:"10"}).setToken(DISCORD_TOKEN)
 
 async function registerCommands(){
 
+try{
+
 await rest.put(
 Routes.applicationCommands(CLIENT_ID),
 {body:commands}
 )
+
+console.log("Slash commands registered")
+
+}catch(err){
+
+console.log("COMMAND REGISTER ERROR:",err)
+
+}
 
 }
 
@@ -805,7 +815,7 @@ return interaction.reply("تم حظر العضو")
 
 
 /* =================
-PLAY MUSIC (LAVALINK)
+PLAY MUSIC (بدون Lavalink)
 ================= */
 
 if(interaction.commandName === "play"){
@@ -819,52 +829,27 @@ return interaction.reply("ادخل روم صوتي أولاً")
 
 await interaction.deferReply()
 
-let player = manager.players.get(interaction.guild.id)
-
-if(!player){
-
-player = manager.create({
-
-guild:interaction.guild.id,
-voiceChannel:voiceChannel.id,
-textChannel:interaction.channel.id,
-selfDeafen:true
-
+const connection = joinVoiceChannel({
+channelId: voiceChannel.id,
+guildId: interaction.guild.id,
+adapterCreator: interaction.guild.voiceAdapterCreator
 })
 
-player.connect()
+let queue = queues.get(interaction.guild.id)
 
+if(!queue){
+queue = []
+queues.set(interaction.guild.id, queue)
 }
 
-const res = await manager.search(query, interaction.user)
+queue.push({
+title: query,
+url: query
+})
 
-if(res.loadType === "NO_MATCHES"){
-return interaction.editReply("لم يتم العثور على الأغنية")
-}
+await playSong(interaction.guild.id, connection)
 
-if(res.loadType === "TRACK_LOADED" || res.loadType === "SEARCH_RESULT"){
-
-player.queue.add(res.tracks[0])
-
-if(!player.playing && !player.paused && player.queue.size === 1){
-player.play()
-}
-
-return interaction.editReply(`🎶 تمت إضافة: ${res.tracks[0].title}`)
-
-}
-
-if(res.loadType === "PLAYLIST_LOADED"){
-
-player.queue.add(res.tracks)
-
-if(!player.playing && !player.paused && player.queue.size === res.tracks.length){
-player.play()
-}
-
-return interaction.editReply(`🎶 تمت إضافة قائمة تشغيل (${res.tracks.length} أغنية)`)
-
-}
+return interaction.editReply(`🎶 تمت إضافة: ${query}`)
 
 }
 
@@ -875,11 +860,13 @@ SKIP
 
 if(interaction.commandName === "skip"){
 
-const player = manager.players.get(interaction.guild.id)
+const queue = queues.get(interaction.guild.id)
 
-if(!player) return interaction.reply("لا يوجد شيء يعمل")
+if(!queue || queue.length === 0){
+return interaction.reply("لا يوجد شيء يعمل")
+}
 
-player.stop()
+queue.shift()
 
 return interaction.reply("⏭ تم تخطي الأغنية")
 
@@ -892,11 +879,11 @@ PAUSE
 
 if(interaction.commandName === "pause"){
 
-const player = manager.players.get(interaction.guild.id)
+const player = getPlayer(interaction.guild.id)
 
 if(!player) return interaction.reply("لا يوجد شيء يعمل")
 
-player.pause(true)
+player.pause()
 
 return interaction.reply("⏸ تم إيقاف الموسيقى")
 
@@ -909,11 +896,11 @@ RESUME
 
 if(interaction.commandName === "resume"){
 
-const player = manager.players.get(interaction.guild.id)
+const player = getPlayer(interaction.guild.id)
 
 if(!player) return interaction.reply("لا يوجد شيء يعمل")
 
-player.pause(false)
+player.unpause()
 
 return interaction.reply("▶️ تم استكمال الموسيقى")
 
@@ -926,11 +913,13 @@ STOP
 
 if(interaction.commandName === "stop"){
 
-const player = manager.players.get(interaction.guild.id)
+const connection = getVoiceConnection(interaction.guild.id)
 
-if(!player) return interaction.reply("لا يوجد شيء يعمل")
+if(connection){
+connection.destroy()
+}
 
-player.destroy()
+queues.delete(interaction.guild.id)
 
 return interaction.reply("⏹ تم إيقاف الموسيقى")
 
@@ -943,13 +932,13 @@ QUEUE
 
 if(interaction.commandName === "queue"){
 
-const player = manager.players.get(interaction.guild.id)
+const queue = queues.get(interaction.guild.id)
 
-if(!player || !player.queue.size){
+if(!queue || queue.length === 0){
 return interaction.reply("لا يوجد طابور")
 }
 
-let text = player.queue.map((t,i)=>`${i+1}. ${t.title}`).slice(0,10).join("\n")
+let text = queue.map((t,i)=>`${i+1}. ${t.title}`).slice(0,10).join("\n")
 
 return interaction.reply(`🎶 الطابور:\n${text}`)
 
@@ -962,13 +951,9 @@ LOOP
 
 if(interaction.commandName === "loop"){
 
-const player = manager.players.get(interaction.guild.id)
+loops.set(interaction.guild.id, !loops.get(interaction.guild.id))
 
-if(!player) return interaction.reply("لا يوجد شيء يعمل")
-
-player.setTrackRepeat(!player.trackRepeat)
-
-return interaction.reply(`🔁 التكرار: ${player.trackRepeat ? "مفعل" : "متوقف"}`)
+return interaction.reply(`🔁 التكرار: ${loops.get(interaction.guild.id) ? "مفعل" : "متوقف"}`)
 
 }
 
@@ -981,15 +966,11 @@ if(interaction.commandName === "volume"){
 
 const value = interaction.options.getInteger("value")
 
-const player = manager.players.get(interaction.guild.id)
-
-if(!player) return interaction.reply("لا يوجد شيء يعمل")
-
 if(value < 1 || value > 100){
 return interaction.reply("القيمة بين 1 و 100")
 }
 
-player.setVolume(value)
+volumes.set(interaction.guild.id, value / 100)
 
 return interaction.reply(`🔊 الصوت أصبح ${value}%`)
 
@@ -1002,13 +983,13 @@ NOW PLAYING
 
 if(interaction.commandName === "nowplaying"){
 
-const player = manager.players.get(interaction.guild.id)
+const queue = queues.get(interaction.guild.id)
 
-if(!player || !player.queue.current){
+if(!queue || queue.length === 0){
 return interaction.reply("لا يوجد شيء يعمل")
 }
 
-return interaction.reply(`🎶 الآن: ${player.queue.current.title}`)
+return interaction.reply(`🎶 الآن: ${queue[0].title}`)
 
 }
 
