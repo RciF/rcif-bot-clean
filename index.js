@@ -145,48 +145,25 @@ players.set(guildId,player)
 return players.get(guildId)
 }
 
-/* =================
-EMBED + BUTTONS
-================= */
-
-function musicEmbed(song){
-
+function createMusicEmbed(song){
 return new EmbedBuilder()
 .setColor("#2b2d31")
 .setTitle("🎶 Now Playing")
 .setDescription(`[${song.title}](${song.url})`)
-.setFooter({text:"Music System"})
 }
 
-function controls(){
-
+function createButtons(){
 return new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("pause")
-.setLabel("⏯")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("skip")
-.setLabel("⏭")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("stop")
-.setLabel("⏹")
-.setStyle(ButtonStyle.Danger)
-
+new ButtonBuilder().setCustomId("pause").setLabel("⏯").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("skip").setLabel("⏭").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("stop").setLabel("⏹").setStyle(ButtonStyle.Danger)
 )
-
 }
 
 async function playSong(guildId,connection){
 
 const queue = queues.get(guildId)
-if(!queue || queue.length===0){
-return
-}
+if(!queue || queue.length===0) return
 
 const song = queue[0]
 
@@ -208,12 +185,12 @@ connection.subscribe(player)
 player.play(resource)
 
 const guild = client.guilds.cache.get(guildId)
-const channel = guild.channels.cache.find(c=>c.type===0)
+const textChannel = guild.channels.cache.find(c=>c.type===0)
 
-if(channel){
-channel.send({
-embeds:[musicEmbed(song)],
-components:[controls()]
+if(textChannel){
+textChannel.send({
+embeds:[createMusicEmbed(song)],
+components:[createButtons()]
 })
 }
 
@@ -258,52 +235,26 @@ playSong(guildId,connection)
 }
 
 /* =================
-AI CHAT
+SPOTIFY SUPPORT
 ================= */
 
-async function askAI(prompt,userId){
+async function handleSpotify(url){
 
-try{
+const data = await play.spotify(url)
 
-const history = getChatHistory(userId)
-
-const systemPrompt = `اسمك ${BOT_NAME}. روبوت ديسكورد لطيف.`
-
-const messages = [
-{role:"system",content:systemPrompt},
-...history,
-{role:"user",content:prompt}
-]
-
-const res = await fetch("https://api.openai.com/v1/chat/completions",{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-"Authorization":`Bearer ${OPENAI_API_KEY}`
-},
-body:JSON.stringify({
-model:"gpt-4.1-mini",
-messages:messages
-})
-})
-
-const data = await res.json()
-
-if(!data || !data.choices){
-return "تعذر الحصول على رد."
+if(data.type === "track"){
+return [`${data.name} ${data.artists[0].name}`]
 }
 
-const reply = data.choices[0].message.content
+if(data.type === "playlist" || data.type === "album"){
 
-addChatHistory(userId,"user",prompt)
-addChatHistory(userId,"assistant",reply)
+const tracks = await data.all_tracks()
 
-return reply
+return tracks.map(t=>`${t.name} ${t.artists[0].name}`)
 
-}catch(err){
-console.log(err)
-return "خطأ في الذكاء الاصطناعي"
 }
+
+return []
 
 }
 
@@ -312,8 +263,6 @@ SLASH COMMANDS
 ================= */
 
 const commands = [
-
-new SlashCommandBuilder().setName("help").setDescription("عرض الأوامر"),
 
 new SlashCommandBuilder()
 .setName("play")
@@ -337,12 +286,7 @@ new SlashCommandBuilder()
 .setDescription("تغيير الصوت")
 .addIntegerOption(o=>o.setName("value").setDescription("1-100").setRequired(true)),
 
-new SlashCommandBuilder().setName("nowplaying").setDescription("الأغنية الحالية"),
-
-new SlashCommandBuilder()
-.setName("ai")
-.setDescription("سؤال الذكاء الاصطناعي")
-.addStringOption(o=>o.setName("question").setDescription("السؤال").setRequired(true))
+new SlashCommandBuilder().setName("nowplaying").setDescription("الأغنية الحالية")
 
 ]
 
@@ -352,22 +296,18 @@ async function registerCommands(){
 await rest.put(Routes.applicationCommands(CLIENT_ID),{body:commands})
 }
 
-/* =================
-READY
-================= */
-
 client.once("clientReady",()=>{
 console.log("Bot online")
 registerCommands()
 })
 
 /* =================
-BUTTON SYSTEM
+INTERACTIONS
 ================= */
 
 client.on("interactionCreate",async interaction=>{
 
-if(!interaction.isButton()) return
+if(interaction.isButton()){
 
 const player = players.get(interaction.guild.id)
 
@@ -385,6 +325,56 @@ if(interaction.customId==="stop"){
 const connection = getVoiceConnection(interaction.guild.id)
 if(connection) connection.destroy()
 interaction.reply({content:"⏹ Stopped",ephemeral:true})
+}
+
+return
+}
+
+if(!interaction.isChatInputCommand()) return
+
+if(interaction.commandName==="play"){
+
+const query = interaction.options.getString("song")
+const voiceChannel = interaction.member.voice.channel
+
+if(!voiceChannel){
+return safeReply(interaction,"ادخل روم صوتي أولاً")
+}
+
+await interaction.deferReply()
+
+let songs = []
+
+if(query.includes("spotify.com")){
+songs = await handleSpotify(query)
+}else{
+songs = [query]
+}
+
+if(!queues.has(interaction.guild.id)){
+queues.set(interaction.guild.id,[])
+}
+
+const connection = joinVoiceChannel({
+channelId:voiceChannel.id,
+guildId:interaction.guild.id,
+adapterCreator:interaction.guild.voiceAdapterCreator
+})
+
+for(const s of songs){
+
+let results = await play.search(s,{limit:1})
+if(results.length){
+queues.get(interaction.guild.id).push(results[0])
+}
+
+}
+
+if(queues.get(interaction.guild.id).length===1){
+await playSong(interaction.guild.id,connection)
+}
+
+return safeEdit(interaction,`🎶 تمت إضافة ${songs.length} أغنية إلى الطابور`)
 }
 
 })
