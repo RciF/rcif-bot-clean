@@ -12,9 +12,23 @@ const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnec
 
 const play = require("play-dl")
 
+/* =================
+YOUTUBE COOKIE FIX
+================= */
+
 play.setToken({
-youtube:{cookie:""}
+youtube:{
+cookie:"SID=g.a0007Ajbk0Ruyk1FRIePku8_vR1wnY48XQBu1BrPzmo7lLmgUxaTQwhzPXpvliHKP_mgNvQqSQACgYKAeYSARUSFQHGX2MiIDz9qRRYgQai2PfB9mWysxoVAUF8yKqa74iwyV-AiKFHVOUKFy1A0076; SAPISID=NaKhXdVdkQLGCa6z/AVfu14g818eRpEEDw; PREF=f6=40000080&f7=100&tz=Asia.Riyadh&f5=30000&f4=4000000;"
+}
 })
+
+/* =================
+KEEP RENDER ALIVE
+================= */
+
+setInterval(()=>{
+console.log("Bot alive")
+},300000)
 
 const express = require("express")
 const fs = require("fs")
@@ -27,7 +41,6 @@ const OWNER_ID = process.env.OWNER_ID
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
 const BOT_NAME = "لين"
-
 
 
 
@@ -46,7 +59,7 @@ method:"POST",
 
 headers:{
 "Content-Type":"application/json",
-"Authorization":"Bearer "+OPENAI_API_KEY
+"Authorization":"Bearer " + OPENAI_API_KEY
 },
 
 body:JSON.stringify({
@@ -64,13 +77,23 @@ messages:[
 
 const data = await res.json()
 
-return data.choices?.[0]?.message?.content || "لم أستطع الرد"
+/* حماية إذا فشل الرد */
+
+if(!data || !data.choices){
+
+console.log("AI ERROR:", data)
+
+return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي"
+
+}
+
+return data.choices[0].message.content
 
 }catch(err){
 
-console.log(err)
+console.log("AI ERROR:", err)
 
-return "AI error"
+return "حدث خطأ في الذكاء الاصطناعي"
 
 }
 
