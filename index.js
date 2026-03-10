@@ -366,6 +366,37 @@ saveMemory()
 PART 6 - MUSIC SYSTEM
 ===================================================== */
 
+const { Manager } = require("erela.js")
+
+/* =================
+LAVALINK MANAGER
+================= */
+
+const manager = new Manager({
+  nodes: [
+    {
+      host: "lavalink.lexnet.cc",
+      port: 443,
+      password: "lexnet",
+      secure: true
+    }
+  ],
+  send(id, payload) {
+    const guild = client.guilds.cache.get(id)
+    if (guild) guild.shard.send(payload)
+  }
+})
+
+client.on("raw", (d) => manager.updateVoiceState(d))
+
+client.once("ready", () => {
+  manager.init(client.user.id)
+})
+
+/* =================
+OLD LOCAL PLAYER SYSTEM (KEEPED)
+================= */
+
 const queues = new Map()
 const players = new Map()
 const volumes = new Map()
