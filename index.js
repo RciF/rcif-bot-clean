@@ -121,6 +121,36 @@ fs.writeFileSync("memory.json",JSON.stringify(memory,null,2))
 }
 
 /* =================
+CHAT MEMORY (NEW)
+================= */
+
+function getChatHistory(userId){
+
+if(!memory[userId]){
+memory[userId] = []
+}
+
+return memory[userId]
+
+}
+
+function addChatHistory(userId,role,content){
+
+if(!memory[userId]){
+memory[userId] = []
+}
+
+memory[userId].push({role,content})
+
+if(memory[userId].length > 12){
+memory[userId].shift()
+}
+
+saveMemory()
+
+}
+
+/* =================
 DISCORD CLIENT
 ================= */
 
@@ -158,12 +188,26 @@ serverQueue.player.play(resource)
 }
 
 /* =================
-AI CHAT (FIXED)
+AI CHAT (UPGRADED)
 ================= */
 
-async function askAI(prompt){
+async function askAI(prompt,userId){
 
 try{
+
+const history = getChatHistory(userId)
+
+const systemPrompt = `اسمك ${BOT_NAME}. 
+أنت روبوت ديسكورد لطيف وذكي.
+تتكلم بالعربية بشكل طبيعي وودود.
+تحب مساعدة الناس.
+إذا كان الشخص هو المالك تعامل معه باحترام خاص.`
+
+const messages = [
+{role:"system",content:systemPrompt},
+...history,
+{role:"user",content:prompt}
+]
 
 const res = await fetch("https://api.openai.com/v1/chat/completions",{
 method:"POST",
@@ -173,10 +217,7 @@ headers:{
 },
 body:JSON.stringify({
 model:"gpt-4.1-mini",
-messages:[
-{role:"system",content:`اسمك ${BOT_NAME} روبوت ديسكورد لطيف.`},
-{role:"user",content:prompt}
-]
+messages:messages
 })
 })
 
@@ -187,7 +228,12 @@ console.log("OpenAI response:",data)
 return "تعذر الحصول على رد من الذكاء الاصطناعي."
 }
 
-return data.choices[0].message.content
+const reply = data.choices[0].message.content
+
+addChatHistory(userId,"user",prompt)
+addChatHistory(userId,"assistant",reply)
+
+return reply
 
 }catch(err){
 
@@ -330,7 +376,7 @@ const q = interaction.options.getString("question")
 
 await interaction.deferReply()
 
-const answer = await askAI(q)
+const answer = await askAI(q,interaction.user.id)
 
 return safeEdit(interaction,answer)
 
@@ -349,6 +395,51 @@ return safeEdit(interaction,"❌ فشل إنشاء الصورة")
 }
 
 return safeEdit(interaction,img)
+
+}
+
+})
+
+/* =================
+MENTION AI SYSTEM
+================= */
+
+client.on("messageCreate", async (message)=>{
+
+try{
+
+if(message.author.bot) return
+
+if(!message.mentions.has(client.user)) return
+
+if(checkSpam(message.author.id)){
+return message.reply("⏳ حاول مرة أخرى بعد قليل.")
+}
+
+let question = message.content
+.replace(`<@${client.user.id}>`,"")
+.replace(`<@!${client.user.id}>`,"")
+.trim()
+
+if(!question){
+return message.reply("اكتب سؤالك بعد المنشن 🙂")
+}
+
+if(isOwner(message.author.id)){
+question = `المالك ${message.author.username} يسأل: ${question}`
+}
+
+await message.channel.sendTyping()
+
+const reply = await askAI(question,message.author.id)
+
+message.reply(reply)
+
+logEvent(`AI mention used by ${message.author.tag}`)
+
+}catch(err){
+
+console.log("MENTION AI ERROR:",err)
 
 }
 
