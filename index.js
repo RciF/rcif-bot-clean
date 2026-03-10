@@ -64,7 +64,7 @@ LAVALINK MANAGER (DISABLED)
 READY EVENT
 ===================================================== */
 
-client.once("ready",()=>{
+client.once("clientReady",()=>{
   console.log("Bot online")
 })
 
@@ -590,7 +590,7 @@ try{
 
 await rest.put(
 Routes.applicationCommands(CLIENT_ID),
-{body:commands}
+{ body: commands.map(cmd => cmd.toJSON()) }
 )
 
 console.log("Slash commands registered")
@@ -611,6 +611,102 @@ registerCommands()
 
 })
 
+
+/* =====================================================
+PART 10 - INTERACTION HANDLER
+===================================================== */
+
+client.on("interactionCreate", async interaction => {
+
+if(!interaction.isChatInputCommand()) return
+
+try{
+
+/* =================
+PLAY
+================= */
+
+if(interaction.commandName === "play"){
+
+await interaction.deferReply()
+
+const query = interaction.options.getString("song")
+
+const voice = interaction.member.voice.channel
+
+if(!voice){
+
+return interaction.editReply("❌ ادخل روم صوتي أولاً")
+
+}
+
+const connection = joinVoiceChannel({
+channelId: voice.id,
+guildId: interaction.guild.id,
+adapterCreator: interaction.guild.voiceAdapterCreator
+})
+
+let queue = queues.get(interaction.guild.id)
+
+if(!queue){
+queue = []
+queues.set(interaction.guild.id, queue)
+}
+
+queue.push({
+title: query,
+url: query
+})
+
+interaction.editReply(`🎵 تمت إضافة ${query}`)
+
+playSong(interaction.guild.id, connection)
+
+}
+
+/* =================
+SKIP
+================= */
+
+if(interaction.commandName === "skip"){
+
+const player = getPlayer(interaction.guild.id)
+
+player.stop()
+
+return interaction.reply("⏭ تم التخطي")
+
+}
+
+/* =================
+STOP
+================= */
+
+if(interaction.commandName === "stop"){
+
+queues.set(interaction.guild.id, [])
+
+const connection = getVoiceConnection(interaction.guild.id)
+
+if(connection) connection.destroy()
+
+return interaction.reply("⏹ تم الإيقاف")
+
+}
+
+}catch(err){
+
+console.log("INTERACTION ERROR:",err)
+
+if(!interaction.replied){
+
+interaction.reply("حدث خطأ أثناء تنفيذ الأمر")
+
+}
+
+}
+
+})
 
 
 /* =====================================================
