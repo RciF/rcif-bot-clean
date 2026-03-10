@@ -50,7 +50,7 @@ const ffmpeg = require("ffmpeg-static")
 /* مكتبة تشغيل الصوت من يوتيوب */
 const play = require("play-dl")
 
-await play.setToken({
+play.setToken({
   youtube: {
     cookie: process.env.YT_COOKIE
   }
