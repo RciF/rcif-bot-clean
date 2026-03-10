@@ -761,7 +761,6 @@ client.once("clientReady",()=>{
 registerCommands()
 })
 
-
 /* =====================================================
 PART 9 - INTERACTION HANDLER
 ===================================================== */
@@ -794,27 +793,34 @@ return interaction.reply({content:"❌ ادخل روم صوتي أولاً",ephe
 
 await interaction.deferReply()
 
-const connection = joinVoiceChannel({
-channelId:voice.id,
-guildId:guildId,
-adapterCreator:interaction.guild.voiceAdapterCreator
+let player = manager.players.get(guildId)
+
+if(!player){
+player = manager.create({
+guild: guildId,
+voiceChannel: voice.id,
+textChannel: interaction.channel.id,
+selfDeafen: true
 })
-
-let queue = queues.get(guildId)
-
-if(!queue){
-queue=[]
-queues.set(guildId,queue)
 }
 
-queue.push({
-title:query,
-url:query
-})
+if(player.state !== "CONNECTED") player.connect()
 
-await playSong(guildId,connection)
+const res = await manager.search(query, interaction.user)
 
-return interaction.editReply(`🎵 تمت إضافة ${query}`)
+if(res.loadType === "NO_MATCHES"){
+return interaction.editReply("❌ لم يتم العثور على نتيجة")
+}
+
+const track = res.tracks[0]
+
+player.queue.add(track)
+
+if(!player.playing && !player.paused && player.queue.size === 1){
+player.play()
+}
+
+return interaction.editReply(`🎵 تمت إضافة **${track.title}**`)
 }
 
 /* =================
@@ -823,9 +829,9 @@ SKIP
 
 if(interaction.commandName === "skip"){
 
-const player=getPlayer(guildId)
+const player = manager.players.get(guildId)
 
-if(!player){
+if(!player || !player.queue.current){
 return interaction.reply({content:"❌ لا يوجد شيء يعمل",ephemeral:true})
 }
 
@@ -840,10 +846,13 @@ STOP
 
 if(interaction.commandName === "stop"){
 
-queues.set(guildId,[])
+const player = manager.players.get(guildId)
 
-const connection=getVoiceConnection(guildId)
-if(connection) connection.destroy()
+if(!player){
+return interaction.reply("❌ لا يوجد تشغيل")
+}
+
+player.destroy()
 
 return interaction.reply("⏹ تم الإيقاف")
 }
@@ -854,9 +863,13 @@ PAUSE
 
 if(interaction.commandName === "pause"){
 
-const player=getPlayer(guildId)
+const player = manager.players.get(guildId)
 
-player.pause()
+if(!player){
+return interaction.reply("❌ لا يوجد تشغيل")
+}
+
+player.pause(true)
 
 return interaction.reply("⏸ تم الإيقاف المؤقت")
 }
@@ -867,9 +880,13 @@ RESUME
 
 if(interaction.commandName === "resume"){
 
-const player=getPlayer(guildId)
+const player = manager.players.get(guildId)
 
-player.unpause()
+if(!player){
+return interaction.reply("❌ لا يوجد تشغيل")
+}
+
+player.pause(false)
 
 return interaction.reply("▶️ تم استكمال التشغيل")
 }
@@ -880,60 +897,15 @@ QUEUE
 
 if(interaction.commandName === "queue"){
 
-const queue=queues.get(guildId)
+const player = manager.players.get(guildId)
 
-if(!queue || queue.length===0){
+if(!player || player.queue.size === 0){
 return interaction.reply("📭 الطابور فارغ")
 }
 
-const list=queue.map((s,i)=>`${i+1}. ${s.title}`).join("\n")
+const list = player.queue.map((t,i)=>`${i+1}. ${t.title}`).join("\n")
 
 return interaction.reply(`🎶 الطابور:\n${list}`)
-}
-
-/* =================
-LOOP
-================= */
-
-if(interaction.commandName === "loop"){
-
-const current=loops.get(guildId)
-
-loops.set(guildId,!current)
-
-return interaction.reply(`🔁 التكرار: ${!current ? "مفعل" : "متوقف"}`)
-}
-
-/* =================
-VOLUME
-================= */
-
-if(interaction.commandName === "volume"){
-
-const value=interaction.options.getInteger("value")
-
-volumes.set(guildId,value/100)
-
-return interaction.reply(`🔊 الصوت: ${value}%`)
-}
-
-/* =================
-NOW PLAYING
-================= */
-
-if(interaction.commandName === "nowplaying"){
-
-const queue=queues.get(guildId)
-
-if(!queue || queue.length===0){
-return interaction.reply("لا يوجد شيء يعمل")
-}
-
-const song=queue[0]
-
-return interaction.reply({
-embeds:[createMusicEmbed(song)]
-})
 }
 
 /* =================
