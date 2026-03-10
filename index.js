@@ -429,17 +429,36 @@ const queue = queues.get(guildId)
 
 if(!queue || queue.length === 0) return
 
-const song = queue[0]
+let song = queue[0]
 
 let stream
+let video
 
 try{
 
-/* جلب معلومات الفيديو أولاً لتجنب خطأ 429 */
+/* إذا لم يكن رابط يوتيوب نقوم بالبحث */
+
+if(!song.url.startsWith("http")){
+
+const result = await play.search(song.url,{ limit:1 })
+
+if(!result || result.length === 0){
+queue.shift()
+return playSong(guildId, connection)
+}
+
+video = result[0]
+
+song.url = video.url
+song.title = video.title
+
+}
+
+/* جلب معلومات الفيديو */
 
 const info = await play.video_basic_info(song.url)
 
-/* إنشاء الستريم من المعلومات */
+/* إنشاء الستريم */
 
 stream = await play.stream_from_info(info.video_details,{
 discordPlayerCompatibility:true
