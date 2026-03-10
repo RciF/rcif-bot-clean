@@ -465,6 +465,10 @@ const player = getPlayer(guildId)
 const vol = volumes.get(guildId) || 1
 resource.volume.setVolume(vol)
 
+/* انتظار اتصال الصوت */
+
+await entersState(connection, VoiceConnectionStatus.Ready, 20000)
+
 connection.subscribe(player)
 
 player.play(resource)
