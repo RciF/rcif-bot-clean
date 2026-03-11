@@ -326,38 +326,53 @@ saveMemory()
 
 }
 
+
 /* =====================================================
-PART 6 - MUSIC SYSTEM (LAVALINK)
+PART 6 - MUSIC SYSTEM (LAVALINK v4)
 ===================================================== */
 
-const manager = new Manager({
-nodes: [
-{
-host: "lava-v4.ajieblogs.eu.org",
-port: 443,
-password: "https://dsc.gg/ajidevserver",
-secure: true
-}
-],
-send(id, payload) {
-const guild = client.guilds.cache.get(id)
-if (guild) guild.shard.send(payload)
-}
+const { LavalinkManager } = require("lavalink-client")
+
+const manager = new LavalinkManager({
+  nodes: [
+    {
+      id: "main",
+      host: "lavalink-uy0o.onrender.com",
+      port: 443,
+      authorization: "rcif123",
+      secure: true
+    }
+  ],
+
+  sendToShard: (guildId, payload) => {
+    const guild = client.guilds.cache.get(guildId)
+    if (guild) guild.shard.send(payload)
+  }
 })
 
-/* اتصال الصوت */
+/* استقبال بيانات الصوت من Discord */
 
-client.on("raw",(d)=>manager.updateVoiceState(d))
-
-/* logs لمعرفة الاتصال */
-
-manager.on("nodeConnect", node=>{
-console.log("Lavalink connected")
+client.on("raw", (packet) => {
+  manager.sendRawData(packet)
 })
 
-manager.on("nodeError",(node,error)=>{
-console.log("Lavalink error:",error)
+/* تشغيل Lavalink بعد تشغيل البوت */
+
+client.once("ready", async () => {
+  console.log("Initializing Lavalink...")
+  await manager.init(client.user.id)
 })
+
+/* Logs لمعرفة حالة الاتصال */
+
+manager.on("nodeConnect", () => {
+  console.log("✅ Lavalink connected")
+})
+
+manager.on("nodeError", (node, err) => {
+  console.log("❌ Lavalink error:", err)
+})
+
 
 /* =====================================================
 OLD LOCAL PLAYER SYSTEM (لم نحذفه)
@@ -370,15 +385,15 @@ const loops = new Map()
 
 function getPlayer(guildId){
 
-if(!players.has(guildId)){
+  if(!players.has(guildId)){
 
-const player = createAudioPlayer()
+    const player = createAudioPlayer()
 
-players.set(guildId,player)
+    players.set(guildId,player)
 
-}
+  }
 
-return players.get(guildId)
+  return players.get(guildId)
 
 }
 
