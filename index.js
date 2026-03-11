@@ -321,9 +321,9 @@ const manager = new LavalinkManager({
 nodes:[
 {
 id:"main",
-host:"lava-v4.ajieblogs.eu.org",
+host:"lavalinkv4.icehost.net",
 port:443,
-authorization:"https://dsc.gg/ajidevserver",
+authorization:"icehost",
 secure:true
 }
 ],
