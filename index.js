@@ -504,7 +504,7 @@ let song = queue[0]
 
 try{
 
-let player = manager.players.get(guildId)
+let player = manager.players?.get?.(guildId)
 
 if(!player){
 
@@ -521,7 +521,7 @@ await player.connect()
 
 /* تم تعديل هذا السطر */
 
-const node = manager.nodes.get("main")
+const node = manager.nodes?.get?.("main")
 
 const res = await node.search({
 query: song.url,
@@ -724,7 +724,7 @@ selfDeafen: true
 
 if(player.state !== "CONNECTED") await player.connect()
 
-const node = manager.nodes.get("main")
+const node = manager.nodes?.get?.("main")
 
 if(!node){
 return interaction.editReply("❌ Lavalink غير متصل")
@@ -756,7 +756,7 @@ SKIP
 
 else if(interaction.commandName === "skip"){
 
-const player = manager.players.get(guildId)
+const player = manager.players?.get?.(guildId)
 
 if(!player || !player.queue.current){
 return safeReply(interaction,{content:"❌ لا يوجد شيء يعمل",flags:64})
@@ -773,7 +773,7 @@ STOP
 
 else if(interaction.commandName === "stop"){
 
-const player = manager.players.get(guildId)
+const player = manager.players?.get?.(guildId)
 
 if(!player){
 return safeReply(interaction,"❌ لا يوجد تشغيل")
@@ -790,7 +790,7 @@ PAUSE
 
 else if(interaction.commandName === "pause"){
 
-const player = manager.players.get(guildId)
+const player = manager.players?.get?.(guildId)
 
 if(!player){
 return safeReply(interaction,"❌ لا يوجد تشغيل")
@@ -807,7 +807,7 @@ RESUME
 
 else if(interaction.commandName === "resume"){
 
-const player = manager.players.get(guildId)
+const player = manager.players?.get?.(guildId)
 
 if(!player){
 return safeReply(interaction,"❌ لا يوجد تشغيل")
@@ -824,7 +824,7 @@ QUEUE
 
 else if(interaction.commandName === "queue"){
 
-const player = manager.players.get(guildId)
+const player = manager.players?.get?.(guildId)
 
 if(!player || player.queue.tracks.length === 0){
 return safeReply(interaction,"📭 الطابور فارغ")
