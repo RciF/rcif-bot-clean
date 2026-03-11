@@ -1454,7 +1454,7 @@ console.log("❌ DISCORD TOKEN NOT FOUND")
 process.exit(1)
 }
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
 
 console.log("Bot online")
 
