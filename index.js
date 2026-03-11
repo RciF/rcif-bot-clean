@@ -298,52 +298,75 @@ PART 7 - MUSIC SYSTEM (LAVALINK)
 
 const { LavalinkManager } = require("lavalink-client")
 
-function getLavalinkNodeOptions() {
-const envHost = process.env.LAVALINK_HOST
-const envPort = process.env.LAVALINK_PORT ? Number(process.env.LAVALINK_PORT) : undefined
-const envSecure =
+function getLavalinkNodes() {
+const authorization = process.env.LAVALINK_PASSWORD || "rcif123"
+const retryAmount = 10
+const retryDelay = 10_000
+
+// If you explicitly set host/port/secure -> use exactly that (single node).
+if (process.env.LAVALINK_HOST) {
+const port = process.env.LAVALINK_PORT ? Number(process.env.LAVALINK_PORT) : 2333
+const secure =
 process.env.LAVALINK_SECURE != null
 ? ["1", "true", "yes", "on"].includes(String(process.env.LAVALINK_SECURE).toLowerCase())
-: undefined
+: false
 
-// Render tip:
-// - If Lavalink is a *private* Render service in the same region, use the internal DNS name (service name) + port 2333 (secure: false).
-// - If using the public `*.onrender.com` hostname, use wss on 443 (secure: true) only if your Lavalink service is correctly exposed via Render's proxy.
-const host =
-envHost ||
-(process.env.RENDER
-? // Most reliable default on Render (private service DNS name). Override with LAVALINK_HOST if different.
-  "rcif-lavalink"
-: "rcif-lavalink.onrender.com")
-
-const isPublicOnRender = host.endsWith(".onrender.com")
-
-const port = Number.isFinite(envPort)
-? envPort
-: isPublicOnRender
-? 443
-: 2333
-
-const secure = typeof envSecure === "boolean" ? envSecure : isPublicOnRender
-
-return {
+return [
+{
 id: process.env.LAVALINK_NODE_ID || "main",
-host,
+host: process.env.LAVALINK_HOST,
 port,
-authorization: process.env.LAVALINK_PASSWORD || "rcif123",
+authorization,
 secure,
-retryAmount: 10,
-retryDelay: 10_000
+retryAmount,
+retryDelay
 }
+]
+}
+
+// Render default (best-effort):
+// - Prefer the private Render service DNS name (avoids Render edge proxy 502 issues).
+// - Also add public hostname as fallback in case your services are not on the same private network.
+if (process.env.RENDER) {
+return [
+{
+id: "render-internal",
+host: "rcif-lavalink",
+port: 2333,
+authorization,
+secure: false,
+retryAmount,
+retryDelay
+},
+{
+id: "render-public",
+host: "rcif-lavalink.onrender.com",
+port: 443,
+authorization,
+secure: true,
+retryAmount,
+retryDelay
+}
+]
+}
+
+// Local/dev default.
+return [
+{
+id: process.env.LAVALINK_NODE_ID || "main",
+host: "rcif-lavalink.onrender.com",
+port: 443,
+authorization,
+secure: true,
+retryAmount,
+retryDelay
+}
+]
 }
 
 const manager = new LavalinkManager({
 
-nodes: [
-{
-...getLavalinkNodeOptions()
-}
-],
+nodes: getLavalinkNodes(),
 
 sendToShard: (guildId, payload) => {
 const guild = client.guilds.cache.get(guildId)
@@ -371,8 +394,10 @@ client.once("clientReady", async () => {
 console.log("Bot online")
 
 try{
-const node = getLavalinkNodeOptions()
+const nodes = getLavalinkNodes()
+for(const node of nodes){
 console.log(`Attempting Lavalink connection: ${node.secure ? "wss" : "ws"}://${node.host}:${node.port} (id=${node.id})`)
+}
 }catch(e){
 console.log("Failed to build Lavalink config:",e)
 }
