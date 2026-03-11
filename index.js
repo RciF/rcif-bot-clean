@@ -636,7 +636,7 @@ selfDeafen: true
 
 }
 
-if(player.state !== "CONNECTED") player.connect()
+if(player.state !== "CONNECTED") await player.connect()
 
 const res = await manager.search(query, interaction.user)
 
@@ -649,7 +649,7 @@ const track = res.tracks[0]
 player.queue.add(track)
 
 if(!player.playing && !player.paused && player.queue.size === 1){
-player.play()
+await player.play()
 }
 
 return interaction.editReply(`🎵 تمت إضافة **${track.title}**`)
@@ -659,7 +659,7 @@ return interaction.editReply(`🎵 تمت إضافة **${track.title}**`)
 SKIP
 ================= */
 
-if(interaction.commandName === "skip"){
+else if(interaction.commandName === "skip"){
 
 const player = manager.players.get(guildId)
 
@@ -676,7 +676,7 @@ return interaction.reply("⏭ تم التخطي")
 STOP
 ================= */
 
-if(interaction.commandName === "stop"){
+else if(interaction.commandName === "stop"){
 
 const player = manager.players.get(guildId)
 
@@ -693,7 +693,7 @@ return interaction.reply("⏹ تم الإيقاف")
 PAUSE
 ================= */
 
-if(interaction.commandName === "pause"){
+else if(interaction.commandName === "pause"){
 
 const player = manager.players.get(guildId)
 
@@ -710,7 +710,7 @@ return interaction.reply("⏸ تم الإيقاف المؤقت")
 RESUME
 ================= */
 
-if(interaction.commandName === "resume"){
+else if(interaction.commandName === "resume"){
 
 const player = manager.players.get(guildId)
 
@@ -727,7 +727,7 @@ return interaction.reply("▶️ تم استكمال التشغيل")
 QUEUE
 ================= */
 
-if(interaction.commandName === "queue"){
+else if(interaction.commandName === "queue"){
 
 const player = manager.players.get(guildId)
 
@@ -744,7 +744,7 @@ return interaction.reply(`🎶 الطابور:\n${list}`)
 AI
 ================= */
 
-if(interaction.commandName === "ask"){
+else if(interaction.commandName === "ask"){
 
 if(!settings.ai){
 return interaction.reply("🤖 نظام الذكاء الصناعي مغلق")
@@ -771,7 +771,7 @@ return interaction.editReply(answer)
 IMAGE
 ================= */
 
-if(interaction.commandName === "image"){
+else if(interaction.commandName === "image"){
 
 await interaction.deferReply()
 
@@ -790,7 +790,7 @@ return interaction.editReply(img)
 WARN
 ================= */
 
-if(interaction.commandName === "warn"){
+else if(interaction.commandName === "warn"){
 
 const user = interaction.options.getUser("user")
 
@@ -803,7 +803,7 @@ return interaction.reply(`⚠️ تم تحذير ${user.tag} (${count})`)
 KICK
 ================= */
 
-if(interaction.commandName === "kick"){
+else if(interaction.commandName === "kick"){
 
 const member = interaction.options.getMember("user")
 
@@ -816,7 +816,7 @@ return interaction.reply("تم طرد العضو")
 BAN
 ================= */
 
-if(interaction.commandName === "ban"){
+else if(interaction.commandName === "ban"){
 
 const member = interaction.options.getMember("user")
 
