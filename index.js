@@ -567,7 +567,7 @@ new SlashCommandBuilder()
 
 ]
 
-const rest = new REST({version:"10"}).setToken(DISCORD_TOKEN)
+const rest = new REST({ version:"10" }).setToken(DISCORD_TOKEN)
 
 async function registerCommands(){
 
@@ -582,7 +582,7 @@ console.log("Slash commands registered")
 
 }catch(err){
 
-console.log("COMMAND REGISTER ERROR:",err)
+console.log("COMMAND REGISTER ERROR:", err)
 
 }
 
@@ -590,8 +590,10 @@ console.log("COMMAND REGISTER ERROR:",err)
 
 /* تسجيل الأوامر عند تشغيل البوت */
 
-client.once("clientReady",()=>{
-registerCommands()
+client.once("clientReady", async () => {
+
+await registerCommands()
+
 })
 
 /* =====================================================
