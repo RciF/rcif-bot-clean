@@ -298,17 +298,50 @@ PART 7 - MUSIC SYSTEM (LAVALINK)
 
 const { LavalinkManager } = require("lavalink-client")
 
+function getLavalinkNodeOptions() {
+const envHost = process.env.LAVALINK_HOST
+const envPort = process.env.LAVALINK_PORT ? Number(process.env.LAVALINK_PORT) : undefined
+const envSecure =
+process.env.LAVALINK_SECURE != null
+? ["1", "true", "yes", "on"].includes(String(process.env.LAVALINK_SECURE).toLowerCase())
+: undefined
+
+// Render tip:
+// - If Lavalink is a *private* Render service in the same region, use the internal DNS name (service name) + port 2333 (secure: false).
+// - If using the public `*.onrender.com` hostname, use wss on 443 (secure: true) only if your Lavalink service is correctly exposed via Render's proxy.
+const host =
+envHost ||
+(process.env.RENDER
+? // Most reliable default on Render (private service DNS name). Override with LAVALINK_HOST if different.
+  "rcif-lavalink"
+: "rcif-lavalink.onrender.com")
+
+const isPublicOnRender = host.endsWith(".onrender.com")
+
+const port = Number.isFinite(envPort)
+? envPort
+: isPublicOnRender
+? 443
+: 2333
+
+const secure = typeof envSecure === "boolean" ? envSecure : isPublicOnRender
+
+return {
+id: process.env.LAVALINK_NODE_ID || "main",
+host,
+port,
+authorization: process.env.LAVALINK_PASSWORD || "rcif123",
+secure,
+retryAmount: 10,
+retryDelay: 10_000
+}
+}
+
 const manager = new LavalinkManager({
 
 nodes: [
 {
-id: "main",
-host: "rcif-lavalink.onrender.com",
-port: 443,
-authorization: "rcif123",
-secure: true,
-retryAmount: 10,
-retryDelay: 10_000
+...getLavalinkNodeOptions()
 }
 ],
 
@@ -336,6 +369,13 @@ READY EVENT
 client.once("clientReady", async () => {
 
 console.log("Bot online")
+
+try{
+const node = getLavalinkNodeOptions()
+console.log(`Attempting Lavalink connection: ${node.secure ? "wss" : "ws"}://${node.host}:${node.port} (id=${node.id})`)
+}catch(e){
+console.log("Failed to build Lavalink config:",e)
+}
 
 await manager.init({
 id: client.user.id,
