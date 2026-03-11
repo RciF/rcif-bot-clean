@@ -321,10 +321,10 @@ const manager = new LavalinkManager({
 nodes:[
 {
 id:"main",
-host:"lavalinkv4-idle.alfari.id",
-port:443,
-authorization:"YouTube@2023",
-secure:true
+host:"lavalink.jirayu.net",
+port:13592,
+authorization:"youshallnotpass",
+secure:false
 }
 ],
 
