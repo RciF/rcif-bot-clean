@@ -328,8 +328,8 @@ retryDelay
 // - Prefer the private Render service DNS name (avoids Render edge proxy 502 issues).
 // - Also add public hostname as fallback in case your services are not on the same private network.
 if (process.env.RENDER) {
-const internalHost = process.env.LAVALINK_INTERNAL_HOST || "rcif-lavalink"
-const publicHost = process.env.LAVALINK_PUBLIC_HOST || "rcif-lavalink.onrender.com"
+const internalHost = String(process.env.LAVALINK_INTERNAL_HOST || "rcif-lavalink").trim()
+const publicHost = String(process.env.LAVALINK_PUBLIC_HOST || "rcif-lavalink.onrender.com").trim()
 return [
 {
 id: "render-internal",
