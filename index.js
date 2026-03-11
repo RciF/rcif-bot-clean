@@ -1454,4 +1454,15 @@ console.log("❌ DISCORD TOKEN NOT FOUND")
 process.exit(1)
 }
 
+client.once("ready", async () => {
+
+console.log("Bot online")
+
+await manager.init({
+id: client.user.id,
+username: client.user.username
+})
+
+})
+
 client.login(DISCORD_TOKEN)
