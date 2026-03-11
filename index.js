@@ -326,11 +326,6 @@ secure:false
 }
 ],
 
-client:{
-id: process.env.CLIENT_ID,
-username:"bot"
-},
-
 sendToShard:(guildId,payload)=>{
 const guild = client.guilds.cache.get(guildId)
 if(guild){
@@ -339,6 +334,8 @@ guild.shard.send(payload)
 }
 
 })
+
+/* إرسال أحداث الصوت من Discord إلى Lavalink */
 
 client.on("raw",(packet)=>{
 manager.sendRawData(packet)
@@ -352,20 +349,27 @@ client.once("clientReady", async () => {
 
 console.log("Bot online")
 
-await manager.init(client)
+await manager.init({
+id: client.user.id,
+username: client.user.username
+})
 
 })
 
-manager.on("nodeConnect", () => {
+/* =====================================================
+LAVALINK EVENTS
+===================================================== */
 
-console.log("✅ Lavalink connected")
-
+manager.on("nodeConnect",(node)=>{
+console.log("✅ Lavalink connected:", node.options.id)
 })
 
-manager.on("nodeError", (node, err) => {
-
+manager.on("nodeError",(node,err)=>{
 console.log("❌ Lavalink error:", err)
+})
 
+manager.on("nodeDisconnect",(node)=>{
+console.log("⚠️ Lavalink disconnected:", node.options.id)
 })
 
 /* =====================================================
@@ -390,7 +394,6 @@ players.set(guildId,player)
 return players.get(guildId)
 
 }
-
 
 /* =====================================================
 PART 7 - PLAY SONG SYSTEM (LAVALINK)
