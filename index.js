@@ -308,6 +308,8 @@ saveMemory()
 
 }
 
+ 
+
 /* =====================================================
 PART 6 - MUSIC SYSTEM (LAVALINK)
 ===================================================== */
@@ -320,9 +322,9 @@ nodes:[
 {
 id:"main",
 host:"lavalink-uyo0.onrender.com",
-port:2333,
+port:443,
 authorization:"rcif123",
-secure:false
+secure:true
 }
 ],
 
@@ -394,6 +396,7 @@ players.set(guildId,player)
 return players.get(guildId)
 
 }
+
 
 /* =====================================================
 PART 7 - PLAY SONG SYSTEM (LAVALINK)
