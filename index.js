@@ -649,7 +649,11 @@ selfDeafen: true
 
 if(player.state !== "CONNECTED") await player.connect()
 
-const node = manager.nodes.first()
+const node = manager.nodes.get("main")
+
+if(!node){
+return interaction.editReply("❌ Lavalink غير متصل")
+}
 
 const res = await node.search({
 query: query,
