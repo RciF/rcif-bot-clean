@@ -328,10 +328,12 @@ retryDelay
 // - Prefer the private Render service DNS name (avoids Render edge proxy 502 issues).
 // - Also add public hostname as fallback in case your services are not on the same private network.
 if (process.env.RENDER) {
+const internalHost = process.env.LAVALINK_INTERNAL_HOST || "rcif-lavalink"
+const publicHost = process.env.LAVALINK_PUBLIC_HOST || "rcif-lavalink.onrender.com"
 return [
 {
 id: "render-internal",
-host: "rcif-lavalink",
+host: internalHost,
 port: 2333,
 authorization,
 secure: false,
@@ -340,7 +342,7 @@ retryDelay
 },
 {
 id: "render-public",
-host: "rcif-lavalink.onrender.com",
+host: publicHost,
 port: 443,
 authorization,
 secure: true,
@@ -420,7 +422,7 @@ console.log("✅ Lavalink connected:", node.options.id)
 })
 
 manager.on("nodeError", (node, err) => {
-console.log("❌ Lavalink error:", err)
+console.log(`❌ Lavalink error (${node?.options?.id || "unknown-node"}):`, err?.message || err)
 })
 
 manager.on("nodeDisconnect", (node) => {
