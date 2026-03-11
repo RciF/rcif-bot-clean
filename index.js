@@ -48,9 +48,8 @@ youtube:{
 cookie:process.env.YT_COOKIE
 }
 })
-
 /* =====================================================
-ENV VARIABLES
+PART 2 - ENV VARIABLES
 ===================================================== */
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
@@ -72,9 +71,8 @@ GatewayIntentBits.GuildVoiceStates,
 GatewayIntentBits.MessageContent
 ]
 })
-
 /* =====================================================
-WEB SERVER (Render Port Binding)
+PART 3 - WEB SERVER (Render Port Binding)
 ===================================================== */
 
 const app = express()
@@ -86,9 +84,8 @@ res.send("Bot running")
 app.listen(process.env.PORT || 10000,()=>{
 console.log("Web server ready")
 })
-
 /* =====================================================
-PART 2 - AI SYSTEM
+PART 4 - AI SYSTEM
 ===================================================== */
 
 async function askAI(prompt){
@@ -137,9 +134,8 @@ return "حدث خطأ في الذكاء الاصطناعي"
 }
 
 }
-
 /* =====================================================
-PART 3 - IMAGE GENERATION
+PART 5 - IMAGE GENERATION
 ===================================================== */
 
 async function generateImage(prompt){
@@ -183,9 +179,8 @@ return null
 }
 
 }
-
 /* =====================================================
-PART 4 - XP + WARNINGS
+PART 6 - XP + WARNINGS + MEMORY
 ===================================================== */
 
 let xp = {}
@@ -242,9 +237,7 @@ return text.includes("http://") || text.includes("https://")
 
 }
 
-/* =====================================================
-PART 5 - SAFE + MEMORY
-===================================================== */
+/* ================= SAFE REPLY ================= */
 
 async function safeReply(interaction,content){
 
@@ -262,15 +255,7 @@ console.log("SAFE REPLY ERROR:",e)
 
 }
 
-function logEvent(text){
-
-const log=`[${new Date().toLocaleString()}] ${text}\n`
-
-fs.appendFileSync("logs.txt",log)
-
-}
-
-/* MEMORY */
+/* ================= MEMORY ================= */
 
 let memory = {}
 
@@ -307,11 +292,8 @@ memory[userId].shift()
 saveMemory()
 
 }
-
- 
-
 /* =====================================================
-PART 6 - MUSIC SYSTEM (LAVALINK)
+PART 7 - MUSIC SYSTEM (LAVALINK)
 ===================================================== */
 
 const { LavalinkManager } = require("lavalink-client")
@@ -358,6 +340,9 @@ id: client.user.id,
 username: client.user.username
 })
 
+/* تسجيل الأوامر */
+await registerCommands()
+
 })
 
 /* =====================================================
@@ -375,9 +360,8 @@ console.log("❌ Lavalink error:", err)
 manager.on("nodeDisconnect", (node) => {
 console.log("⚠️ Lavalink disconnected:", node.options.id)
 })
-
 /* =====================================================
-OLD LOCAL PLAYER SYSTEM (لم نحذفه)
+PART 8 - OLD LOCAL PLAYER SYSTEM (لم نحذفه)
 ===================================================== */
 
 const queues = new Map()
@@ -398,9 +382,8 @@ players.set(guildId, player)
 return players.get(guildId)
 
 }
-
 /* =====================================================
-PART 7 - PLAY SONG SYSTEM (LAVALINK)
+PART 9 - PLAY SONG SYSTEM (LAVALINK)
 ===================================================== */
 
 async function playSong(guildId, voiceChannel){
@@ -412,8 +395,6 @@ if(!queue || queue.length === 0) return
 let song = queue[0]
 
 try{
-
-/* إنشاء player */
 
 let player = manager.players.get(guildId)
 
@@ -430,9 +411,9 @@ await player.connect()
 
 }
 
-/* البحث عن الأغنية */
+/* تم تعديل هذا السطر */
 
-const node = manager.nodes.first()
+const node = manager.nodes.get("main")
 
 const res = await node.search({
 query: song.url,
@@ -446,8 +427,6 @@ queue.shift()
 return playSong(guildId, voiceChannel)
 
 }
-
-/* إضافة للمشغل */
 
 player.queue.add(res.tracks[0])
 
@@ -466,9 +445,8 @@ return playSong(guildId, voiceChannel)
 }
 
 }
-
 /* =====================================================
-PART 8 - SLASH COMMANDS
+PART 10 - SLASH COMMANDS
 ===================================================== */
 
 const commands = [
@@ -564,10 +542,6 @@ o.setName("user")
 .setRequired(true)
 ),
 
-/* =================
-CONTROL PANEL
-================= */
-
 new SlashCommandBuilder()
 .setName("panel")
 .setDescription("فتح لوحة التحكم")
@@ -595,12 +569,8 @@ console.log("COMMAND REGISTER ERROR:", err)
 
 }
 
-registerCommands()
-
-})
-
 /* =====================================================
-PART 9 - INTERACTION HANDLER
+PART 12 - INTERACTION HANDLER
 ===================================================== */
 
 client.on("interactionCreate", async interaction => {
@@ -646,7 +616,7 @@ selfDeafen: true
 
 if(player.state !== "CONNECTED") await player.connect()
 
-const node = manager.nodes.find(n => n.options.id === "main")
+const node = manager.nodes.get("main")
 
 if(!node){
 return interaction.editReply("❌ Lavalink غير متصل")
@@ -818,56 +788,15 @@ const count = addWarn(user.id)
 return safeReply(interaction,`⚠️ تم تحذير ${user.tag} (${count})`)
 }
 
-/* =================
-KICK
-================= */
-
-else if(interaction.commandName === "kick"){
-
-const member = interaction.options.getMember("user")
-
-await member.kick()
-
-return safeReply(interaction,"تم طرد العضو")
-}
-
-/* =================
-BAN
-================= */
-
-else if(interaction.commandName === "ban"){
-
-const member = interaction.options.getMember("user")
-
-await member.ban()
-
-return safeReply(interaction,"تم حظر العضو")
-}
-
 }catch(err){
 
 console.log("INTERACTION ERROR:",err)
 
-try{
-
-if(interaction.deferred){
-await interaction.editReply("حدث خطأ أثناء تنفيذ الأمر")
-}
-else if(interaction.replied){
-await interaction.followUp("حدث خطأ أثناء تنفيذ الأمر")
-}
-else{
-await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر",flags:64})
-}
-
-}catch(e){}
-
 }
 
 })
-
 /* =====================================================
-PART 10 - MESSAGE EVENTS
+PART 13 - MESSAGE EVENTS
 ===================================================== */
 
 client.on("messageCreate", async message=>{
@@ -882,10 +811,7 @@ const settings = getSettings(guildId)
 
 /* =================
 ROOMS ALLOWED LINKS
-=================
-
-ضع هنا ID الرومات التي تريد السماح بالروابط فيها
-*/
+================= */
 
 const allowedLinkChannels = [
 "1415931124290555935",
@@ -898,16 +824,10 @@ const allowedLinkChannels = [
 
 /* =================
 ROLES ALLOWED LINKS
-=================
-
-ضع هنا ID الرتب التي يسمح لها بالروابط
-Right Click Role
-Copy Role ID
-*/
+================= */
 
 const allowedLinkRoles = [
 "1481053486241026179"
-// "ضع هنا ايدي رتبة اخرى لاحقاً"
 ]
 
 /* =================
@@ -924,11 +844,7 @@ ANTI LINK SYSTEM
 
 if(settings.antilink && containsLink(message.content)){
 
-/* السماح إذا كان الروم ضمن القائمة */
-
 if(allowedLinkChannels.includes(message.channel.id)) return
-
-/* السماح إذا كان العضو لديه رتبة مسموحة */
 
 if(message.member.roles.cache.some(role => allowedLinkRoles.includes(role.id))) return
 
@@ -941,9 +857,8 @@ message.channel.send("🚫 الروابط غير مسموحة").catch(()=>{})
 }
 
 })
-
 /* =====================================================
-PART 11 - BUTTON HANDLER
+PART 14 - BUTTON HANDLER
 ===================================================== */
 
 client.on("interactionCreate", async interaction => {
@@ -1018,9 +933,8 @@ console.log("BUTTON HANDLER ERROR:",err)
 }
 
 })
-
 /* =====================================================
-PART 12 - SETTINGS SYSTEM
+PART 15 - SETTINGS SYSTEM
 ===================================================== */
 
 let settings = {}
@@ -1074,397 +988,6 @@ settings[guildId][key] = value
 saveSettings()
 
 }
-
-/* =====================================================
-PART 13 - PANEL COMMAND
-===================================================== */
-
-client.on("interactionCreate", async interaction => {
-
-if(!interaction.isChatInputCommand()) return
-
-if(interaction.commandName !== "panel") return
-
-try{
-
-const isAdmin = interaction.member.permissions.has(PermissionFlagsBits.Administrator)
-
-if(!isAdmin){
-return interaction.reply({
-content:"❌ You need Administrator permission",
-ephemeral:true
-})
-}
-
-/* تحديد اللغة */
-
-const locale = interaction.locale || "en"
-
-const isArabic = locale.startsWith("ar")
-
-/* النصوص */
-
-const text = isArabic ? {
-
-title:"🎛 لوحة التحكم",
-desc:"إدارة أنظمة السيرفر",
-music:"🎵 الموسيقى",
-ai:"🤖 الذكاء الصناعي",
-protection:"🛡 الحماية",
-xp:"📊 نظام XP"
-
-} : {
-
-title:"🎛 Control Panel",
-desc:"Manage server systems",
-music:"🎵 Music",
-ai:"🤖 AI",
-protection:"🛡 Protection",
-xp:"📊 XP System"
-
-}
-
-/* Embed */
-
-const embed = new EmbedBuilder()
-.setColor("#2b2d31")
-.setTitle(text.title)
-.setDescription(text.desc)
-
-/* Select Menu */
-
-const menu = new ActionRowBuilder().addComponents(
-
-new StringSelectMenuBuilder()
-.setCustomId("panel_menu")
-.setPlaceholder("Select System")
-.addOptions(
-{
-label:text.music,
-value:"panel_music"
-},
-{
-label:text.ai,
-value:"panel_ai"
-},
-{
-label:text.protection,
-value:"panel_protection"
-},
-{
-label:text.xp,
-value:"panel_xp"
-}
-)
-
-)
-
-await interaction.reply({
-embeds:[embed],
-components:[menu]
-})
-
-}catch(err){
-
-console.log("PANEL ERROR:",err)
-
-}
-
-})
-
-
-/* =====================================================
-PART 14 - PANEL SYSTEM
-===================================================== */
-
-client.on("interactionCreate", async interaction => {
-
-if(!interaction.isStringSelectMenu()) return
-if(interaction.customId !== "panel_menu") return
-
-try{
-
-const guildId = interaction.guild.id
-
-const settings = getSettings(guildId)
-
-/* تحديد اللغة */
-
-const locale = interaction.locale || "en"
-const isArabic = locale.startsWith("ar")
-
-/* النصوص */
-
-const text = isArabic ? {
-
-music:"🎵 لوحة الموسيقى",
-ai:"🤖 لوحة الذكاء الصناعي",
-protection:"🛡 لوحة الحماية",
-xp:"📊 لوحة XP",
-
-loop:"تفعيل / إيقاف التكرار",
-volume:"مستوى الصوت",
-queue:"عرض الطابور",
-
-ai_toggle:"تشغيل / إيقاف AI",
-memory_clear:"مسح الذاكرة",
-
-antilink:"تشغيل / إيقاف منع الروابط",
-
-xp_toggle:"تشغيل / إيقاف XP"
-
-} : {
-
-music:"🎵 Music Panel",
-ai:"🤖 AI Panel",
-protection:"🛡 Protection Panel",
-xp:"📊 XP Panel",
-
-loop:"Toggle Loop",
-volume:"Volume",
-queue:"Queue",
-
-ai_toggle:"Toggle AI",
-memory_clear:"Clear Memory",
-
-antilink:"Toggle Anti Link",
-
-xp_toggle:"Toggle XP"
-
-}
-
-/* =================
-MUSIC PANEL
-================= */
-
-if(interaction.values[0] === "panel_music"){
-
-const embed = new EmbedBuilder()
-.setColor("#2b2d31")
-.setTitle(text.music)
-
-const row = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("music_pause")
-.setLabel("⏯")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("music_skip")
-.setLabel("⏭")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("music_stop")
-.setLabel("⏹")
-.setStyle(ButtonStyle.Danger)
-
-)
-
-return interaction.update({
-embeds:[embed],
-components:[row]
-})
-
-}
-
-/* =================
-AI PANEL
-================= */
-
-if(interaction.values[0] === "panel_ai"){
-
-const embed = new EmbedBuilder()
-.setColor("#2b2d31")
-.setTitle(text.ai)
-
-const row = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("ai_toggle")
-.setLabel(text.ai_toggle)
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("memory_clear")
-.setLabel(text.memory_clear)
-.setStyle(ButtonStyle.Secondary)
-
-)
-
-return interaction.update({
-embeds:[embed],
-components:[row]
-})
-
-}
-
-/* =================
-PROTECTION PANEL
-================= */
-
-if(interaction.values[0] === "panel_protection"){
-
-const embed = new EmbedBuilder()
-.setColor("#2b2d31")
-.setTitle(text.protection)
-
-const row = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("antilink_toggle")
-.setLabel(text.antilink)
-.setStyle(ButtonStyle.Primary)
-
-)
-
-return interaction.update({
-embeds:[embed],
-components:[row]
-})
-
-}
-
-/* =================
-XP PANEL
-================= */
-
-if(interaction.values[0] === "panel_xp"){
-
-const embed = new EmbedBuilder()
-.setColor("#2b2d31")
-.setTitle(text.xp)
-
-const row = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("xp_toggle")
-.setLabel(text.xp_toggle)
-.setStyle(ButtonStyle.Primary)
-
-)
-
-return interaction.update({
-embeds:[embed],
-components:[row]
-})
-
-}
-
-}catch(err){
-
-console.log("PANEL SYSTEM ERROR:",err)
-
-}
-
-})
-
-/* =====================================================
-PART 15 - PANEL BUTTON ACTIONS
-===================================================== */
-
-client.on("interactionCreate", async interaction => {
-
-if(!interaction.isButton()) return
-
-try{
-
-const guildId = interaction.guild?.id
-if(!guildId) return
-
-const settings = getSettings(guildId)
-
-/* تحديد اللغة */
-
-const locale = interaction.locale || "en"
-const isArabic = locale.startsWith("ar")
-
-
-
-/* =================
-AI TOGGLE
-================= */
-
-if(interaction.customId === "ai_toggle"){
-
-const newValue = !settings.ai
-
-updateSetting(guildId,"ai",newValue)
-
-return safeReply(interaction,{
-content: isArabic
-? `🤖 الذكاء الصناعي: ${newValue ? "مفعل" : "متوقف"}`
-: `🤖 AI is now ${newValue ? "enabled" : "disabled"}`,
-ephemeral:true
-})
-
-}
-
-/* =================
-CLEAR MEMORY
-================= */
-
-if(interaction.customId === "memory_clear"){
-
-memory = {}
-saveMemory()
-
-return safeReply(interaction,{
-content: isArabic
-? "🧹 تم مسح ذاكرة الذكاء الصناعي"
-: "🧹 AI memory cleared",
-ephemeral:true
-})
-
-}
-
-/* =================
-ANTILINK TOGGLE
-================= */
-
-if(interaction.customId === "antilink_toggle"){
-
-const newValue = !settings.antilink
-
-updateSetting(guildId,"antilink",newValue)
-
-return safeReply(interaction,{
-content: isArabic
-? `🔗 منع الروابط: ${newValue ? "مفعل" : "متوقف"}`
-: `🔗 Anti Link is now ${newValue ? "enabled" : "disabled"}`,
-ephemeral:true
-})
-
-}
-
-/* =================
-XP TOGGLE
-================= */
-
-if(interaction.customId === "xp_toggle"){
-
-const newValue = !settings.xp
-
-updateSetting(guildId,"xp",newValue)
-
-return safeReply(interaction,{
-content: isArabic
-? `📊 نظام XP: ${newValue ? "مفعل" : "متوقف"}`
-: `📊 XP system is now ${newValue ? "enabled" : "disabled"}`,
-ephemeral:true
-})
-
-}
-
-}catch(err){
-
-console.log("PANEL BUTTON ERROR:", err)
-
-}
-
-})
-
 /* =====================================================
 PART 16 - LOGIN
 ===================================================== */
