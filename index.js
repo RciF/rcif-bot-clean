@@ -1475,14 +1475,3 @@ process.exit(1)
 }
 
 client.login(DISCORD_TOKEN)
-
-console.log("Bot online")
-
-await manager.init({
-id: client.user.id,
-username: client.user.username
-})
-
-})
-
-client.login(DISCORD_TOKEN)
