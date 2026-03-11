@@ -326,8 +326,6 @@ secure:true
 }
 ],
 
-clientId: process.env.CLIENT_ID,
-
 sendToShard:(guildId,payload)=>{
 const guild = client.guilds.cache.get(guildId)
 if(guild){
@@ -349,7 +347,10 @@ client.once("clientReady",async()=>{
 
 console.log("Bot online")
 
-await manager.init(client.user.id)
+await manager.init({
+id: client.user.id,
+username: client.user.username
+})
 
 })
 
@@ -364,7 +365,6 @@ manager.on("nodeError",(node,err)=>{
 console.log("❌ Lavalink error:",err)
 
 })
-
 /* =====================================================
 OLD LOCAL PLAYER SYSTEM (لم نحذفه)
 ===================================================== */
