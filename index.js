@@ -595,11 +595,7 @@ console.log("COMMAND REGISTER ERROR:", err)
 
 }
 
-/* تسجيل الأوامر عند تشغيل البوت */
-
-client.once("ready", async () => {
-
-await registerCommands()
+registerCommands()
 
 })
 
@@ -1478,7 +1474,7 @@ console.log("❌ DISCORD TOKEN NOT FOUND")
 process.exit(1)
 }
 
-client.once("ready", async () => {
+client.login(DISCORD_TOKEN)
 
 console.log("Bot online")
 
