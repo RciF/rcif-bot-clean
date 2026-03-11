@@ -321,7 +321,7 @@ const manager = new LavalinkManager({
 nodes:[
 {
 id:"main",
-host:"lavalink.lexnet.cc",
+host:"lavalink.lexnet.cy",
 port:443,
 authorization:"lexnet",
 secure:true
