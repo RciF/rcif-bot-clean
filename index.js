@@ -318,28 +318,30 @@ const { LavalinkManager } = require("lavalink-client")
 
 const manager = new LavalinkManager({
 
-nodes:[
+nodes: [
 {
-id:"main",
-host:"lavalinkv4.icehost.net",
-port:443,
-authorization:"icehost",
-secure:true
+id: "main",
+host: "rcif-lavalink.onrender.com",
+port: 443,
+authorization: "rcif123",
+secure: true
 }
 ],
 
-sendToShard:(guildId,payload)=>{
+sendToShard: (guildId, payload) => {
 const guild = client.guilds.cache.get(guildId)
-if(guild){
+if (guild) {
 guild.shard.send(payload)
 }
 }
 
 })
 
-/* إرسال أحداث الصوت من Discord إلى Lavalink */
+/* =====================================================
+إرسال أحداث الصوت من Discord إلى Lavalink
+===================================================== */
 
-client.on("raw",(packet)=>{
+client.on("raw", (packet) => {
 manager.sendRawData(packet)
 })
 
@@ -362,15 +364,15 @@ username: client.user.username
 LAVALINK EVENTS
 ===================================================== */
 
-manager.on("nodeConnect",(node)=>{
+manager.on("nodeConnect", (node) => {
 console.log("✅ Lavalink connected:", node.options.id)
 })
 
-manager.on("nodeError",(node,err)=>{
+manager.on("nodeError", (node, err) => {
 console.log("❌ Lavalink error:", err)
 })
 
-manager.on("nodeDisconnect",(node)=>{
+manager.on("nodeDisconnect", (node) => {
 console.log("⚠️ Lavalink disconnected:", node.options.id)
 })
 
@@ -383,13 +385,13 @@ const players = new Map()
 const volumes = new Map()
 const loops = new Map()
 
-function getPlayer(guildId){
+function getPlayer(guildId) {
 
-if(!players.has(guildId)){
+if (!players.has(guildId)) {
 
 const player = createAudioPlayer()
 
-players.set(guildId,player)
+players.set(guildId, player)
 
 }
 
