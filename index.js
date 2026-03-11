@@ -320,9 +320,9 @@ nodes:[
 {
 id:"main",
 host:"lavalink-uy0o.onrender.com",
-port:443,
+port:2333,
 authorization:"rcif123",
-secure:true
+secure:false
 }
 ],
 
