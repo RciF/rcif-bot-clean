@@ -319,7 +319,7 @@ const manager = new LavalinkManager({
 nodes:[
 {
 id:"main",
-host:"lavalink-uy0o.onrender.com",
+host:"lavalink-uyo0.onrender.com",
 port:2333,
 authorization:"rcif123",
 secure:false
