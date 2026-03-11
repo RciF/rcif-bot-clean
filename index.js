@@ -326,6 +326,11 @@ secure:false
 }
 ],
 
+client:{
+id: process.env.CLIENT_ID,
+username:"bot"
+},
+
 sendToShard:(guildId,payload)=>{
 const guild = client.guilds.cache.get(guildId)
 if(guild){
