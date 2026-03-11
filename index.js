@@ -321,9 +321,9 @@ const manager = new LavalinkManager({
 nodes:[
 {
 id:"main",
-host:"lava-v4.ajieblogs.eu.org",
+host:"lavalinkv4-idle.alfari.id",
 port:443,
-authorization:"https://dsc.gg/ajidevserver",
+authorization:"YouTube@2023",
 secure:true
 }
 ],
@@ -396,7 +396,6 @@ players.set(guildId,player)
 return players.get(guildId)
 
 }
-
 
 /* =====================================================
 PART 7 - PLAY SONG SYSTEM (LAVALINK)
