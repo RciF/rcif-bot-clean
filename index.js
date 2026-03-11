@@ -412,14 +412,14 @@ let player = manager.players.get(guildId)
 
 if(!player){
 
-player = manager.create({
-guild: guildId,
-voiceChannel: voiceChannel.id,
-textChannel: voiceChannel.guild.systemChannelId,
+player = manager.createPlayer({
+guildId: guildId,
+voiceChannelId: voiceChannel.id,
+textChannelId: voiceChannel.guild.systemChannelId,
 selfDeafen: true
 })
 
-player.connect()
+await player.connect()
 
 }
 
@@ -442,7 +442,7 @@ return playSong(guildId, voiceChannel)
 player.queue.add(res.tracks[0])
 
 if(!player.playing && !player.paused){
-player.play()
+await player.play()
 }
 
 }catch(err){
