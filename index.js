@@ -349,7 +349,7 @@ manager.sendRawData(packet)
 READY EVENT
 ===================================================== */
 
-client.once("clientReady", async () => {
+client.once("ready", async () => {
 
 console.log("Bot online")
 
@@ -597,7 +597,7 @@ console.log("COMMAND REGISTER ERROR:", err)
 
 /* تسجيل الأوامر عند تشغيل البوت */
 
-client.once("clientReady", async () => {
+client.once("ready", async () => {
 
 await registerCommands()
 
@@ -1475,7 +1475,7 @@ console.log("❌ DISCORD TOKEN NOT FOUND")
 process.exit(1)
 }
 
-client.once("clientReady", async () => {
+client.once("ready", async () => {
 
 console.log("Bot online")
 
