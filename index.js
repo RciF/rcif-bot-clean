@@ -627,10 +627,10 @@ let player = manager.players.get(guildId)
 
 if(!player){
 
-player = manager.create({
-guild: guildId,
-voiceChannel: voice.id,
-textChannel: interaction.channel.id,
+player = manager.createPlayer({
+guildId: guildId,
+voiceChannelId: voice.id,
+textChannelId: interaction.channel.id,
 selfDeafen: true
 })
 
