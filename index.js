@@ -521,14 +521,36 @@ await player.connect()
 
 /* تم تعديل هذا السطر */
 
-const node = manager.nodes?.get?.("main")
+let node = manager.nodes?.get?.("main")
+
+if(!node && manager.nodes && typeof manager.nodes.values === "function"){
+const first = manager.nodes.values().next()
+if(first && first.value) node = first.value
+}
+
+if(!node){
+console.log("LAVALINK playSong no node available for guild",guildId)
+return
+}
+
+const rawQuery = song.url
+const isUrl = /^https?:\/\//.test(rawQuery)
+const searchQuery = isUrl
+? rawQuery
+: (rawQuery.startsWith("ytsearch:") ? rawQuery : `ytsearch:${rawQuery}`)
+
+console.log("LAVALINK playSong searching",{
+guildId,
+searchQuery
+})
 
 const res = await node.search({
-query: song.url,
-source: "ytsearch"
+query: searchQuery
 })
 
 if(!res || !res.tracks || res.tracks.length === 0){
+
+console.log("LAVALINK playSong no result for",searchQuery)
 
 queue.shift()
 
@@ -709,7 +731,22 @@ return safeReply(interaction,{content:"❌ ادخل روم صوتي أولاً",
 
 await interaction.deferReply()
 
-let player = manager.players.get(guildId)
+try{
+
+const rawQuery = query
+const isUrl = /^https?:\/\//.test(rawQuery)
+const searchQuery = isUrl
+? rawQuery
+: (rawQuery.startsWith("ytsearch:") ? rawQuery : `ytsearch:${rawQuery}`)
+
+console.log("MUSIC /play request",{
+guildId,
+userId: interaction.user.id,
+query: rawQuery,
+searchQuery
+})
+
+let player = manager.players?.get?.(guildId)
 
 if(!player){
 
@@ -724,30 +761,61 @@ selfDeafen: true
 
 if(player.state !== "CONNECTED") await player.connect()
 
-const node = manager.nodes?.get?.("main")
+let node = manager.nodes?.get?.("main")
+
+if(!node && manager.nodes && typeof manager.nodes.values === "function"){
+const first = manager.nodes.values().next()
+if(first && first.value) node = first.value
+}
 
 if(!node){
+console.log("MUSIC /play no Lavalink node available")
 return interaction.editReply("❌ Lavalink غير متصل")
 }
 
+console.log("MUSIC /play searching on node",node.options?.id || node.id,"query:",searchQuery)
+
 const res = await node.search({
-query: query,
-source: "ytsearch"
+query: searchQuery
 })
 
+const tracksCount = Array.isArray(res?.tracks) ? res.tracks.length : 0
+console.log("MUSIC /play search result count:",tracksCount)
+
 if(!res || !res.tracks || res.tracks.length === 0){
+console.log("MUSIC /play no tracks found for query:",searchQuery)
 return interaction.editReply("❌ لم يتم العثور على نتيجة")
 }
 
 const track = res.tracks[0]
 
+console.log("MUSIC /play adding track:",track.info?.title || track.title || "unknown-title")
+
 player.queue.add(track)
 
 if(!player.playing && !player.paused && player.queue.tracks.length === 1){
+console.log("MUSIC /play starting playback")
 await player.play()
 }
 
 return interaction.editReply(`🎵 تمت إضافة **${track.title}**`)
+
+}catch(err){
+
+console.log("MUSIC /play error:",err)
+
+try{
+if(interaction.deferred || interaction.replied){
+await interaction.editReply("❌ حدث خطأ أثناء تشغيل الأغنية")
+}else{
+await interaction.reply("❌ حدث خطأ أثناء تشغيل الأغنية")
+}
+}catch(e){
+console.log("MUSIC /play reply error:",e)
+}
+
+return
+}
 }
 
 /* =================
