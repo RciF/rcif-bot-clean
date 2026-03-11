@@ -613,7 +613,7 @@ if(!interaction.isChatInputCommand()) return
 
 try{
 
-const guildId = interaction.guild.id
+const guildId = interaction.guildId
 const settings = getSettings(guildId)
 
 /* =================
@@ -650,7 +650,7 @@ selfDeafen: true
 
 if(player.state !== "CONNECTED") await player.connect()
 
-const node = manager.nodes.get("main")
+const node = manager.nodes.find(n => n.options.id === "main")
 
 if(!node){
 return interaction.editReply("❌ Lavalink غير متصل")
@@ -669,7 +669,7 @@ const track = res.tracks[0]
 
 player.queue.add(track)
 
-if(!player.playing && !player.paused && player.queue.size === 1){
+if(!player.playing && !player.paused && player.queue.tracks.length === 1){
 await player.play()
 }
 
@@ -752,11 +752,13 @@ else if(interaction.commandName === "queue"){
 
 const player = manager.players.get(guildId)
 
-if(!player || player.queue.size === 0){
+if(!player || player.queue.tracks.length === 0){
 return interaction.reply("📭 الطابور فارغ")
 }
 
-const list = player.queue.map((t,i)=>`${i+1}. ${t.title}`).join("\n")
+const list = player.queue.tracks
+.map((t,i)=>`${i+1}. ${t.title}`)
+.join("\n")
 
 return interaction.reply(`🎶 الطابور:\n${list}`)
 }
@@ -867,7 +869,6 @@ await interaction.reply({content:"حدث خطأ أثناء تنفيذ الأمر
 }
 
 })
-
 
 /* =====================================================
 PART 10 - MESSAGE EVENTS
