@@ -28,12 +28,6 @@ VoiceConnectionStatus
 } = require("@discordjs/voice")
 
 /* =================
-LAVALINK IMPORT
-================= */
-
-const { Manager } = require("erela.js")
-
-/* =================
 KEEP RENDER ALIVE
 ================= */
 
@@ -91,18 +85,6 @@ res.send("Bot running")
 
 app.listen(process.env.PORT || 10000,()=>{
 console.log("Web server ready")
-})
-
-/* =====================================================
-READY EVENT
-===================================================== */
-
-client.once("clientReady",()=>{
-console.log("Bot online")
-
-/* تشغيل Lavalink بعد اتصال البوت */
-manager.init(client.user.id)
-
 })
 
 /* =====================================================
@@ -326,53 +308,56 @@ saveMemory()
 
 }
 
-
 /* =====================================================
-PART 6 - MUSIC SYSTEM (LAVALINK v4)
+PART 6 - MUSIC SYSTEM (LAVALINK)
 ===================================================== */
 
 const { LavalinkManager } = require("lavalink-client")
 
 const manager = new LavalinkManager({
-  nodes: [
-    {
-      id: "main",
-      host: "lavalink-uy0o.onrender.com",
-      port: 443,
-      authorization: "rcif123",
-      secure: true
-    }
-  ],
 
-  sendToShard: (guildId, payload) => {
-    const guild = client.guilds.cache.get(guildId)
-    if (guild) guild.shard.send(payload)
-  }
+nodes:[
+{
+id:"main",
+host:"lavalink-uy0o.onrender.com",
+port:443,
+authorization:"rcif123",
+secure:true
+}
+],
+
+sendToShard:(guildId,payload)=>{
+const guild = client.guilds.cache.get(guildId)
+if(guild) guild.shard.send(payload)
+}
+
 })
 
-/* استقبال بيانات الصوت من Discord */
-
-client.on("raw", (packet) => {
-  manager.sendRawData(packet)
+client.on("raw",(packet)=>{
+manager.sendRawData(packet)
 })
 
-/* تشغيل Lavalink بعد تشغيل البوت */
+/* =====================================================
+READY EVENT
+===================================================== */
 
-client.once("ready", async () => {
-  console.log("Initializing Lavalink...")
-  await manager.init(client.user.id)
+client.once("clientReady",async()=>{
+
+console.log("Bot online")
+
+await manager.init({
+clientId:client.user.id
 })
 
-/* Logs لمعرفة حالة الاتصال */
-
-manager.on("nodeConnect", () => {
-  console.log("✅ Lavalink connected")
 })
 
-manager.on("nodeError", (node, err) => {
-  console.log("❌ Lavalink error:", err)
+manager.on("nodeConnect",()=>{
+console.log("✅ Lavalink connected")
 })
 
+manager.on("nodeError",(node,err)=>{
+console.log("❌ Lavalink error:",err)
+})
 
 /* =====================================================
 OLD LOCAL PLAYER SYSTEM (لم نحذفه)
@@ -385,17 +370,23 @@ const loops = new Map()
 
 function getPlayer(guildId){
 
-  if(!players.has(guildId)){
+if(!players.has(guildId)){
 
-    const player = createAudioPlayer()
+const player = createAudioPlayer()
 
-    players.set(guildId,player)
-
-  }
-
-  return players.get(guildId)
+players.set(guildId,player)
 
 }
+
+return players.get(guildId)
+
+}
+
+/* =====================================================
+LOGIN
+===================================================== */
+
+client.login(DISCORD_TOKEN)
 
 /* =====================================================
 PART 7 - PLAY SONG SYSTEM (LAVALINK)
