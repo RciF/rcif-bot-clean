@@ -431,8 +431,11 @@ await player.connect()
 
 /* البحث عن الأغنية */
 
-const res = await manager.search(song.url, {
-requester: "user"
+const node = manager.nodes.first()
+
+const res = await node.search({
+query: song.url,
+source: "ytsearch"
 })
 
 if(!res || !res.tracks || res.tracks.length === 0){
@@ -646,7 +649,12 @@ selfDeafen: true
 
 if(player.state !== "CONNECTED") await player.connect()
 
-const res = await manager.search(query, interaction.user)
+const node = manager.nodes.first()
+
+const res = await node.search({
+query: query,
+source: "ytsearch"
+})
 
 if(!res || !res.tracks || res.tracks.length === 0){
 return interaction.editReply("❌ لم يتم العثور على نتيجة")
