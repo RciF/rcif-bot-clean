@@ -623,14 +623,14 @@ PLAY
 if(interaction.commandName === "play"){
 
 if(!settings.music){
-return interaction.reply("🎵 نظام الموسيقى مغلق")
+return safeReply(interaction,"🎵 نظام الموسيقى مغلق")
 }
 
 const query = interaction.options.getString("song")
 const voice = interaction.member.voice.channel
 
 if(!voice){
-return interaction.reply({content:"❌ ادخل روم صوتي أولاً",flags:64})
+return safeReply(interaction,{content:"❌ ادخل روم صوتي أولاً",flags:64})
 }
 
 await interaction.deferReply()
@@ -685,12 +685,12 @@ else if(interaction.commandName === "skip"){
 const player = manager.players.get(guildId)
 
 if(!player || !player.queue.current){
-return interaction.reply({content:"❌ لا يوجد شيء يعمل",flags:64})
+return safeReply(interaction,{content:"❌ لا يوجد شيء يعمل",flags:64})
 }
 
 player.stop()
 
-return interaction.reply("⏭ تم التخطي")
+return safeReply(interaction,"⏭ تم التخطي")
 }
 
 /* =================
@@ -702,12 +702,12 @@ else if(interaction.commandName === "stop"){
 const player = manager.players.get(guildId)
 
 if(!player){
-return interaction.reply("❌ لا يوجد تشغيل")
+return safeReply(interaction,"❌ لا يوجد تشغيل")
 }
 
 player.destroy()
 
-return interaction.reply("⏹ تم الإيقاف")
+return safeReply(interaction,"⏹ تم الإيقاف")
 }
 
 /* =================
@@ -719,12 +719,12 @@ else if(interaction.commandName === "pause"){
 const player = manager.players.get(guildId)
 
 if(!player){
-return interaction.reply("❌ لا يوجد تشغيل")
+return safeReply(interaction,"❌ لا يوجد تشغيل")
 }
 
 player.pause(true)
 
-return interaction.reply("⏸ تم الإيقاف المؤقت")
+return safeReply(interaction,"⏸ تم الإيقاف المؤقت")
 }
 
 /* =================
@@ -736,12 +736,12 @@ else if(interaction.commandName === "resume"){
 const player = manager.players.get(guildId)
 
 if(!player){
-return interaction.reply("❌ لا يوجد تشغيل")
+return safeReply(interaction,"❌ لا يوجد تشغيل")
 }
 
 player.pause(false)
 
-return interaction.reply("▶️ تم استكمال التشغيل")
+return safeReply(interaction,"▶️ تم استكمال التشغيل")
 }
 
 /* =================
@@ -753,14 +753,14 @@ else if(interaction.commandName === "queue"){
 const player = manager.players.get(guildId)
 
 if(!player || player.queue.tracks.length === 0){
-return interaction.reply("📭 الطابور فارغ")
+return safeReply(interaction,"📭 الطابور فارغ")
 }
 
 const list = player.queue.tracks
 .map((t,i)=>`${i+1}. ${t.title}`)
 .join("\n")
 
-return interaction.reply(`🎶 الطابور:\n${list}`)
+return safeReply(interaction,`🎶 الطابور:\n${list}`)
 }
 
 /* =================
@@ -770,7 +770,7 @@ AI
 else if(interaction.commandName === "ask"){
 
 if(!settings.ai){
-return interaction.reply("🤖 نظام الذكاء الصناعي مغلق")
+return safeReply(interaction,"🤖 نظام الذكاء الصناعي مغلق")
 }
 
 await interaction.deferReply()
@@ -819,7 +819,7 @@ const user = interaction.options.getUser("user")
 
 const count = addWarn(user.id)
 
-return interaction.reply(`⚠️ تم تحذير ${user.tag} (${count})`)
+return safeReply(interaction,`⚠️ تم تحذير ${user.tag} (${count})`)
 }
 
 /* =================
@@ -832,7 +832,7 @@ const member = interaction.options.getMember("user")
 
 await member.kick()
 
-return interaction.reply("تم طرد العضو")
+return safeReply(interaction,"تم طرد العضو")
 }
 
 /* =================
@@ -845,7 +845,7 @@ const member = interaction.options.getMember("user")
 
 await member.ban()
 
-return interaction.reply("تم حظر العضو")
+return safeReply(interaction,"تم حظر العضو")
 }
 
 }catch(err){
@@ -968,12 +968,12 @@ PAUSE BUTTON
 if(interaction.customId==="pause" || interaction.customId==="music_pause"){
 
 if(!player){
-return interaction.reply({content:"لا يوجد تشغيل",ephemeral:true})
+return safeReply(interaction,{content:"لا يوجد تشغيل",ephemeral:true})
 }
 
 player.pause()
 
-return interaction.reply({
+return safeReply(interaction,{
 content:"⏸ تم الإيقاف المؤقت",
 ephemeral:true
 })
@@ -986,12 +986,12 @@ SKIP BUTTON
 if(interaction.customId==="skip" || interaction.customId==="music_skip"){
 
 if(!player){
-return interaction.reply({content:"لا يوجد تشغيل",ephemeral:true})
+return safeReply(interaction,{content:"لا يوجد تشغيل",ephemeral:true})
 }
 
 player.stop()
 
-return interaction.reply({
+return safeReply(interaction,{
 content:"⏭ تم التخطي",
 ephemeral:true
 })
@@ -1009,7 +1009,7 @@ const connection=getVoiceConnection(guildId)
 
 if(connection) connection.destroy()
 
-return interaction.reply({
+return safeReply(interaction,{
 content:"⏹ تم إيقاف التشغيل",
 ephemeral:true
 })
@@ -1384,6 +1384,8 @@ const settings = getSettings(guildId)
 const locale = interaction.locale || "en"
 const isArabic = locale.startsWith("ar")
 
+
+
 /* =================
 AI TOGGLE
 ================= */
@@ -1394,7 +1396,7 @@ const newValue = !settings.ai
 
 updateSetting(guildId,"ai",newValue)
 
-return interaction.reply({
+return safeReply(interaction,{
 content: isArabic
 ? `🤖 الذكاء الصناعي: ${newValue ? "مفعل" : "متوقف"}`
 : `🤖 AI is now ${newValue ? "enabled" : "disabled"}`,
@@ -1412,7 +1414,7 @@ if(interaction.customId === "memory_clear"){
 memory = {}
 saveMemory()
 
-return interaction.reply({
+return safeReply(interaction,{
 content: isArabic
 ? "🧹 تم مسح ذاكرة الذكاء الصناعي"
 : "🧹 AI memory cleared",
@@ -1431,7 +1433,7 @@ const newValue = !settings.antilink
 
 updateSetting(guildId,"antilink",newValue)
 
-return interaction.reply({
+return safeReply(interaction,{
 content: isArabic
 ? `🔗 منع الروابط: ${newValue ? "مفعل" : "متوقف"}`
 : `🔗 Anti Link is now ${newValue ? "enabled" : "disabled"}`,
@@ -1450,7 +1452,7 @@ const newValue = !settings.xp
 
 updateSetting(guildId,"xp",newValue)
 
-return interaction.reply({
+return safeReply(interaction,{
 content: isArabic
 ? `📊 نظام XP: ${newValue ? "مفعل" : "متوقف"}`
 : `📊 XP system is now ${newValue ? "enabled" : "disabled"}`,
