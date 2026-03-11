@@ -304,9 +304,11 @@ nodes: [
 {
 id: "main",
 host: "rcif-lavalink.onrender.com",
-port: 2333,
+port: 443,
 authorization: "rcif123",
-secure: false
+secure: true,
+retryAmount: 10,
+retryDelay: 10_000
 }
 ],
 
