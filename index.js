@@ -304,9 +304,9 @@ nodes: [
 {
 id: "main",
 host: "rcif-lavalink.onrender.com",
-port: 443,
+port: 2333,
 authorization: "rcif123",
-secure: true
+secure: false
 }
 ],
 
@@ -331,7 +331,7 @@ manager.sendRawData(packet)
 READY EVENT
 ===================================================== */
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
 
 console.log("Bot online")
 
@@ -340,7 +340,6 @@ id: client.user.id,
 username: client.user.username
 })
 
-/* تسجيل الأوامر */
 await registerCommands()
 
 })
