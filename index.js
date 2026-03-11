@@ -326,12 +326,17 @@ secure:true
 }
 ],
 
+/* مهم لحل مشكلة client.id */
+clientId: process.env.CLIENT_ID,
+
 sendToShard:(guildId,payload)=>{
 const guild = client.guilds.cache.get(guildId)
 if(guild) guild.shard.send(payload)
 }
 
 })
+
+/* استقبال بيانات الصوت من Discord */
 
 client.on("raw",(packet)=>{
 manager.sendRawData(packet)
@@ -345,9 +350,7 @@ client.once("clientReady",async()=>{
 
 console.log("Bot online")
 
-await manager.init({
-clientId:client.user.id
-})
+await manager.init(client)
 
 })
 
