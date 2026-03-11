@@ -298,6 +298,35 @@ PART 7 - MUSIC SYSTEM (LAVALINK)
 
 const { LavalinkManager } = require("lavalink-client")
 
+async function probeLavalinkRest(node){
+try{
+const controller = new AbortController()
+const timeoutMs = process.env.LAVALINK_PROBE_TIMEOUT_MS ? Number(process.env.LAVALINK_PROBE_TIMEOUT_MS) : 8000
+const timeout = setTimeout(()=>controller.abort(), timeoutMs)
+
+const scheme = node.secure ? "https" : "http"
+const url = `${scheme}://${String(node.host).trim()}:${node.port}/v4/info`
+
+const res = await fetch(url,{
+method:"GET",
+headers:{
+"Authorization": node.authorization,
+"User-Agent":"discord-bot-lavalink-probe"
+},
+signal: controller.signal
+})
+clearTimeout(timeout)
+
+const text = await res.text()
+let json = null
+try{ json = JSON.parse(text) }catch(e){}
+
+return { ok: res.ok, status: res.status, url, json, text }
+}catch(err){
+return { ok: false, status: 0, url: null, json: null, text: null, error: err?.message || String(err) }
+}
+}
+
 function getLavalinkNodes() {
 const authorization = process.env.LAVALINK_PASSWORD || "rcif123"
 const retryAmount = 10
@@ -399,6 +428,17 @@ try{
 const nodes = getLavalinkNodes()
 for(const node of nodes){
 console.log(`Attempting Lavalink connection: ${node.secure ? "wss" : "ws"}://${node.host}:${node.port} (id=${node.id})`)
+}
+
+for(const node of nodes){
+const probe = await probeLavalinkRest(node)
+if(probe.ok){
+const version = probe.json?.version?.semver || probe.json?.version || "unknown"
+console.log(`✅ Lavalink REST ok (${node.id}): ${probe.status} ${probe.url} (version=${version})`)
+}else{
+const extra = probe.status ? `status=${probe.status}` : (probe.error ? `error=${probe.error}` : "unknown-error")
+console.log(`⚠️ Lavalink REST probe failed (${node.id}): ${extra}`)
+}
 }
 }catch(e){
 console.log("Failed to build Lavalink config:",e)
