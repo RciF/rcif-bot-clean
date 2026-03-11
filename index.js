@@ -343,28 +343,26 @@ manager.sendRawData(packet)
 READY EVENT
 ===================================================== */
 
-client.once("clientReady",async()=>{
+client.once("clientReady", async () => {
 
 console.log("Bot online")
 
-await manager.init({
-id: client.user.id,
-username: client.user.username
-})
+await manager.init(client)
 
 })
 
-manager.on("nodeConnect",()=>{
+manager.on("nodeConnect", () => {
 
 console.log("✅ Lavalink connected")
 
 })
 
-manager.on("nodeError",(node,err)=>{
+manager.on("nodeError", (node, err) => {
 
-console.log("❌ Lavalink error:",err)
+console.log("❌ Lavalink error:", err)
 
 })
+
 /* =====================================================
 OLD LOCAL PLAYER SYSTEM (لم نحذفه)
 ===================================================== */
