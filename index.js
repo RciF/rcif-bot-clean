@@ -331,7 +331,7 @@ manager.sendRawData(packet)
 READY EVENT
 ===================================================== */
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
 
 console.log("Bot online")
 
