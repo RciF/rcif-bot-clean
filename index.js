@@ -321,10 +321,10 @@ const manager = new LavalinkManager({
 nodes:[
 {
 id:"main",
-host:"lava-v4.ajieblogs.eu.org",
-port:443,
-authorization:"https://dsc.gg/ajidevserver",
-secure:true
+host:"lavalink.jirayu.net",
+port:13592,
+authorization:"youshallnotpass",
+secure:false
 }
 ],
 
