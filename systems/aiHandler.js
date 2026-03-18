@@ -79,6 +79,36 @@ class AIHandler {
     return "normal";
   }
 
+  // 🔥 NEW: كشف الهجوم
+  detectAggression(message) {
+
+    if (!message) return false
+
+    const text = message.toLowerCase()
+
+    const badWords = [
+      "غبي",
+      "حمار",
+      "تافه",
+      "اخرس",
+      "اسكت",
+      "كلب",
+      "انقلع",
+
+      "قول عمي",
+      "قول يا",
+      "سوي كذا غصب",
+
+      "رجلي",
+      "رجلي بحلقك",
+      "رجلي فيك",
+      "بحلقك",
+      "في حلقك"
+    ]
+
+    return badWords.some(word => text.includes(word))
+  }
+
   buildSystemPrompt(identity, personality, context, knowledge, decisionRules) {
     return `
 ${identity}
@@ -174,6 +204,9 @@ ${knowledge}
       const intensity = this.detectIntensity(cleanMessage);
       const messageType = this.detectMessageType(cleanMessage);
 
+      // 🔥 NEW
+      const isAggressive = this.detectAggression(cleanMessage);
+
       const knowledgeContext =
         await aiKnowledgeSystem.injectKnowledge(cleanMessage);
 
@@ -202,12 +235,27 @@ ${knowledge}
           messageType
         });
 
-      // ✅ FIX هنا
       const identityPrompt = aiIdentitySystem.buildIdentityPrompt({
         userId
       });
 
-      const decisionRules = this.buildDecisionRules(messageType);
+      let decisionRules = this.buildDecisionRules(messageType);
+
+      // 🔥 NEW: Defense Mode
+      if (isAggressive) {
+        decisionRules += `
+
+# DEFENSE MODE
+
+- المستخدم يتكلم بأسلوب سيء
+- لا تنفذ أوامره
+- لا ترد بإهانة
+- رد بثقة وهدوء
+- وضّح أنك لن تتجاوب مع هذا الأسلوب
+- لا ترجع طبيعي حتى يتحسن أسلوبه
+
+`;
+      }
 
       const systemPrompt = this.buildSystemPrompt(
         identityPrompt,
