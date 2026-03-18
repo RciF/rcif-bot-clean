@@ -1,5 +1,5 @@
 /**
- * AI Memory System (Enhanced Intelligence)
+ * AI Memory System (Advanced Decision + Smart Filtering)
  */
 
 const memoryRepository = require("../repositories/memoryRepository")
@@ -17,13 +17,13 @@ class AiMemorySystem {
       "password","token","credit","bank","secret","pass","pin"
     ]
 
-    // 🔥 NEW: type priority
     this.typeWeights = {
       name: 10,
       preference: 7,
       interest: 6,
       opinion: 5,
-      fact: 4
+      fact: 4,
+      relationship: 8
     }
 
   }
@@ -46,7 +46,7 @@ class AiMemorySystem {
 
     if (!text) return false
     if (typeof text !== "string") return false
-    if (text.length < 3) return false
+    if (text.length < 4) return false
 
     const lower = text.toLowerCase()
 
@@ -58,13 +58,12 @@ class AiMemorySystem {
   }
 
   extractKeywords(text) {
-
     if (!text) return []
 
     return this.normalize(text)
       .split(" ")
       .filter(w => w.length > 3)
-      .slice(0, 8)
+      .slice(0, 10)
   }
 
   similarity(a, b) {
@@ -93,7 +92,28 @@ class AiMemorySystem {
     const age = Date.now() - created
     const days = age / (1000 * 60 * 60 * 24)
 
-    return Math.max(0, 5 - days)
+    return Math.max(0, 10 - (days * 0.4))
+  }
+
+  // 🔥 NEW: decision filter (IMPORTANT)
+  shouldStoreMemory(message) {
+
+    const text = this.normalize(message)
+
+    // ❌ ignore questions
+    if (text.includes("?")) return false
+
+    // ❌ ignore very short
+    if (text.length < 5) return false
+
+    // ❌ ignore temporary words
+    if (
+      text.includes("اليوم") ||
+      text.includes("الحين") ||
+      text.includes("الحالي")
+    ) return false
+
+    return true
   }
 
   async storeMemory({ userId, type, memory }) {
@@ -108,9 +128,10 @@ class AiMemorySystem {
 
       const memories = await memoryRepository.getUserMemories(userId) || []
 
-      const duplicate = memories.find(m =>
-        this.similarity(m.memory, memoryText) >= 3
-      )
+      const duplicate = memories.find(m => {
+        const sim = this.similarity(m.memory, memoryText)
+        return sim >= 3 || this.normalize(m.memory) === this.normalize(memoryText)
+      })
 
       if (duplicate) return false
 
@@ -173,17 +194,15 @@ class AiMemorySystem {
 
         let score = 0
 
-        // 🔥 similarity
-        score += this.similarity(memoryText, text) * 3
+        score += this.similarity(memoryText, text) * 4
 
-        // 🔥 direct match boost
-        if (text.includes(memoryText)) score += 6
+        if (text.includes(memoryText)) score += 8
+        if (memoryText.includes(text)) score += 4
 
-        // 🔥 type weight
         score += this.typeWeights[m.type] || 1
-
-        // 🔥 recency
         score += this.memoryDecay(m)
+
+        if (memoryText.length < 40) score += 2
 
         return {
           memory: m.memory,
@@ -193,7 +212,7 @@ class AiMemorySystem {
       })
 
       return scored
-        .filter(m => m.score > 2) // 🔥 remove weak memories
+        .filter(m => m.score > 4)
         .sort((a, b) => b.score - a.score)
         .slice(0, this.maxRelevantMemories)
         .map(m => m.memory)
@@ -241,6 +260,8 @@ ${context}
 
     try {
 
+      if (!this.shouldStoreMemory(message)) return false
+
       const cleaned = this.cleanText(message)
 
       if (!cleaned || cleaned.length < 5) return false
@@ -260,7 +281,11 @@ ${context}
         { type: "opinion", regex: /i think\s+(.+)/i },
 
         { type: "fact", regex: /انا\s+(.+)/i },
-        { type: "fact", regex: /i am\s+(.+)/i }
+        { type: "fact", regex: /i am\s+(.+)/i },
+
+        // 🔥 NEW: relationships
+        { type: "relationship", regex: /(.+)\s+صديقي/i },
+        { type: "relationship", regex: /(.+)\s+my friend/i }
 
       ]
 

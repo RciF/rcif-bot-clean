@@ -4,6 +4,7 @@ const aiTokenUsageSystem = require("./aiTokenUsageSystem")
 const aiBrainSystem = require("./aiBrainSystem")
 const aiMemorySystem = require("./aiMemorySystem")
 const logger = require("./loggerSystem")
+const devModeSystem = require("./devModeSystem") // ✅ NEW
 
 const OWNER_ID = "529320108032786433"
 
@@ -38,7 +39,6 @@ function cleanupCooldowns() {
     cooldowns.clear()
   }
 
-  // ✅ NEW: تنظيف الردود المؤقتة
   const now = Date.now()
   for (const [key, time] of recentReplies.entries()) {
     if (now - time > RECENT_REPLY_TTL) {
@@ -66,6 +66,23 @@ module.exports = async (message) => {
     if (message.author.bot) return
     if (!message.content) return
 
+    const userId = message.author.id
+
+    // ✅ Dev Mode Commands (قبل أي شيء)
+    if (userId === OWNER_ID) {
+
+      if (message.content === "!dev on") {
+        devModeSystem.enable()
+        return message.reply("✅ تم تفعيل وضع المطور")
+      }
+
+      if (message.content === "!dev off") {
+        devModeSystem.disable()
+        return message.reply("❌ تم إيقاف وضع المطور")
+      }
+
+    }
+
     const botName = message.client.user.username.toLowerCase()
 
     const mentioned = message.mentions.has(message.client.user)
@@ -73,7 +90,9 @@ module.exports = async (message) => {
 
     if (!mentioned && !calledByName) return
 
-    const userId = message.author.id
+    // ✅ Dev Mode check
+    if (!devModeSystem.canRespond(userId)) return
+
     const now = Date.now()
 
     cleanupCooldowns()
@@ -109,7 +128,6 @@ module.exports = async (message) => {
     if (!content) return
     if (content.length < 2) return
 
-    // ✅ NEW: منع تكرار نفس الرسالة بسرعة
     const dedupeKey = `${userId}:${content}`
     if (recentReplies.has(dedupeKey)) {
       return

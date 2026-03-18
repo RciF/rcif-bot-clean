@@ -12,14 +12,12 @@ class AIKnowledgeSystem {
 
     this.maxKnowledgeResults = 5
     this.maxContentLength = 2000
-    this.minLearnLength = 12
+    this.minLearnLength = 15
 
     this.embeddingCache = new Map()
     this.maxCacheSize = 100
 
-    // 🔥 NEW
-    this.minRelevanceScore = 0.3
-
+    this.minRelevanceScore = 0.35
   }
 
   sanitizeText(text) {
@@ -32,12 +30,11 @@ class AIKnowledgeSystem {
 
     if (!cleaned) return ""
 
-    if (cleaned.length > this.maxContentLength) {
-      return cleaned.slice(0, this.maxContentLength)
-    }
+    return cleaned.slice(0, this.maxContentLength)
+  }
 
-    return cleaned
-
+  normalize(text) {
+    return this.sanitizeText(text).toLowerCase()
   }
 
   async generateEmbedding(text) {
@@ -59,6 +56,7 @@ class AIKnowledgeSystem {
       if (!response?.data?.length) return null
 
       const embedding = response.data[0].embedding
+
       if (!Array.isArray(embedding)) return null
 
       if (this.embeddingCache.size >= this.maxCacheSize) {
@@ -77,9 +75,40 @@ class AIKnowledgeSystem {
       })
 
       return null
-
     }
+  }
 
+  // 🔥 decision filter (IMPORTANT)
+  shouldLearn(message) {
+
+    const text = this.normalize(message)
+
+    if (!text) return false
+
+    // ❌ ignore short
+    if (text.length < this.minLearnLength) return false
+
+    // ❌ ignore questions
+    if (text.includes("?") || text.includes("؟")) return false
+
+    // ❌ ignore casual talk
+    if (
+      text.includes("كيف حالك") ||
+      text.includes("تمام") ||
+      text.includes("اوكي")
+    ) return false
+
+    // ✅ learning triggers
+    const triggers = [
+      "هو",
+      "هي",
+      "يعني",
+      "definition",
+      "is",
+      "are"
+    ]
+
+    return triggers.some(t => text.includes(t))
   }
 
   async storeKnowledge(data) {
@@ -95,10 +124,7 @@ class AIKnowledgeSystem {
       if (existing) return null
 
       const embedding = await this.generateEmbedding(content)
-      if (!embedding) {
-        logger.warn("AI_KNOWLEDGE_SKIP_STORE_NO_EMBEDDING")
-        return null
-      }
+      if (!embedding) return null
 
       const knowledgeEntry = {
         userId: data.userId || null,
@@ -107,13 +133,7 @@ class AIKnowledgeSystem {
         embedding
       }
 
-      const stored = await knowledgeRepository.createKnowledge(knowledgeEntry)
-
-      logger.info("AI_KNOWLEDGE_STORED", {
-        source: knowledgeEntry.source
-      })
-
-      return stored
+      return await knowledgeRepository.createKnowledge(knowledgeEntry)
 
     } catch (error) {
 
@@ -122,9 +142,7 @@ class AIKnowledgeSystem {
       })
 
       return null
-
     }
-
   }
 
   async searchKnowledge(query) {
@@ -145,17 +163,34 @@ class AIKnowledgeSystem {
 
       if (!Array.isArray(knowledge) || !knowledge.length) return []
 
-      // 🔥 NEW: filter weak knowledge
-      const filtered = knowledge.filter(k => {
-        if (!k?.content) return false
+      const queryNorm = this.normalize(query)
 
-        // إذا فيه similarity score من DB استخدمه
-        if (typeof k.similarity === "number") {
-          return k.similarity >= this.minRelevanceScore
-        }
+      const filtered = knowledge
+        .map(k => {
 
-        return true
-      })
+          if (!k?.content) return null
+
+          let score = 0
+
+          if (typeof k.similarity === "number") {
+            score += k.similarity * 5
+          }
+
+          const contentNorm = this.normalize(k.content)
+
+          if (queryNorm.includes(contentNorm)) score += 3
+          if (contentNorm.includes(queryNorm)) score += 2
+
+          if (contentNorm.length < 120) score += 1
+
+          return {
+            ...k,
+            finalScore: score
+          }
+
+        })
+        .filter(k => k && k.finalScore >= this.minRelevanceScore * 5)
+        .sort((a, b) => b.finalScore - a.finalScore)
 
       return filtered
 
@@ -166,18 +201,36 @@ class AIKnowledgeSystem {
       })
 
       return []
+    }
+  }
 
+  dedupeKnowledge(list) {
+
+    const seen = new Set()
+    const result = []
+
+    for (const item of list) {
+
+      const clean = this.normalize(item.content)
+
+      if (!seen.has(clean)) {
+        seen.add(clean)
+        result.push(item)
+      }
+
+      if (result.length >= 3) break
     }
 
+    return result
   }
 
   formatKnowledge(knowledge) {
 
     if (!Array.isArray(knowledge) || !knowledge.length) return ""
 
-    const trimmed = knowledge.slice(0, 3) // 🔥 تقليل الضوضاء
+    const cleanList = this.dedupeKnowledge(knowledge)
 
-    const formatted = trimmed
+    const formatted = cleanList
       .map((k) => `- ${k.content}`)
       .join("\n")
 
@@ -185,7 +238,6 @@ class AIKnowledgeSystem {
 [Relevant Knowledge]
 ${formatted}
 `.trim()
-
   }
 
   async injectKnowledge(userMessage) {
@@ -204,39 +256,17 @@ ${formatted}
       })
 
       return ""
-
     }
-
   }
 
   async learnFromMessage(userId, message) {
 
     try {
 
-      if (!message) return
+      if (!this.shouldLearn(message)) return
 
       const sanitized = this.sanitizeText(message)
       if (!sanitized) return
-      if (sanitized.length < this.minLearnLength) return
-
-      const lower = sanitized.toLowerCase()
-
-      const learningTriggers = [
-        "تعريف",
-        "definition",
-        "meaning",
-        "هو",
-        "هي",
-        "is",
-        "are",
-        "يعني"
-      ]
-
-      const shouldLearn = learningTriggers.some(trigger =>
-        lower.includes(trigger)
-      )
-
-      if (!shouldLearn) return
 
       await this.storeKnowledge({
         userId,
@@ -251,7 +281,6 @@ ${formatted}
       })
 
     }
-
   }
 
 }

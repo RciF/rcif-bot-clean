@@ -38,32 +38,79 @@ class AIHandler {
 
   trimConversation(memory) {
     if (!Array.isArray(memory)) return [];
-
     return memory.slice(-this.maxConversationMessages);
   }
 
-  // 🔥 NEW: dynamic personality mode
   detectIntensity(message) {
     if (!message) return "normal";
 
     const lower = message.toLowerCase();
 
-    if (lower.includes("?")) return "low";        // سؤال → مختصر
-    if (lower.length > 80) return "high";         // كلام كثير → تفاعل أعلى
+    if (lower.includes("?")) return "low";
+    if (lower.length > 80) return "high";
 
     return "normal";
   }
 
-  buildSystemPrompt(identity, personality, context, knowledge) {
+  detectContextStrength({ memories = [], knowledge = [], intent }) {
+    let score = 0;
+
+    if (memories?.length) score += memories.length;
+    if (knowledge?.length) score += knowledge.length;
+    if (intent) score += 2;
+
+    return score;
+  }
+
+  detectMessageType(message) {
+    if (!message) return "normal";
+
+    const lower = message.toLowerCase();
+
+    if (
+      lower.includes("تعبان") ||
+      lower.includes("حزين") ||
+      lower.includes("مضايق") ||
+      lower.includes("زعلان")
+    ) return "emotional";
+
+    if (lower.includes("?")) return "question";
+
+    return "normal";
+  }
+
+  buildSystemPrompt(identity, personality, context, knowledge, decisionRules) {
     return `
 ${identity}
 
 ${personality}
 
+${decisionRules}
+
 ${context}
 
 ${knowledge}
 `.trim();
+  }
+
+  buildDecisionRules(type) {
+    return `
+# RESPONSE RULES
+
+- إذا السؤال واضح → أجب مباشرة
+- إذا فيه نقص → اسأل سؤال توضيحي
+- إذا مكرر → اختصر
+- إذا عاطفي → ركز على المشاعر وكن داعم
+
+# RESPONSE STYLE
+
+- طبيعي
+- بدون حشو
+- غير مكرر
+- لا تكرر نفس الجمل
+
+# CURRENT MODE: ${type}
+`;
   }
 
   buildCacheKey(userId, message, context, knowledge) {
@@ -124,25 +171,17 @@ ${knowledge}
       let memory = memoryManager.getMemory(userId) || [];
       memory = this.trimConversation(memory);
 
-      // 🔥 detect personality intensity
       const intensity = this.detectIntensity(cleanMessage);
+      const messageType = this.detectMessageType(cleanMessage);
 
-      const personalityPrompt =
-        aiPersonalitySystem.getSystemPrompt({ intensity });
-
-      const identityPrompt = aiIdentitySystem.buildIdentityPrompt();
-
-      // 🔥 knowledge first (for context building)
       const knowledgeContext =
         await aiKnowledgeSystem.injectKnowledge(cleanMessage);
 
-      // 🔥 build smart context
       const contextPrompt = aiContextSystem.buildContext({
         ...context,
         message: cleanMessage
       });
 
-      // 🔥 inject memory into context (not duplicate)
       const finalContext =
         await aiMemorySystem.injectMemoriesIntoContext(
           userId,
@@ -150,11 +189,32 @@ ${knowledge}
           contextPrompt
         );
 
+      const contextStrength = this.detectContextStrength({
+        memories: context?.memories,
+        knowledge: knowledgeContext ? [1] : [],
+        intent: context?.intent
+      });
+
+      const personalityPrompt =
+        aiPersonalitySystem.getSystemPrompt({
+          intensity,
+          contextStrength,
+          messageType
+        });
+
+      // ✅ FIX هنا
+      const identityPrompt = aiIdentitySystem.buildIdentityPrompt({
+        userId
+      });
+
+      const decisionRules = this.buildDecisionRules(messageType);
+
       const systemPrompt = this.buildSystemPrompt(
         identityPrompt,
         personalityPrompt,
         finalContext,
-        knowledgeContext
+        knowledgeContext,
+        decisionRules
       );
 
       const messages = [
@@ -173,7 +233,7 @@ ${knowledge}
       let reply = await this.generateAIResponse(messages, cacheKey);
 
       if (!reply) {
-        return "ما قدرت أرد الآن.";
+        return "⚠️";
       }
 
       reply = this.sanitize(reply);
@@ -182,7 +242,6 @@ ${knowledge}
       memoryManager.addMessage(userId, "user", cleanMessage);
       memoryManager.addMessage(userId, "assistant", reply);
 
-      // 🔥 async learning (non-blocking)
       this.processLearning(userId, cleanMessage);
 
       return reply;
@@ -193,7 +252,7 @@ ${knowledge}
         error: error.message
       });
 
-      return "صار خطأ بسيط.";
+      return "⚠️";
     }
 
   }

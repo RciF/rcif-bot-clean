@@ -1,6 +1,6 @@
 /**
  * AI Response Formatter System
- * Advanced Human-like Formatting
+ * Advanced Human-like Formatting (Smart Clean + Natural Flow)
  */
 
 class AIResponseFormatterSystem {
@@ -32,10 +32,13 @@ class AIResponseFormatterSystem {
         return formatted
     }
 
-    // 🔥 NEW: remove repetitive sentences
+    splitSentences(text) {
+        return text.split(/(?<=[.!؟])/)
+    }
+
     removeRepetition(text) {
 
-        const sentences = text.split(/(?<=[.!؟])/)
+        const sentences = this.splitSentences(text)
 
         const seen = new Set()
         const filtered = []
@@ -53,19 +56,46 @@ class AIResponseFormatterSystem {
         return filtered.join(" ")
     }
 
-    // 🔥 NEW: simplify overly long responses
-    simplify(text) {
+    removeWeakEndings(text) {
+
+        if (!text) return text
+
+        return text
+            .replace(/هل تحتاج.*$/i, "")
+            .replace(/anything else.*$/i, "")
+            .replace(/let me know.*$/i, "")
+            .trim()
+    }
+
+    // 🔥 NEW: remove robotic phrases
+    removeRoboticPhrases(text) {
+
+        return text
+            .replace(/فيما يلي/gi, "")
+            .replace(/بشكل عام/gi, "")
+            .replace(/عادةً/gi, "")
+            .replace(/يمكن القول أن/gi, "")
+            .replace(/من المهم أن/gi, "")
+            .trim()
+    }
+
+    // 🔥 NEW: smart shortening (keeps meaning)
+    smartTrim(text) {
 
         if (!text) return ""
 
         const words = text.split(" ")
 
-        // إذا الرد طويل جدًا → قصه بشكل ذكي
-        if (words.length > 120) {
-            return words.slice(0, 120).join(" ") + "..."
+        if (words.length <= 120) return text
+
+        // try cut at sentence boundary
+        const sentences = this.splitSentences(text)
+
+        if (sentences.length > 1) {
+            return sentences.slice(0, 3).join(" ").trim() + "..."
         }
 
-        return text
+        return words.slice(0, 120).join(" ") + "..."
     }
 
     enforceDiscordLimit(text) {
@@ -97,17 +127,38 @@ class AIResponseFormatterSystem {
         return text
     }
 
+    ensureNaturalEnding(text) {
+
+        if (!text) return text
+
+        const endings = [".", "!", "؟"]
+
+        const lastChar = text.slice(-1)
+
+        if (!endings.includes(lastChar)) {
+            return text + "."
+        }
+
+        return text
+    }
+
     formatResponse(text) {
 
         if (!text) return "..."
 
         let formatted = this.normalize(text)
 
-        // 🔥 تحسين الجودة
         formatted = this.removeRepetition(formatted)
-        formatted = this.simplify(formatted)
+        formatted = this.removeWeakEndings(formatted)
+
+        // 🔥 new layers
+        formatted = this.removeRoboticPhrases(formatted)
+
+        formatted = this.smartTrim(formatted)
 
         formatted = this.enforceDiscordLimit(formatted)
+
+        formatted = this.ensureNaturalEnding(formatted)
 
         formatted = this.ensureNonEmpty(formatted)
 
