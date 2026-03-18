@@ -3,6 +3,7 @@ require("dotenv").config()
 const { Client, GatewayIntentBits, Collection } = require("discord.js")
 
 const startupSystem = require("./systems/startupSystem")
+const { startApiServer } = require("./systems/apiServerSystem") // ✅ رجعناه
 const logger = require("./systems/loggerSystem")
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
@@ -24,21 +25,7 @@ client.commands = new Collection()
 
 logger.init()
 
-// 🔥 KEEP ALIVE SERVER (FIXED)
-const express = require("express")
-const app = express()
-
-app.get("/", (req, res) => {
-  res.send("Bot is alive")
-})
-
-const PORT = process.env.PORT || 3000
-
-app.listen(PORT, () => {
-  logger.success("KEEP_ALIVE_SERVER_RUNNING", { port: PORT })
-})
-
-// ❌ حذفنا apiServerSystem بالكامل (كان يسبب المشكلة)
+// ❌ حذفنا keep-alive القديم نهائي
 
 require("./systems/commandHandler")(client)
 require("./systems/eventHandler")(client)
@@ -58,6 +45,9 @@ try {
     await startupSystem()
 
     await client.login(DISCORD_TOKEN)
+
+    // ✅ تشغيل API server بعد تسجيل الدخول
+    startApiServer(client)
 
     logger.success("DISCORD_CLIENT_CONNECTED")
 
