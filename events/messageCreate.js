@@ -6,8 +6,7 @@ const guildManager = require("../utils/guildManager")
 const aiSystem = require("../systems/aiSystem")
 const xpSystem = require("../systems/xpSystem")
 const aiObservationSystem = require("../systems/aiObservationSystem")
-const aiSocialGraphSystem = require("../systems/aiSocialGraphSystem")
-const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem") // ✅ NEW
+const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
 const aiHandler = require("../systems/aiHandler")
 const logger = require("../systems/loggerSystem")
 
@@ -37,14 +36,7 @@ module.exports = {
         logger.error("AI_OBSERVATION_FAILED", { error: err.message })
       }
 
-      // 🔥 social graph (non-blocking)
-      try {
-        aiSocialGraphSystem.detectRelationships(message)
-      } catch (err) {
-        logger.error("AI_SOCIAL_GRAPH_FAILED", { error: err.message })
-      }
-
-      // 🔥 social awareness (FIXED)
+      // 🔥 social awareness (UPDATED)
       try {
         await aiSocialAwarenessSystem.trackInteraction(message)
       } catch (err) {
