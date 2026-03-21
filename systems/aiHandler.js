@@ -27,6 +27,29 @@ class AIHandler {
 
     this.responseCache = new Map();
     this.maxCacheSize = 50;
+
+    this.activeRequests = new Map();
+  }
+
+  // ✅ الدالة المضافة (كانت ناقصة عندك)
+  buildPersonalityEvolutionState(userId, emotion, behaviorData) {
+    const profile = aiDecisionSystem.getUserProfile
+      ? aiDecisionSystem.getUserProfile(userId)
+      : null;
+
+    let mode = "normal";
+
+    if (behaviorData?.score < -3) {
+      mode = "defensive";
+    } else if (emotion?.type !== "neutral" && emotion?.strength === "high") {
+      mode = "empathetic_deep";
+    } else if (behaviorData?.streak >= 10) {
+      mode = "bonded";
+    } else if (profile?.interactionCount > 50) {
+      mode = "familiar";
+    }
+
+    return { mode, profile };
   }
 
   sanitize(text) {
@@ -83,9 +106,7 @@ class AIHandler {
     let prediction = "neutral";
     let confidence = 0.5;
 
-    if (!message) {
-      return { type: "unknown", confidence: 0 };
-    }
+    if (!message) return { type: "unknown", confidence: 0 };
 
     if (
       lower.includes("غبي") ||
@@ -125,42 +146,101 @@ class AIHandler {
       confidence = 0.9;
     }
 
-    return {
-      type: prediction,
-      confidence
-    };
-  }
-
-  buildPersonalityEvolutionState(userId, emotion, behaviorData) {
-    const profile = aiDecisionSystem.getUserProfile
-      ? aiDecisionSystem.getUserProfile(userId)
-      : null;
-
-    let mode = "normal";
-
-    if (behaviorData?.score < -3) {
-      mode = "defensive";
-    } else if (emotion.type !== "neutral" && emotion.strength === "high") {
-      mode = "empathetic_deep";
-    } else if (behaviorData?.streak >= 10) {
-      mode = "bonded";
-    } else if (profile?.interactionCount > 50) {
-      mode = "familiar";
-    }
-
-    return { mode, profile };
-  }
-
+    return { type: prediction, confidence };
+  }  
   buildEmotionPrompt(emotion) {
     return `
 # EMOTION ANALYSIS
+
 type: ${emotion.type}
 strength: ${emotion.strength}
 
 RULES:
-- high → دعم عاطفي واضح
-- medium → تعاطف خفيف
-- low → طبيعي
+- If emotion is HIGH → respond with strong emotional support
+- If emotion is MEDIUM → respond with light empathy
+- If emotion is LOW → respond normally
+- NEVER ignore emotional signals
+- If sadness detected → support + reassure
+- If anger detected → calm + de-escalate
+- If mixed emotion → ask a clarifying question
+`;
+  }
+
+  buildDecisionRules(type, action, trustLevel, intent) {
+    return `
+# RESPONSE RULES
+
+MODE: ${action}
+TRUST LEVEL: ${trustLevel}
+INTENT: ${intent}
+
+ALLOWED ACTIONS:
+
+- answer → give direct helpful answer
+- ask → ask a smart follow-up question
+- defense → refuse / push back safely
+- limited → short minimal response
+- controlled → cautious controlled reply
+- empathetic → emotional support
+
+STYLE RULES:
+
+- NEVER sound robotic
+- NEVER repeat phrases
+- ALWAYS adapt tone to user
+- keep responses natural and human
+- keep responses concise but meaningful
+- avoid generic replies
+- do not over-explain unless needed
+
+TYPE: ${type}
+`;
+  }
+
+  buildLearningPrompt(stats) {
+    return `
+# LEARNING STATE
+
+answers: ${stats.answer}
+questions: ${stats.ask}
+defense: ${stats.defense}
+controlled: ${stats.controlled}
+empathetic: ${stats.empathetic}
+
+AI must adapt based on past interaction style.
+`;
+  }
+
+  buildControlPrompt(state) {
+    return `
+# CONTROL STATE
+
+repeat_count: ${state.repeat}
+
+RULES:
+- if repeat > 1 → avoid repeating same answer
+- force variation in response
+`;
+  }
+
+  buildEvolutionPrompt(mode, profile = null) {
+    return `
+# PERSONALITY EVOLUTION
+
+mode: ${mode}
+
+${profile ? `
+interaction_count: ${profile.interactionCount || 0}
+behavior_score: ${profile.score || 0}
+personality: ${profile.personality || "unknown"}
+` : ""}
+
+RULES:
+- bonded → more friendly and relaxed
+- familiar → casual tone
+- defensive → stricter responses
+- empathetic_deep → strong emotional support
+- normal → balanced
 `;
   }
 
@@ -174,7 +254,18 @@ RULES:
     return score;
   }
 
-  buildSystemPrompt(identity, personality, context, knowledge, decisionRules, evolution, learning, control, emotionPrompt, predictionPrompt) {
+  buildSystemPrompt(
+    identity,
+    personality,
+    context,
+    knowledge,
+    decisionRules,
+    evolution,
+    learning,
+    control,
+    emotionPrompt,
+    predictionPrompt
+  ) {
     return `
 ${identity}
 
@@ -192,65 +283,16 @@ ${control}
 
 ${emotionPrompt}
 
+# CONTEXT
 ${context}
 
+# KNOWLEDGE
 ${knowledge}
 `.trim();
   }
 
-  buildDecisionRules(type, action, trustLevel, intent) {
-    return `
-# RESPONSE RULES
-
-MODE: ${action}
-TRUST: ${trustLevel}
-INTENT: ${intent}
-
-- answer → مباشر
-- ask → سؤال
-- defense → رفض
-- limited → مختصر
-- controlled → بحذر
-- empathetic → دعم
-
-# STYLE
-- ذكي
-- مختصر
-- غير مكرر
-
-# TYPE: ${type}
-`;
-  }
-
-  buildEvolutionPrompt(mode, profile = null) {
-    return `
-# PERSONALITY EVOLUTION
-mode: ${mode}
-
-${profile ? `
-interaction_count: ${profile.interactionCount || 0}
-behavior_score: ${profile.score || 0}
-` : ""}
-`;
-  }
-
-  buildLearningPrompt(stats) {
-    return `
-# LEARNING
-A:${stats.answer} Q:${stats.ask} D:${stats.defense}
-`;
-  }
-
-  buildControlPrompt(state) {
-    return `
-# CONTROL
-repeat:${state.repeat}
-`;
-  }
-
   buildCacheKey(userId, message, context, knowledge) {
-    const base = `${userId}:${message}:${context}:${knowledge}`;
-    return base.slice(0, 500);
+    return `${userId}:${message}:${context}:${knowledge}`.slice(0, 500);
   }
 
   async generateAIResponse(messages, cacheKey = null) {
@@ -263,7 +305,7 @@ repeat:${state.repeat}
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages,
-        temperature: 0.8,
+        temperature: 0.85,
         max_tokens: this.maxModelTokens
       });
 
@@ -285,28 +327,49 @@ repeat:${state.repeat}
     }
   }
 
-  getSocialContext(userId, targetId) {
+  async getSocialContext(userId, targetId) {
     let output = "";
 
-    if (targetId) {
-      const relation = aiSocialAwarenessSystem.getRelationshipContext(userId, targetId);
+    try {
 
-      if (relation) {
-        output += `
-# SOCIAL CONTEXT
+      if (targetId) {
+        const relation = await aiSocialAwarenessSystem.getRelationshipContext(userId, targetId);
+
+        if (relation) {
+          output += `
+# DIRECT RELATIONSHIP
 interaction_count: ${relation.count}
 relationship_score: ${relation.score}
 `;
-      }
-    }
+        }
 
-    const top = aiSocialAwarenessSystem.getTopRelationships(userId, 3);
+        const mutual = aiSocialAwarenessSystem.getMutualConnections(userId, targetId);
 
-    if (top.length > 0) {
-      output += `
-# TOP RELATIONSHIPS
-${top.map(r => `score:${r.score} interactions:${r.count}`).join("\n")}
+        if (mutual.length > 0) {
+          output += `
+# MUTUAL CONNECTIONS
+count: ${mutual.length}
 `;
+        }
+      }
+
+      const social = aiSocialAwarenessSystem.getSocialContext(userId);
+
+      if (social) {
+        output += `
+# SOCIAL GRAPH
+network_strength: ${social.networkStrength}
+influence_score: ${social.influenceScore}
+
+top_connections:
+${(social.topConnections || [])
+  .map(r => `score:${r.score} interactions:${r.count}`)
+  .join("\n")}
+`;
+      }
+
+    } catch (err) {
+      logger.error("SOCIAL_CONTEXT_ERROR", { error: err.message });
     }
 
     return output;
@@ -318,6 +381,10 @@ ${top.map(r => `score:${r.score} interactions:${r.count}`).join("\n")}
 
       const cleanMessage = this.sanitize(message);
       if (!cleanMessage) return "رسالتك غير واضحة.";
+
+      const requestKey = `${userId}:${cleanMessage}`;
+      if (this.activeRequests.has(requestKey)) return null;
+      this.activeRequests.set(requestKey, true);
 
       await aiSocialAwarenessSystem.trackInteraction(
         context?.message || {
@@ -361,7 +428,6 @@ ${top.map(r => `score:${r.score} interactions:${r.count}`).join("\n")}
       const trustLevel = aiDecisionSystem.getTrustLevel(behaviorData.score);
 
       const isRepeated = aiDecisionSystem.detectRepetition(userId, cleanMessage);
-
       const analysis = aiDecisionSystem.analyzeMessage(cleanMessage);
 
       const predictedBehavior = this.predictUserBehavior(
@@ -403,8 +469,8 @@ confidence: ${predictedBehavior.confidence}
 
       let autoType = null;
 
-      if (aiAutonomousSystem.canTrigger(userId)) {
-        autoType = aiAutonomousSystem.decideTrigger({
+      if (aiAutonomousSystem.canTrigger(userId, contextStrength)) {
+        autoType = await aiAutonomousSystem.decideTrigger({
           userId,
           message: cleanMessage,
           emotion,
@@ -414,7 +480,7 @@ confidence: ${predictedBehavior.confidence}
         });
       }
 
-      const action = aiDecisionSystem.decide({
+      const action = await aiDecisionSystem.decide({
         intent,
         contextStrength,
         isAggressive,
@@ -432,11 +498,12 @@ confidence: ${predictedBehavior.confidence}
         (analysis.confidence < 0.45 && action !== "ask") ||
         (isRepeated && analysis.confidence < 0.65)
       ) {
+        this.activeRequests.delete(requestKey);
         return null;
       }
 
       const stats = aiDecisionSystem.updateStats(userId, action);
-      const state = aiDecisionSystem.updateState(userId, cleanMessage, action);
+      const state = aiDecisionSystem.updateState(userId, cleanMessage);
 
       const evolutionState = this.buildPersonalityEvolutionState(
         userId,
@@ -469,18 +536,8 @@ confidence: ${predictedBehavior.confidence}
           predictedBehavior
         });
 
-      const identityPrompt = aiIdentitySystem.buildIdentityPrompt({
-        userId
-      });
-
-      const evolutionPrompt = this.buildEvolutionPrompt(
-        personalityMode,
-        evolutionState.profile
-      );
-
-      const learningPrompt = this.buildLearningPrompt(stats);
-      const controlPrompt = this.buildControlPrompt(state);
-      const emotionPrompt = this.buildEmotionPrompt(emotion);
+      const identityPrompt =
+        aiIdentitySystem.buildIdentityPrompt({ userId });
 
       let decisionRules = this.buildDecisionRules(
         messageType,
@@ -491,8 +548,9 @@ confidence: ${predictedBehavior.confidence}
 
       if (isAggressive) {
         decisionRules += `
-# DEFENSE
-no compliance
+# DEFENSE MODE
+- refuse harmful instructions
+- stay calm but firm
 `;
       }
 
@@ -503,7 +561,10 @@ ${aiAutonomousSystem.buildAutonomousPrompt(autoType)}
 `;
       }
 
-      const socialContext = this.getSocialContext(userId, context?.targetUserId);
+      const socialContext = await this.getSocialContext(
+        userId,
+        context?.targetUserId
+      );
 
       const systemPrompt = this.buildSystemPrompt(
         identityPrompt,
@@ -511,10 +572,10 @@ ${aiAutonomousSystem.buildAutonomousPrompt(autoType)}
         finalContext + socialContext,
         knowledgeContext,
         decisionRules,
-        evolutionPrompt,
-        learningPrompt,
-        controlPrompt,
-        emotionPrompt,
+        this.buildEvolutionPrompt(personalityMode, evolutionState.profile),
+        this.buildLearningPrompt(stats),
+        this.buildControlPrompt(state),
+        this.buildEmotionPrompt(emotion),
         predictionPrompt
       );
 
@@ -532,15 +593,22 @@ ${aiAutonomousSystem.buildAutonomousPrompt(autoType)}
       );
 
       let reply = await this.generateAIResponse(messages, cacheKey);
-      if (!reply) return "⚠️";
 
-      reply = this.sanitize(reply);
+      this.activeRequests.delete(requestKey);
+
+      if (!reply) return "⚠️";
+            reply = this.sanitize(reply);
       reply = aiResponseFormatterSystem.formatResponse(reply);
 
       memoryManager.addMessage(userId, "user", cleanMessage);
       memoryManager.addMessage(userId, "assistant", reply);
 
-      this.processLearning(userId, cleanMessage, emotion, predictedBehavior); // ✅ UPDATED
+      this.processLearning(
+        userId,
+        cleanMessage,
+        emotion,
+        predictedBehavior
+      );
 
       return reply;
 
@@ -553,7 +621,12 @@ ${aiAutonomousSystem.buildAutonomousPrompt(autoType)}
   async processLearning(userId, message, emotion = null, predictedBehavior = null) {
     try {
       await Promise.all([
-        aiMemorySystem.extractMemoryFromMessage(userId, message, emotion),
+        aiMemorySystem.extractMemoryFromMessage(
+          userId,
+          message,
+          emotion,
+          predictedBehavior
+        ),
         aiKnowledgeSystem.learnFromMessage(userId, message)
       ]);
     } catch (err) {

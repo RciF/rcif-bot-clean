@@ -1,7 +1,3 @@
-/**
- * AI Context System (Ultimate Version — Dynamic Context Intelligence + Emotion Awareness + Compression + Relevance Engine)
- */
-
 class AIContextSystem {
 
     sanitize(text) {
@@ -88,11 +84,62 @@ class AIContextSystem {
 
         return result
             .sort((a, b) => b.score - a.score)
+            .slice(0, 8)
+            .map(i => i.value);
+    }
+
+    scoreContextItem(value, message, emotion, predictedBehavior, socialScore = 0) {
+        let score = 0;
+
+        if (!value) return 0;
+
+        const clean = this.normalize(value);
+        const msg = this.normalize(message);
+
+        score += this.similarity(clean, msg) * 3;
+
+        if (msg.includes(clean)) score += 5;
+        if (clean.includes(msg)) score += 3;
+
+        if (emotion?.intensity > 0.5) score += 2;
+
+        if (predictedBehavior?.type === "deep_engagement") score += 2;
+        if (predictedBehavior?.type === "repeat") score -= 2;
+
+        score += socialScore;
+
+        return score;
+    }
+
+    compressContextAdvanced(memories, knowledge, message, emotion, predictedBehavior, socialScore) {
+
+        const combined = [
+            ...memories.map(v => ({ type: "memory", value: v })),
+            ...knowledge.map(v => ({ type: "knowledge", value: v }))
+        ];
+
+        if (combined.length <= 6) {
+            return combined.map(i => i.value);
+        }
+
+        const scored = combined.map(item => ({
+            value: item.value,
+            score: this.scoreContextItem(
+                item.value,
+                message,
+                emotion,
+                predictedBehavior,
+                socialScore
+            )
+        }));
+
+        return scored
+            .sort((a, b) => b.score - a.score)
             .slice(0, 6)
             .map(i => i.value);
     }
 
-    detectContextMode({ memories, knowledge, intent, emotion, predictedBehavior }) {
+    detectContextMode({ memories, knowledge, intent, emotion, predictedBehavior, socialScore }) {
         let score = 0;
 
         if (memories?.length) score += memories.length;
@@ -101,11 +148,13 @@ class AIContextSystem {
 
         if (emotion?.intensity > 0.5) score += 2;
 
-        // ✅ NEW — Prediction influence
         if (predictedBehavior?.type === "deep_engagement") score += 2;
         if (predictedBehavior?.type === "repeat") score -= 2;
 
-        if (score >= 6) return "rich";
+        if (socialScore > 20) score += 2;
+        if (socialScore < -10) score -= 2;
+
+        if (score >= 7) return "rich";
         if (score >= 3) return "medium";
         return "light";
     }
@@ -136,34 +185,26 @@ class AIContextSystem {
         return true;
     }
 
-    compressContext(memories, knowledge) {
-        const combined = [...memories, ...knowledge];
-
-        if (combined.length <= 5) return combined;
-
-        return combined.slice(0, 5);
-    }
-
-    buildBehaviorRules({ contextMode, complexity, isTopicShift, emotion, predictedBehavior }) {
+    buildBehaviorRules({ contextMode, complexity, isTopicShift, emotion, predictedBehavior, socialScore }) {
 
         let rules = "";
 
         if (contextMode === "rich") {
             rules += `
-- استخدم السياق بذكاء بدون تكرار
-- اربط الرد بالمعلومات السابقة
+- اربط الرد بالسياق الاجتماعي + السابق
+- استخدم معلومات العلاقات عند الحاجة
 `;
         }
 
         if (contextMode === "medium") {
             rules += `
-- استخدم بعض السياق عند الحاجة فقط
+- استخدم السياق بشكل محدود
 `;
         }
 
         if (contextMode === "light") {
             rules += `
-- تجاهل السياق وركز على الرسالة الحالية
+- تجاهل السياق وركز على الرسالة
 `;
         }
 
@@ -177,74 +218,98 @@ class AIContextSystem {
         if (complexity === "question") {
             rules += `
 - أجب مباشرة
-- بدون حشو
 `;
         }
 
         if (isTopicShift) {
             rules += `
 - تجاهل السياق القديم
-- ابدأ سياق جديد
 `;
         }
 
         if (emotion?.polarity === "negative") {
             rules += `
 - كن هادئ
-- لا تكون حاد
 `;
         }
 
         if (emotion?.intensity > 0.7) {
             rules += `
-- أعطِ اهتمام أعلى للمشاعر
+- ركز على المشاعر
 `;
         }
 
-        // ✅ NEW — Prediction behavior rules
         if (predictedBehavior) {
 
             if (predictedBehavior.type === "repeat") {
                 rules += `
-- لا تعيد نفس الفكرة
+- لا تكرر
 - اختصر
 `;
             }
 
             if (predictedBehavior.type === "escalation") {
                 rules += `
-- لا تستفز المستخدم
-- خلك هادئ جداً
+- لا تستفز
 `;
             }
 
             if (predictedBehavior.type === "deep_engagement") {
                 rules += `
-- ممكن توسع أكثر
+- توسع أكثر
 `;
             }
         }
 
+        if (socialScore > 20) {
+            rules += `
+- تعامل بشكل ودّي أكثر
+`;
+        }
+
+        if (socialScore < -10) {
+            rules += `
+- كن حذر
+`;
+        }
+
         rules += `
 - لا تكرر
-- لا تخرج عن الموضوع
 - كن طبيعي
 `;
 
         return rules;
     }
 
-    buildContext({
-        user,
-        guild,
-        channel,
-        message,
-        intent,
-        memories = [],
-        knowledge = [],
-        emotion = null,
-        predictedBehavior = null // ✅ NEW
-    }) {
+    normalizeInput(data) {
+        return {
+            user: data?.user || {},
+            guild: data?.guild || {},
+            channel: data?.channel || {},
+            message: data?.message || "",
+            intent: data?.intent || "normal",
+            memories: Array.isArray(data?.memories) ? data.memories : [],
+            knowledge: Array.isArray(data?.knowledge) ? data.knowledge : [],
+            emotion: data?.emotion || null,
+            predictedBehavior: data?.predictedBehavior || null,
+            socialScore: data?.socialScore || 0
+        };
+    }
+
+    buildContext(input) {
+
+        const {
+            user,
+            guild,
+            channel,
+            message,
+            intent,
+            memories,
+            knowledge,
+            emotion,
+            predictedBehavior,
+            socialScore
+        } = this.normalizeInput(input);
 
         const username = this.sanitize(user?.username || "Unknown User");
         const userId = user?.id || "unknown";
@@ -263,9 +328,13 @@ class AIContextSystem {
         const processedKnowledge =
             this.dedupeAndFilter(knowledge, "content", userMessage);
 
-        const compressed = this.compressContext(
+        const compressed = this.compressContextAdvanced(
             processedMemories,
-            processedKnowledge
+            processedKnowledge,
+            userMessage,
+            emotion,
+            predictedBehavior,
+            socialScore
         );
 
         const contextMode = this.detectContextMode({
@@ -273,7 +342,8 @@ class AIContextSystem {
             knowledge: processedKnowledge,
             intent,
             emotion,
-            predictedBehavior
+            predictedBehavior,
+            socialScore
         });
 
         const complexity = this.detectMessageComplexity(userMessage);
@@ -288,7 +358,8 @@ class AIContextSystem {
             complexity,
             isTopicShift,
             emotion,
-            predictedBehavior
+            predictedBehavior,
+            socialScore
         });
 
         const memoryContext = compressed.length
@@ -316,6 +387,11 @@ confidence: ${predictedBehavior.confidence}
 `
             : "";
 
+        const socialContext = `
+[Social Signal]
+score: ${socialScore}
+`;
+
         const context = `
 [Discord Context]
 
@@ -332,6 +408,8 @@ ${intentContext}
 ${emotionContext}
 
 ${predictionContext}
+
+${socialContext}
 
 [Context Mode]
 ${contextMode}

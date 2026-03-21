@@ -30,10 +30,9 @@ class AIEmotionSystem {
         words: [],
         patterns: [],
         context: false,
-        prediction: null // ✅ NEW
+        prediction: null
       };
 
-      // --- Keyword Detection ---
       for (const [emotion, keywords] of Object.entries(this.emotionKeywords)) {
         for (const word of words) {
           if (keywords.includes(word)) {
@@ -43,7 +42,6 @@ class AIEmotionSystem {
         }
       }
 
-      // --- Intensifiers ---
       let intensityBoost = 0;
       for (const word of words) {
         if (this.intensifiers.includes(word)) {
@@ -52,7 +50,6 @@ class AIEmotionSystem {
         }
       }
 
-      // --- Negation Handling ---
       let negated = false;
       for (const word of words) {
         if (this.negations.includes(word)) {
@@ -61,7 +58,6 @@ class AIEmotionSystem {
         }
       }
 
-      // --- Message Length Boost ---
       if (text.length > 100) {
         for (const key in scores) {
           if (scores[key] > 0) scores[key] += 0.5;
@@ -69,7 +65,6 @@ class AIEmotionSystem {
         signals.patterns.push("long_message");
       }
 
-      // --- Context Influence ---
       let contextBoost = 0;
       if (context?.recentEmotion) {
         scores[context.recentEmotion] += 0.5;
@@ -77,7 +72,6 @@ class AIEmotionSystem {
         signals.context = true;
       }
 
-      // ✅ NEW — Prediction Influence
       if (predictedBehavior) {
         signals.prediction = predictedBehavior.type;
 
@@ -96,7 +90,6 @@ class AIEmotionSystem {
         }
       }
 
-      // --- Determine Primary Emotion ---
       let primary = "neutral";
       let max = 0;
 
@@ -107,22 +100,18 @@ class AIEmotionSystem {
         }
       }
 
-      // --- Intensity ---
       let intensity = Math.min(1, (max + intensityBoost) / 3);
 
-      // --- Polarity ---
       let polarity = "neutral";
       if (["sad", "angry", "fear"].includes(primary)) polarity = "negative";
       if (primary === "happy") polarity = "positive";
 
-      // --- Hidden Emotion ---
       let hidden = [];
       if (negated && primary !== "neutral") {
         hidden.push(primary);
         primary = "neutral";
       }
 
-      // --- Secondary Emotion ---
       let secondary = null;
       let secondMax = 0;
 
@@ -133,7 +122,6 @@ class AIEmotionSystem {
         }
       }
 
-      // --- Confidence ---
       let confidence = Math.min(1, (max + contextBoost + intensityBoost) / 3);
 
       return {

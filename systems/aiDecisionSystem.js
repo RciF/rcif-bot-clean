@@ -7,7 +7,23 @@ class AIDecisionSystem {
     this.userState = new Map();
     this.userStats = new Map();
     this.userProfiles = new Map();
+
+    this.MAX_CONFIDENCE = 1.5;
+    this.MIN_CONFIDENCE = 0;
+
+    // 🔥 adaptive memory
+    this.lastDecisions = new Map();
   }
+
+  clampConfidence(value) {
+    if (value > this.MAX_CONFIDENCE) return this.MAX_CONFIDENCE;
+    if (value < this.MIN_CONFIDENCE) return this.MIN_CONFIDENCE;
+    return value;
+  }
+
+  // =========================
+  // INTENT
+  // =========================
 
   detectIntent(message) {
     if (!message) return "unknown";
@@ -16,24 +32,11 @@ class AIDecisionSystem {
 
     if (text.includes("?")) return "question";
 
-    if (
-      text.includes("ساعد") ||
-      text.includes("كيف") ||
-      text.includes("ابي") ||
-      text.includes("ابغى")
-    ) return "help";
+    if (["ساعد","كيف","ابي","ابغى"].some(w => text.includes(w))) return "help";
 
-    if (
-      text.includes("احس") ||
-      text.includes("طفشان") ||
-      text.includes("زعلان")
-    ) return "emotional";
+    if (["احس","طفشان","زعلان"].some(w => text.includes(w))) return "emotional";
 
-    if (
-      text.includes("سوي") ||
-      text.includes("نفذ") ||
-      text.includes("افعل")
-    ) return "command";
+    if (["سوي","نفذ","افعل"].some(w => text.includes(w))) return "command";
 
     return "normal";
   }
@@ -52,6 +55,10 @@ class AIDecisionSystem {
     return badWords.some(word => text.includes(word));
   }
 
+  // =========================
+  // BEHAVIOR
+  // =========================
+
   updateBehavior(userId, isAggressive) {
     const data = this.userBehavior.get(userId) || {
       score: 0,
@@ -66,8 +73,7 @@ class AIDecisionSystem {
       data.streak += 1;
     }
 
-    if (data.score > 10) data.score = 10;
-    if (data.score < -10) data.score = -10;
+    data.score = Math.max(-10, Math.min(10, data.score));
 
     this.userBehavior.set(userId, data);
     this.updateUserProfile(userId, data);
@@ -81,6 +87,10 @@ class AIDecisionSystem {
     return "neutral";
   }
 
+  // =========================
+  // STATE
+  // =========================
+
   detectRepetition(userId, message) {
     const state = this.userState.get(userId);
     if (!state) return false;
@@ -88,7 +98,7 @@ class AIDecisionSystem {
     return state.lastMessage === message;
   }
 
-  updateState(userId, message, action) {
+  updateState(userId, message) {
     const state = this.userState.get(userId) || {
       lastMessage: null,
       repeat: 0
@@ -105,6 +115,10 @@ class AIDecisionSystem {
 
     return state;
   }
+
+  // =========================
+  // STATS
+  // =========================
 
   updateStats(userId, action) {
     const stats = this.userStats.get(userId) || {
@@ -126,18 +140,22 @@ class AIDecisionSystem {
     return stats;
   }
 
+  // =========================
+  // PROFILE
+  // =========================
+
   updateUserProfile(userId, behavior = null, stats = null) {
     const profile = this.userProfiles.get(userId) || {
       interactionCount: 0,
       score: 0,
-      personality: "neutral"
+      personality: "neutral",
+      stats: {}
     };
 
     profile.interactionCount++;
 
-    if (behavior) {
-      profile.score = behavior.score;
-    }
+    if (behavior) profile.score = behavior.score;
+    if (stats) profile.stats = stats;
 
     if (profile.score <= -5) profile.personality = "aggressive";
     else if (profile.score >= 5) profile.personality = "friendly";
@@ -151,83 +169,102 @@ class AIDecisionSystem {
     return this.userProfiles.get(userId) || null;
   }
 
+  // =========================
+  // MESSAGE ANALYSIS
+  // =========================
+
   analyzeMessage(message) {
     if (!message) {
-      return {
-        needsResponse: false,
-        confidence: 0,
-        reason: "empty"
-      };
+      return { needsResponse: false, confidence: 0, reason: "empty" };
     }
 
     const text = message.trim();
     const lower = text.toLowerCase();
 
     if (text.length <= 2) {
-      return {
-        needsResponse: false,
-        confidence: 0.9,
-        reason: "too_short"
-      };
+      return { needsResponse: false, confidence: 0.9, reason: "too_short" };
     }
 
     if (lower.includes("?")) {
-      return {
-        needsResponse: true,
-        confidence: 1,
-        reason: "question"
-      };
+      return { needsResponse: true, confidence: 1, reason: "question" };
     }
 
-    if (
-      lower.includes("حزين") ||
-      lower.includes("تعبان") ||
-      lower.includes("زعلان") ||
-      lower.includes("طفشان")
-    ) {
-      return {
-        needsResponse: true,
-        confidence: 0.9,
-        reason: "emotional"
-      };
+    if (["حزين","تعبان","زعلان","طفشان"].some(w => lower.includes(w))) {
+      return { needsResponse: true, confidence: 0.9, reason: "emotional" };
     }
 
-    if (
-      lower.includes("سوي") ||
-      lower.includes("نفذ") ||
-      lower.includes("افعل")
-    ) {
-      return {
-        needsResponse: true,
-        confidence: 0.85,
-        reason: "command"
-      };
+    if (["سوي","نفذ","افعل"].some(w => lower.includes(w))) {
+      return { needsResponse: true, confidence: 0.85, reason: "command" };
     }
 
     if (text.length < 6) {
-      return {
-        needsResponse: true,
-        confidence: 0.4,
-        reason: "unclear"
-      };
+      return { needsResponse: true, confidence: 0.4, reason: "unclear" };
     }
 
     if (text.length > 80) {
-      return {
-        needsResponse: true,
-        confidence: 0.85,
-        reason: "detailed"
-      };
+      return { needsResponse: true, confidence: 0.85, reason: "detailed" };
     }
 
-    return {
-      needsResponse: true,
-      confidence: 0.7,
-      reason: "normal"
-    };
+    return { needsResponse: true, confidence: 0.7, reason: "normal" };
   }
 
-  decide({
+  // =========================
+  // SOCIAL BOOST
+  // =========================
+
+  async getSocialBoost(userId, targetUserId) {
+    if (!userId) return 0;
+
+    try {
+      let boost = 0;
+
+      if (targetUserId) {
+        const relation = await aiSocialAwarenessSystem.getRelationshipContext(userId, targetUserId);
+
+        if (relation) {
+          if (relation.score > 15) boost += 0.2;
+          if (relation.score < -10) boost -= 0.25;
+        }
+      }
+
+      const context = aiSocialAwarenessSystem.getSocialContext(userId);
+
+      if (context?.networkStrength) {
+        if (context.networkStrength > 50) boost += 0.1;
+        if (context.networkStrength < -30) boost -= 0.1;
+      }
+
+      // 🔥 influence boost
+      const influence = aiSocialAwarenessSystem.getUserInfluenceScore(userId);
+      if (influence > 30) boost += 0.1;
+
+      return boost;
+
+    } catch {
+      return 0;
+    }
+  }
+
+  // =========================
+  // ANTI LOOP
+  // =========================
+
+  preventLoop(userId, decision) {
+    const last = this.lastDecisions.get(userId);
+
+    if (last === decision) {
+      return decision === "ask" ? "answer" : decision;
+    }
+
+    this.lastDecisions.set(userId, decision);
+    return decision;
+  }
+
+  // =========================
+  // DECISION ENGINE
+  // =========================
+
+  async decide({
     intent,
     contextStrength,
     isAggressive,
@@ -242,39 +279,28 @@ class AIDecisionSystem {
 
     const analysis = this.analyzeMessage(message);
 
-    let relationshipBoost = 0;
+    const socialBoost = await this.getSocialBoost(
+      userId,
+      context?.targetUserId
+    );
 
-    if (context?.targetUserId && userId) {
-      const relation = aiSocialAwarenessSystem.getRelationshipContext(
-        userId,
-        context.targetUserId
-      );
+    let confidence = this.clampConfidence(analysis.confidence + socialBoost);
 
-      if (relation) {
-        if (relation.score > 10) relationshipBoost = 0.15;
-        if (relation.score < -5) relationshipBoost = -0.2;
-      }
-    }
-
-    let confidence = analysis.confidence + relationshipBoost;
-
-    if (!analysis.needsResponse) {
-      return "limited";
-    }
+    if (!analysis.needsResponse) return "limited";
 
     if (isAggressive) return "defense";
 
     if (isRepeated) return "limited";
 
-    if (trustLevel === "low") return "limited";
+    if (trustLevel === "low" && confidence < 0.6) return "limited";
 
-    // ✅ Prediction Influence (refined)
+    // =========================
+    // PREDICTION
+    // =========================
+
     if (predictedBehavior) {
 
-      if (
-        predictedBehavior.type === "escalation" ||
-        predictedBehavior.type === "hostile_pattern"
-      ) {
+      if (["escalation","hostile_pattern"].includes(predictedBehavior.type)) {
         return "defense";
       }
 
@@ -287,7 +313,7 @@ class AIDecisionSystem {
       }
 
       if (predictedBehavior.type === "follow_up") {
-        return confidence > 0.35 ? "answer" : "ask";
+        return confidence > 0.4 ? "answer" : "ask";
       }
 
       if (predictedBehavior.type === "deep_engagement") {
@@ -295,14 +321,13 @@ class AIDecisionSystem {
       }
     }
 
-    // 🔥 Emotion layer
+    // =========================
+    // EMOTION
+    // =========================
+
     if (emotion) {
 
-      if (emotion.polarity === "negative" && emotion.intensity > 0.6) {
-        return "empathetic";
-      }
-
-      if (emotion.polarity === "negative" && emotion.intensity > 0.3) {
+      if (emotion.polarity === "negative" && emotion.intensity > 0.5) {
         return "empathetic";
       }
 
@@ -311,19 +336,29 @@ class AIDecisionSystem {
       }
     }
 
+    // =========================
+    // INTENT
+    // =========================
+
     if (intent === "command") return "controlled";
 
     if (intent === "emotional") return "empathetic";
 
-    if (intent === "question") return confidence > 0.4 ? "answer" : "ask";
+    if (intent === "question") return confidence > 0.45 ? "answer" : "ask";
 
-    if (intent === "help") return confidence > 0.4 ? "answer" : "ask";
+    if (intent === "help") return confidence > 0.45 ? "answer" : "ask";
 
     if (analysis.reason === "unclear") return "ask";
 
-    if (contextStrength < 2 && confidence < 0.6) return "ask";
+    // =========================
+    // CONTEXT
+    // =========================
 
-    return "answer";
+    if (contextStrength < 2 && confidence < 0.65) return "ask";
+
+    const finalDecision = confidence > 0.4 ? "answer" : "ask";
+
+    return this.preventLoop(userId, finalDecision);
   }
 
 }

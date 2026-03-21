@@ -6,60 +6,102 @@ class AIAutonomousSystem {
   constructor() {
     this.cooldowns = new Map();
     this.minCooldown = 1000 * 60 * 2; // 2 minutes
+
+    // 🔥 adaptive cooldown
+    this.dynamicCooldown = true;
+
+    // 🔥 anti-spam memory
+    this.lastTriggerType = new Map();
   }
 
-  canTrigger(userId) {
+  // =========================
+  // COOLDOWN
+  // =========================
+
+  getCooldown(userId, contextStrength = 0) {
+    if (!this.dynamicCooldown) return this.minCooldown;
+
+    // stronger context → shorter cooldown
+    if (contextStrength >= 5) return this.minCooldown * 0.5;
+    if (contextStrength >= 3) return this.minCooldown * 0.7;
+
+    return this.minCooldown;
+  }
+
+  canTrigger(userId, contextStrength = 0) {
     const last = this.cooldowns.get(userId) || 0;
     const now = Date.now();
 
-    if (now - last < this.minCooldown) return false;
+    const cooldown = this.getCooldown(userId, contextStrength);
+
+    if (now - last < cooldown) return false;
 
     this.cooldowns.set(userId, now);
     return true;
   }
 
-  decideTrigger({ userId, message, emotion, contextStrength, context, predictedBehavior }) {
+  // =========================
+  // DECISION
+  // =========================
+
+  async decideTrigger({
+    userId,
+    message,
+    emotion,
+    contextStrength,
+    context,
+    predictedBehavior
+  }) {
 
     if (!message) return null;
 
-    // ✅ SOCIAL AWARENESS
     let relation = null;
+
     if (context?.targetUserId) {
-      relation = aiSocialAwarenessSystem.getRelationshipContext(
-        userId,
-        context.targetUserId
-      );
+      try {
+        relation = await aiSocialAwarenessSystem.getRelationshipContext(
+          userId,
+          context.targetUserId
+        );
+      } catch (err) {
+        logger.error("AUTONOMOUS_RELATION_FETCH_FAILED", {
+          error: err?.message
+        });
+      }
     }
 
-    // 🔥 PREDICTION CONTROL (NEW)
+    // 🔥 influencer boost
+    let influenceScore = 0;
+    try {
+      influenceScore = aiSocialAwarenessSystem.getUserInfluenceScore(userId);
+    } catch {}
+
+    // =========================
+    // PREDICTION LAYER
+    // =========================
+
     if (predictedBehavior) {
 
-      // escalation → لا تتدخل أو خفف
-      if (predictedBehavior.type === "escalation") {
-        return null;
-      }
+      if (predictedBehavior.type === "escalation") return null;
+      if (predictedBehavior.type === "repeat") return null;
 
-      // repeat → لا تحفز زيادة
-      if (predictedBehavior.type === "repeat") {
-        return null;
-      }
-
-      // emotional continuation → دعم تلقائي
       if (predictedBehavior.type === "emotional_continuation") {
-        return "emotional_followup";
+        return this.safeTrigger(userId, "emotional_followup");
       }
 
-      // deep engagement → تفاعل أعمق
       if (predictedBehavior.type === "deep_engagement") {
-        return "curious";
+        return this.safeTrigger(userId, "curious");
       }
     }
 
-    // 🔥 SOCIAL INTERVENTION
+    // =========================
+    // SOCIAL LOGIC
+    // =========================
+
     if (relation) {
 
       if (relation.score > 10 && emotion?.type === "sad") {
-        return "social_support";
+        return this.safeTrigger(userId, "social_support");
       }
 
       if (relation.score < -5 && emotion?.type === "angry") {
@@ -67,23 +109,59 @@ class AIAutonomousSystem {
       }
     }
 
-    // 🔥 emotional → respond naturally
+    // =========================
+    // EMOTION
+    // =========================
+
     if (emotion?.type !== "neutral" && emotion?.intensity > 0.5) {
-      return "emotional_followup";
+      return this.safeTrigger(userId, "emotional_followup");
     }
 
-    // 🔥 short dry message → push interaction
+    // =========================
+    // SHORT MESSAGE
+    // =========================
+
     if (message.length < 6) {
-      return "engage";
+      return this.safeTrigger(userId, "engage");
     }
 
-    // 🔥 no context → ask something
+    // =========================
+    // LOW CONTEXT
+    // =========================
+
     if (contextStrength < 2) {
-      return "curious";
+      return this.safeTrigger(userId, "curious");
+    }
+
+    // =========================
+    // 🔥 HIGH INFLUENCE USERS
+    // =========================
+
+    if (influenceScore > 30) {
+      return this.safeTrigger(userId, "engage");
     }
 
     return null;
   }
+
+  // =========================
+  // 🔥 ANTI-SPAM TRIGGER
+  // =========================
+
+  safeTrigger(userId, type) {
+    const lastType = this.lastTriggerType.get(userId);
+
+    if (lastType === type) {
+      return null;
+    }
+
+    this.lastTriggerType.set(userId, type);
+    return type;
+  }
+
+  // =========================
+  // PROMPTS
+  // =========================
 
   buildAutonomousPrompt(type) {
 
@@ -92,6 +170,7 @@ class AIAutonomousSystem {
 - المستخدم قريب منك
 - لاحظت حالته
 - ادخل بلطف وادعمه بدون ما يطلب
+- لا تكون رسمي
 `;
     }
 
@@ -100,6 +179,7 @@ class AIAutonomousSystem {
 - تابع المشاعر
 - لا تسكت
 - اسأل أو علّق بشكل إنساني
+- لا تكرر نفس الاسلوب
 `;
     }
 
@@ -107,6 +187,7 @@ class AIAutonomousSystem {
       return `
 - حاول تفتح تفاعل
 - اسأل شيء بسيط
+- خفيفة وسريعة
 `;
     }
 
@@ -114,6 +195,7 @@ class AIAutonomousSystem {
       return `
 - اسأل سؤال خفيف
 - ابني محادثة
+- لا تكون ثقيل
 `;
     }
 

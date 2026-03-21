@@ -1,9 +1,6 @@
-/**
- * AI Memory System (Ultimate Version — Advanced Intelligence + Behavior + Emotion + Ranking + Long-Term Tracking + Prediction Aware)
- */
-
 const memoryRepository = require("../repositories/memoryRepository")
 const logger = require("./loggerSystem")
+const aiSocialAwarenessSystem = require("./aiSocialAwarenessSystem")
 
 class AiMemorySystem {
 
@@ -15,7 +12,7 @@ class AiMemorySystem {
 
     this.userBehaviorProfile = new Map()
     this.userEmotionProfile = new Map()
-    this.userPredictionProfile = new Map() // ✅ NEW
+    this.userPredictionProfile = new Map()
 
     this.forbiddenWords = [
       "password","token","credit","bank","secret","pass","pin"
@@ -32,10 +29,18 @@ class AiMemorySystem {
       goal: 8,
       skill: 7,
       emotion: 9,
-      prediction: 6 // ✅ NEW
+      prediction: 6
     }
 
+    // 🔥 cache layer
+    this.memoryCache = new Map()
+    this.cacheTTL = 1000 * 60 * 5
+
   }
+
+  // =========================
+  // CLEANING
+  // =========================
 
   cleanText(text) {
     if (!text) return ""
@@ -91,6 +96,10 @@ class AiMemorySystem {
     return score
   }
 
+  // =========================
+  // DECAY + SOCIAL
+  // =========================
+
   memoryDecay(memory) {
 
     if (!memory || !memory.created_at) return 0
@@ -103,6 +112,24 @@ class AiMemorySystem {
 
     return Math.max(0, 10 - (days * 0.4))
   }
+
+  getSocialWeight(userId) {
+    try {
+      const social = aiSocialAwarenessSystem.getSocialContext(userId)
+      if (!social) return 0
+
+      if (social.networkStrength > 50) return 3
+      if (social.networkStrength < -30) return -2
+
+      return 1
+    } catch {
+      return 0
+    }
+  }
+
+  // =========================
+  // STORE DECISION
+  // =========================
 
   shouldStoreMemory(message) {
 
@@ -120,6 +147,10 @@ class AiMemorySystem {
     return true
   }
 
+  // =========================
+  // PROFILES
+  // =========================
+
   updateBehaviorProfile(userId, message) {
 
     if (!this.userBehaviorProfile.has(userId)) {
@@ -136,19 +167,11 @@ class AiMemorySystem {
 
     profile.totalMessages++
 
-    if (
-      text.includes("حزين") ||
-      text.includes("زعلان") ||
-      text.includes("تعبان")
-    ) {
+    if (["حزين","زعلان","تعبان"].some(w => text.includes(w))) {
       profile.emotionalCount++
     }
 
-    if (
-      text.includes("غبي") ||
-      text.includes("اخرس") ||
-      text.includes("كلب")
-    ) {
+    if (["غبي","اخرس","كلب"].some(w => text.includes(w))) {
       profile.aggressiveCount++
     }
 
@@ -183,7 +206,6 @@ class AiMemorySystem {
     return profile
   }
 
-  // ✅ NEW — Prediction Profile
   updatePredictionProfile(userId, predictedBehavior) {
 
     if (!predictedBehavior || !predictedBehavior.type) return
@@ -200,34 +222,32 @@ class AiMemorySystem {
     return profile
   }
 
+  // =========================
+  // BUILD MEMORY
+  // =========================
+
   async buildEmotionMemory(userId, profile) {
 
     if (!profile) return
 
-    const entries = Object.entries(profile)
-      .filter(([k]) => k !== "last")
-
+    const entries = Object.entries(profile).filter(([k]) => k !== "last")
     const dominant = entries.sort((a, b) => b[1] - a[1])[0]
 
     if (!dominant || dominant[1] < 3) return
 
-    let summary = null
+    const map = {
+      sad: "يميل للحزن غالباً",
+      angry: "يميل للغضب غالباً",
+      fear: "يميل للتوتر والقلق",
+      happy: "شخص إيجابي غالباً"
+    }
 
-    if (dominant[0] === "sad") summary = "يميل للحزن غالباً"
-    else if (dominant[0] === "angry") summary = "يميل للغضب غالباً"
-    else if (dominant[0] === "fear") summary = "يميل للتوتر والقلق"
-    else if (dominant[0] === "happy") summary = "شخص إيجابي غالباً"
-
+    const summary = map[dominant[0]]
     if (!summary) return
 
-    await this.storeMemory({
-      userId,
-      type: "emotion",
-      memory: summary
-    })
+    await this.storeMemory({ userId, type: "emotion", memory: summary })
   }
 
-  // ✅ NEW — Prediction Memory
   async buildPredictionMemory(userId, profile) {
 
     if (!profile) return
@@ -237,20 +257,17 @@ class AiMemorySystem {
 
     if (!dominant || dominant[1] < 4) return
 
-    let summary = null
+    const map = {
+      repeat: "يميل لتكرار نفس الرسائل",
+      deep_engagement: "يميل للنقاش العميق",
+      escalation: "يميل للتصعيد",
+      emotional_continuation: "يستمر في الحالة العاطفية"
+    }
 
-    if (dominant[0] === "repeat") summary = "يميل لتكرار نفس الرسائل"
-    else if (dominant[0] === "deep_engagement") summary = "يميل للنقاش العميق"
-    else if (dominant[0] === "escalation") summary = "يميل للتصعيد"
-    else if (dominant[0] === "emotional_continuation") summary = "يستمر في الحالة العاطفية"
-
+    const summary = map[dominant[0]]
     if (!summary) return
 
-    await this.storeMemory({
-      userId,
-      type: "prediction",
-      memory: summary
-    })
+    await this.storeMemory({ userId, type: "prediction", memory: summary })
   }
 
   async buildBehaviorMemory(userId, profile) {
@@ -259,22 +276,41 @@ class AiMemorySystem {
 
     let summary = null
 
-    if (profile.aggressiveCount >= 3) {
-      summary = "يميل للتعامل بعدوانية"
-    } else if (profile.emotionalCount >= 3) {
-      summary = "يتحدث بمشاعر عالية"
-    } else if (profile.shortMessages >= 3) {
-      summary = "يرسل رسائل قصيرة غالباً"
-    }
+    if (profile.aggressiveCount >= 3) summary = "يميل للتعامل بعدوانية"
+    else if (profile.emotionalCount >= 3) summary = "يتحدث بمشاعر عالية"
+    else if (profile.shortMessages >= 3) summary = "يرسل رسائل قصيرة غالباً"
 
     if (!summary) return
 
-    await this.storeMemory({
-      userId,
-      type: "behavior",
-      memory: summary
+    await this.storeMemory({ userId, type: "behavior", memory: summary })
+  }
+
+  // =========================
+  // CACHE
+  // =========================
+
+  getCache(userId) {
+    const cached = this.memoryCache.get(userId)
+    if (!cached) return null
+
+    if (Date.now() - cached.time > this.cacheTTL) {
+      this.memoryCache.delete(userId)
+      return null
+    }
+
+    return cached.data
+  }
+
+  setCache(userId, data) {
+    this.memoryCache.set(userId, {
+      data,
+      time: Date.now()
     })
   }
+
+  // =========================
+  // STORE
+  // =========================
 
   async storeMemory({ userId, type, memory }) {
 
@@ -283,7 +319,6 @@ class AiMemorySystem {
       if (!userId || !type || !memory) return false
 
       const memoryText = this.cleanText(memory)
-
       if (!this.validateMemory(memoryText)) return false
 
       const memories = await memoryRepository.getUserMemories(userId) || []
@@ -306,6 +341,8 @@ class AiMemorySystem {
         createdAt: new Date()
       })
 
+      this.memoryCache.delete(userId)
+
       return true
 
     } catch (error) {
@@ -318,16 +355,25 @@ class AiMemorySystem {
     }
   }
 
+  // =========================
+  // FETCH
+  // =========================
+
   async getUserMemories(userId) {
 
     try {
 
       if (!userId) return []
 
-      const memories = await memoryRepository.getUserMemories(userId)
-      if (!memories) return []
+      const cached = this.getCache(userId)
+      if (cached) return cached
 
-      return memories.slice(0, this.maxUserMemories)
+      const memories = await memoryRepository.getUserMemories(userId) || []
+      const result = memories.slice(0, this.maxUserMemories)
+
+      this.setCache(userId, result)
+
+      return result
 
     } catch (error) {
 
@@ -339,6 +385,10 @@ class AiMemorySystem {
     }
   }
 
+  // =========================
+  // SEARCH
+  // =========================
+
   async searchRelevantMemories(userId, message) {
 
     try {
@@ -347,6 +397,7 @@ class AiMemorySystem {
       if (!memories.length) return []
 
       const text = this.normalize(message)
+      const socialWeight = this.getSocialWeight(userId)
 
       const scored = memories.map(m => {
 
@@ -364,10 +415,9 @@ class AiMemorySystem {
 
         if (memoryText.length < 40) score += 2
 
-        return {
-          memory: m.memory,
-          score
-        }
+        score += socialWeight
+
+        return { memory: m.memory, score }
 
       })
 
@@ -387,17 +437,18 @@ class AiMemorySystem {
     }
   }
 
+  // =========================
+  // CONTEXT
+  // =========================
+
   async injectMemoriesIntoContext(userId, message, context) {
 
     try {
 
       const relevant = await this.searchRelevantMemories(userId, message)
-
       if (!relevant.length) return context
 
-      const memoryText = relevant
-        .map(m => `Memory: ${m}`)
-        .join("\n")
+      const memoryText = relevant.map(m => `Memory: ${m}`).join("\n")
 
       return `
 [Relevant User Memory]
@@ -416,6 +467,10 @@ ${context}
     }
   }
 
+  // =========================
+  // EXTRACTION
+  // =========================
+
   async extractMemoryFromMessage(userId, message, emotion = null, predictedBehavior = null) {
 
     try {
@@ -430,7 +485,6 @@ ${context}
         await this.buildEmotionMemory(userId, emotionProfile)
       }
 
-      // ✅ NEW — Prediction Tracking
       if (predictedBehavior) {
         const predictionProfile = this.updatePredictionProfile(userId, predictedBehavior)
         await this.buildPredictionMemory(userId, predictionProfile)
@@ -504,6 +558,10 @@ ${context}
     }
   }
 
+  // =========================
+  // SERVER MEMORY
+  // =========================
+
   async storeServerMemory(memory) {
 
     try {
@@ -511,7 +569,6 @@ ${context}
       if (!memory) return false
 
       const clean = this.cleanText(memory)
-
       if (!this.validateMemory(clean)) return false
 
       await memoryRepository.createMemory({

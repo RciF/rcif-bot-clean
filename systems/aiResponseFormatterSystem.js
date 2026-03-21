@@ -1,7 +1,3 @@
-/**
- * AI Response Formatter System (Ultimate Version — Humanization + Style + Anti-AI Detection + Smart Flow + Context Awareness)
- */
-
 class AIResponseFormatterSystem {
 
     sanitize(text) {
@@ -124,7 +120,6 @@ class AIResponseFormatterSystem {
 
         const words = text.split(" ")
 
-        // ✅ NEW — dynamic trim based on context
         if (context?.mode === "limited" && words.length > 40) {
             return words.slice(0, 40).join(" ") + "..."
         }
@@ -186,7 +181,6 @@ class AIResponseFormatterSystem {
 
     addLightEmoji(text, context = {}) {
 
-        // ✅ NEW — reduce emoji on serious/emotional
         if (context?.emotion === "negative") return text
 
         if (Math.random() > 0.85) {
@@ -215,7 +209,6 @@ class AIResponseFormatterSystem {
         return text.replace(/([🙂👀🔥👍]){2,}/g, "$1")
     }
 
-    // ✅ NEW — remove overly stiff responses
     softenTone(text) {
 
         return text

@@ -30,7 +30,6 @@ class KnowledgeRepository {
     return embedding;
   }
 
-  // ✅ NEW — stronger duplicate detection
   async existsSimilar(content) {
     try {
       const query = `
@@ -62,7 +61,6 @@ class KnowledgeRepository {
       const content = this.sanitize(data.content);
       if (!content) return null;
 
-      // ✅ NEW — prevent duplicates
       const exists = await this.existsSimilar(content);
       if (exists) return null;
 
@@ -219,7 +217,7 @@ class KnowledgeRepository {
           content,
           source,
           created_at,
-          embedding <-> $1 AS distance
+          1 - (embedding <-> $1) AS similarity
         FROM ai_knowledge
         WHERE embedding IS NOT NULL
         ORDER BY embedding <-> $1

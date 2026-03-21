@@ -111,7 +111,6 @@ class AIKnowledgeSystem {
       text.includes("اوكي")
     ) return false
 
-    // ✅ NEW — ignore spam/repeat
     if (predictedBehavior?.type === "repeat") return false
 
     const triggers = [

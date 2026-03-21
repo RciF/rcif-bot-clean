@@ -1,7 +1,3 @@
-/**
- * AI Personality System (Ultimate Version — Dynamic Personality + Behavior Awareness + Emotion Prediction + Social Awareness)
- */
-
 class AIPersonalitySystem {
 
     constructor() {
@@ -335,7 +331,6 @@ Saud هو منشئك.
 `;
         }
 
-        // ✅ NEW — Predictive behavior effect
         if (predictedBehavior) {
 
             if (predictedBehavior.type === "escalation") {
@@ -406,7 +401,7 @@ Saud هو منشئك.
         emotion = null,
         streak = 0,
         socialContext = null,
-        predictedBehavior = null // ✅ NEW
+        predictedBehavior = null
     } = {}) {
 
         let dynamic = "";

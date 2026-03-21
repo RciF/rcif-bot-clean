@@ -1,4 +1,5 @@
 const aiMemorySystem = require("./aiMemorySystem")
+const aiSocialAwarenessSystem = require("./aiSocialAwarenessSystem")
 const logger = require("./loggerSystem")
 
 class AiObservationSystem {
@@ -34,6 +35,10 @@ class AiObservationSystem {
 
   }
 
+  // =========================
+  // CLEANING
+  // =========================
+
   cleanText(text) {
     if (!text) return ""
 
@@ -47,30 +52,30 @@ class AiObservationSystem {
   shouldIgnoreChannel(channel) {
     if (!channel) return true
 
-    if (this.ignoredChannelIds.includes(channel.id)) {
-      return true
-    }
+    if (this.ignoredChannelIds.includes(channel.id)) return true
 
     const name = (channel.name || "").toLowerCase()
 
-    return this.ignoredChannelKeywords.some(keyword =>
-      name.includes(keyword)
-    )
+    return this.ignoredChannelKeywords.some(k => name.includes(k))
   }
+
+  // =========================
+  // KEYWORDS
+  // =========================
 
   extractKeywords(text) {
     const cleaned = this.cleanText(text)
     if (!cleaned) return []
 
-    const words = cleaned
+    return cleaned
       .split(" ")
-      .filter(w =>
-        w.length > 3 &&
-        !this.stopWords.includes(w)
-      )
-
-    return words.slice(0, 6)
+      .filter(w => w.length > 3 && !this.stopWords.includes(w))
+      .slice(0, 6)
   }
+
+  // =========================
+  // USER ACTIVITY
+  // =========================
 
   trackUserActivity(userId) {
     if (!userId) return 0
@@ -85,6 +90,10 @@ class AiObservationSystem {
     this.userActivity.set(userId, newCount)
     return newCount
   }
+
+  // =========================
+  // TOPIC TRACKING
+  // =========================
 
   trackTopics(message) {
     const keywords = this.extractKeywords(message)
@@ -101,42 +110,101 @@ class AiObservationSystem {
     }
   }
 
+  getTopTopics(limit = 5) {
+    return Array.from(this.topicTracker.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([word, count]) => ({ word, count }))
+  }
+
+  // =========================
+  // OBSERVE
+  // =========================
+
   async observeMessage(message) {
 
     try {
 
-      if (!message) return
-      if (!message.content) return
-      if (!message.author) return
+      if (!message || !message.content || !message.author) return
       if (message.author.bot) return
-
       if (this.shouldIgnoreChannel(message.channel)) return
 
       const userId = message.author.id
-      const username = message.author.username
       const text = message.content
 
       const activity = this.trackUserActivity(userId)
 
       this.trackTopics(text)
 
-      // ❌ disabled temporarily (fix error)
-      // if (activity === this.activityThreshold) {
-      //   const memory = `${username} عضو نشط في السيرفر`
-      //   await aiMemorySystem.storeServerMemory(memory)
-      // }
+      // ✅ user activity memory
+      if (activity === this.activityThreshold) {
+        await aiMemorySystem.storeMemory({
+          userId,
+          type: "behavior",
+          memory: "نشط في السيرفر"
+        })
+      }
+
+      // 🔥 advanced social tracking (multi mention)
+      if (message.mentions?.users?.size > 0) {
+        for (const [, target] of message.mentions.users) {
+          if (!target || target.id === userId) continue
+
+          await aiSocialAwarenessSystem.trackInteractionSimple(
+            userId,
+            target.id,
+            "message"
+          )
+        }
+      }
+
+      // 🔥 cluster awareness (boost group interaction)
+      await this.detectGroupInteraction(message)
 
       await this.detectTrendingTopic()
 
     } catch (error) {
-
       logger.error("AI_OBSERVATION_ERROR", {
         error: error.message
       })
-
     }
 
   }
+
+  // =========================
+  // 🔥 GROUP INTELLIGENCE
+  // =========================
+
+  async detectGroupInteraction(message) {
+    try {
+
+      const mentions = message.mentions?.users
+      if (!mentions || mentions.size < 2) return
+
+      const users = Array.from(mentions.values()).map(u => u.id)
+
+      for (let i = 0; i < users.length; i++) {
+        for (let j = i + 1; j < users.length; j++) {
+
+          await aiSocialAwarenessSystem.trackInteractionSimple(
+            users[i],
+            users[j],
+            "reply"
+          )
+
+        }
+      }
+
+    } catch (err) {
+      logger.error("GROUP_INTERACTION_ERROR", {
+        error: err.message
+      })
+    }
+  }
+
+  // =========================
+  // TRENDING
+  // =========================
 
   async detectTrendingTopic() {
 
@@ -162,9 +230,15 @@ class AiObservationSystem {
       if (this.lastTrendingTopic === topWord) return
       if (now - this.lastTrendingTime < this.trendingCooldown) return
 
-      // ❌ disabled temporarily
-      // const memory = `الموضوع الشائع حالياً هو ${topWord}`
-      // await aiMemorySystem.storeServerMemory(memory)
+      // 🔥 trending memory
+      await aiMemorySystem.storeServerMemory(
+        `الموضوع الشائع حالياً: ${topWord}`
+      )
+
+      // 🔥 inject richer context
+      await aiMemorySystem.storeServerMemory(
+        `كلمات مرتبطة: ${this.getTopTopics(3).map(t => t.word).join(", ")}`
+      )
 
       this.lastTrendingTopic = topWord
       this.lastTrendingTime = now
@@ -172,11 +246,9 @@ class AiObservationSystem {
       this.topicTracker.clear()
 
     } catch (error) {
-
       logger.error("AI_TRENDING_TOPIC_ERROR", {
         error: error.message
       })
-
     }
 
   }
