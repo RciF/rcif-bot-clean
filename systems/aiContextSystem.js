@@ -1,6 +1,5 @@
 /**
- * AI Context System
- * Advanced Context Intelligence (Noise Control + Relevance + Focus)
+ * AI Context System (Ultimate Version — Dynamic Context Intelligence + Emotion Awareness + Compression + Relevance Engine)
  */
 
 class AIContextSystem {
@@ -15,8 +14,35 @@ class AIContextSystem {
             .slice(0, 120);
     }
 
-    // 🔹 smarter filtering + ranking
-    dedupeAndFilter(list, key = "memory") {
+    normalize(text) {
+        return this.sanitize(text).toLowerCase();
+    }
+
+    extractKeywords(text) {
+        if (!text) return [];
+
+        return this.normalize(text)
+            .split(" ")
+            .filter(w => w.length > 3)
+            .slice(0, 10);
+    }
+
+    similarity(a, b) {
+        const wa = this.extractKeywords(a);
+        const wb = this.extractKeywords(b);
+
+        if (!wa.length || !wb.length) return 0;
+
+        let score = 0;
+
+        for (const w of wa) {
+            if (wb.includes(w)) score++;
+        }
+
+        return score;
+    }
+
+    dedupeAndFilter(list, key = "memory", message = "") {
         if (!Array.isArray(list)) return [];
 
         const seen = new Set();
@@ -29,9 +55,8 @@ class AIContextSystem {
 
             if (!value) continue;
 
-            const clean = this.sanitize(value).toLowerCase();
+            const clean = this.normalize(value);
 
-            // ❌ ignore weak entries
             if (
                 clean.length < 4 ||
                 clean === "unknown" ||
@@ -39,38 +64,174 @@ class AIContextSystem {
                 clean.includes("http")
             ) continue;
 
-            if (!seen.has(clean)) {
-                seen.add(clean);
-                result.push(clean);
+            let score = 0;
+
+            if (message) {
+                const msg = this.normalize(message);
+
+                score += this.similarity(clean, msg) * 3;
+
+                if (msg.includes(clean)) score += 5;
+                if (clean.includes(msg)) score += 3;
+
+                if (clean.length < 40) score += 1;
             }
 
-            if (result.length >= 6) break;
+            if (!seen.has(clean)) {
+                seen.add(clean);
+                result.push({
+                    value: clean,
+                    score
+                });
+            }
         }
 
-        return result;
+        return result
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 6)
+            .map(i => i.value);
     }
 
-    // 🔥 detect context mode
-    detectContextMode({ memories, knowledge, intent }) {
+    detectContextMode({ memories, knowledge, intent, emotion, predictedBehavior }) {
         let score = 0;
 
         if (memories?.length) score += memories.length;
         if (knowledge?.length) score += knowledge.length;
         if (intent) score += 2;
 
-        if (score >= 5) return "rich";
-        if (score >= 2) return "medium";
+        if (emotion?.intensity > 0.5) score += 2;
+
+        // ✅ NEW — Prediction influence
+        if (predictedBehavior?.type === "deep_engagement") score += 2;
+        if (predictedBehavior?.type === "repeat") score -= 2;
+
+        if (score >= 6) return "rich";
+        if (score >= 3) return "medium";
         return "light";
     }
 
-    // 🔥 detect message complexity
     detectMessageComplexity(message) {
         if (!message) return "simple";
 
-        if (message.length > 100) return "complex";
+        if (message.length > 120) return "complex";
         if (message.includes("?")) return "question";
+        if (message.split(" ").length > 15) return "complex";
 
         return "simple";
+    }
+
+    detectTopicShift(message, memories) {
+        if (!message || !memories?.length) return false;
+
+        const msgKeywords = this.extractKeywords(message);
+
+        for (const mem of memories) {
+            const memKeywords = this.extractKeywords(mem);
+
+            const overlap = msgKeywords.filter(k => memKeywords.includes(k));
+
+            if (overlap.length > 1) return false;
+        }
+
+        return true;
+    }
+
+    compressContext(memories, knowledge) {
+        const combined = [...memories, ...knowledge];
+
+        if (combined.length <= 5) return combined;
+
+        return combined.slice(0, 5);
+    }
+
+    buildBehaviorRules({ contextMode, complexity, isTopicShift, emotion, predictedBehavior }) {
+
+        let rules = "";
+
+        if (contextMode === "rich") {
+            rules += `
+- استخدم السياق بذكاء بدون تكرار
+- اربط الرد بالمعلومات السابقة
+`;
+        }
+
+        if (contextMode === "medium") {
+            rules += `
+- استخدم بعض السياق عند الحاجة فقط
+`;
+        }
+
+        if (contextMode === "light") {
+            rules += `
+- تجاهل السياق وركز على الرسالة الحالية
+`;
+        }
+
+        if (complexity === "complex") {
+            rules += `
+- نظم الرد
+- وضح الأفكار
+`;
+        }
+
+        if (complexity === "question") {
+            rules += `
+- أجب مباشرة
+- بدون حشو
+`;
+        }
+
+        if (isTopicShift) {
+            rules += `
+- تجاهل السياق القديم
+- ابدأ سياق جديد
+`;
+        }
+
+        if (emotion?.polarity === "negative") {
+            rules += `
+- كن هادئ
+- لا تكون حاد
+`;
+        }
+
+        if (emotion?.intensity > 0.7) {
+            rules += `
+- أعطِ اهتمام أعلى للمشاعر
+`;
+        }
+
+        // ✅ NEW — Prediction behavior rules
+        if (predictedBehavior) {
+
+            if (predictedBehavior.type === "repeat") {
+                rules += `
+- لا تعيد نفس الفكرة
+- اختصر
+`;
+            }
+
+            if (predictedBehavior.type === "escalation") {
+                rules += `
+- لا تستفز المستخدم
+- خلك هادئ جداً
+`;
+            }
+
+            if (predictedBehavior.type === "deep_engagement") {
+                rules += `
+- ممكن توسع أكثر
+`;
+            }
+        }
+
+        rules += `
+- لا تكرر
+- لا تخرج عن الموضوع
+- كن طبيعي
+`;
+
+        return rules;
     }
 
     buildContext({
@@ -80,7 +241,9 @@ class AIContextSystem {
         message,
         intent,
         memories = [],
-        knowledge = []
+        knowledge = [],
+        emotion = null,
+        predictedBehavior = null // ✅ NEW
     }) {
 
         const username = this.sanitize(user?.username || "Unknown User");
@@ -95,78 +258,63 @@ class AIContextSystem {
         const userMessage = this.sanitize(message || "");
 
         const processedMemories =
-            this.dedupeAndFilter(memories, "memory").slice(0, 3);
+            this.dedupeAndFilter(memories, "memory", userMessage);
 
         const processedKnowledge =
-            this.dedupeAndFilter(knowledge, "content").slice(0, 2);
+            this.dedupeAndFilter(knowledge, "content", userMessage);
+
+        const compressed = this.compressContext(
+            processedMemories,
+            processedKnowledge
+        );
 
         const contextMode = this.detectContextMode({
             memories: processedMemories,
             knowledge: processedKnowledge,
-            intent
+            intent,
+            emotion,
+            predictedBehavior
         });
 
         const complexity = this.detectMessageComplexity(userMessage);
 
+        const isTopicShift = this.detectTopicShift(
+            userMessage,
+            processedMemories
+        );
+
+        const behaviorRules = this.buildBehaviorRules({
+            contextMode,
+            complexity,
+            isTopicShift,
+            emotion,
+            predictedBehavior
+        });
+
+        const memoryContext = compressed.length
+            ? compressed.map(m => `- ${m}`).join("\n")
+            : "None";
+
         const intentContext = intent
-            ? `Detected Intent: ${this.sanitize(intent)}`
-            : `None`;
-
-        const memoryContext = processedMemories.length
-            ? processedMemories.map(m => `- ${m}`).join("\n")
+            ? this.sanitize(intent)
             : "None";
 
-        const knowledgeContext = processedKnowledge.length
-            ? processedKnowledge.map(k => `- ${k}`).join("\n")
-            : "None";
+        const emotionContext = emotion
+            ? `
+[Emotion Context]
+type: ${emotion.type}
+intensity: ${emotion.intensity}
+polarity: ${emotion.polarity}
+`
+            : "";
 
-        // 🔥 adaptive behavior rules
-        let behaviorRules = "";
-
-        if (contextMode === "rich") {
-            behaviorRules += `
-- استخدم الذاكرة والمعرفة بذكاء
-- اربط الرد بالسياق بدون شرح
-- لا تكرر المعلومات
-`;
-        }
-
-        if (contextMode === "medium") {
-            behaviorRules += `
-- استخدم بعض السياق إذا كان مفيد
-- لا تعتمد عليه بالكامل
-`;
-        }
-
-        if (contextMode === "light") {
-            behaviorRules += `
-- ركز فقط على الرسالة الحالية
-- لا تفترض معلومات إضافية
-`;
-        }
-
-        // 🔥 complexity rules
-        if (complexity === "complex") {
-            behaviorRules += `
-- المستخدم يحتاج شرح أوضح
-- نظم الرد بشكل أفضل
-`;
-        }
-
-        if (complexity === "question") {
-            behaviorRules += `
-- أجب بشكل مباشر وواضح
-- لا تضيف معلومات غير مطلوبة
-`;
-        }
-
-        // 🔥 anti-noise + focus
-        behaviorRules += `
-- لا تخرج عن الموضوع
-- لا تضف معلومات غير مرتبطة
-- لا تكرر نفس النقاط
-- خلك طبيعي ومركز
-`;
+        const predictionContext = predictedBehavior
+            ? `
+[Prediction]
+type: ${predictedBehavior.type}
+confidence: ${predictedBehavior.confidence}
+`
+            : "";
 
         const context = `
 [Discord Context]
@@ -181,14 +329,15 @@ ${userMessage}
 [Intent]
 ${intentContext}
 
-[Relevant Memory]
-${memoryContext}
+${emotionContext}
 
-[Relevant Knowledge]
-${knowledgeContext}
+${predictionContext}
 
 [Context Mode]
 ${contextMode}
+
+[Relevant Context]
+${memoryContext}
 
 [Behavior Rules]
 ${behaviorRules}

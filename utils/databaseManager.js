@@ -15,7 +15,7 @@ function initDatabase(connectionString) {
 
     pool = new Pool({
         connectionString,
-        max: 10,
+        max: 15,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000
     });
@@ -37,9 +37,22 @@ async function query(text, params = []) {
         throw new Error("DATABASE_NOT_INITIALIZED");
     }
 
+    const start = Date.now();
+
     try {
 
         const result = await pool.query(text, params);
+
+        const duration = Date.now() - start;
+
+        // 🔥 slow query tracking
+        if (duration > 300) {
+            logger.warn("DATABASE_SLOW_QUERY", {
+                duration,
+                sql: typeof text === "string" ? text.slice(0, 120) : "invalid"
+            });
+        }
+
         return result;
 
     } catch (error) {
@@ -52,6 +65,15 @@ async function query(text, params = []) {
         throw error;
     }
 
+}
+
+async function getClient() {
+
+    if (!pool) {
+        throw new Error("DATABASE_NOT_INITIALIZED");
+    }
+
+    return await pool.connect();
 }
 
 async function testConnection() {
@@ -75,6 +97,20 @@ async function testConnection() {
 
     }
 
+}
+
+async function stats() {
+
+    if (!pool) {
+        return { initialized: false };
+    }
+
+    return {
+        initialized: true,
+        totalCount: pool.totalCount,
+        idleCount: pool.idleCount,
+        waitingCount: pool.waitingCount
+    };
 }
 
 async function close() {
@@ -101,15 +137,15 @@ async function close() {
 }
 
 function getPool() {
-
     return pool;
-
 }
 
 module.exports = {
     initDatabase,
     query,
+    getClient,
     testConnection,
+    stats,
     close,
     getPool
 };

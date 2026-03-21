@@ -35,7 +35,6 @@ class AiObservationSystem {
   }
 
   cleanText(text) {
-
     if (!text) return ""
 
     return String(text)
@@ -43,11 +42,9 @@ class AiObservationSystem {
       .replace(/\s+/g, " ")
       .toLowerCase()
       .trim()
-
   }
 
   shouldIgnoreChannel(channel) {
-
     if (!channel) return true
 
     if (this.ignoredChannelIds.includes(channel.id)) {
@@ -59,13 +56,10 @@ class AiObservationSystem {
     return this.ignoredChannelKeywords.some(keyword =>
       name.includes(keyword)
     )
-
   }
 
   extractKeywords(text) {
-
     const cleaned = this.cleanText(text)
-
     if (!cleaned) return []
 
     const words = cleaned
@@ -76,11 +70,9 @@ class AiObservationSystem {
       )
 
     return words.slice(0, 6)
-
   }
 
   trackUserActivity(userId) {
-
     if (!userId) return 0
 
     if (this.userActivity.size > this.maxTrackedUsers) {
@@ -91,15 +83,11 @@ class AiObservationSystem {
     const newCount = count + 1
 
     this.userActivity.set(userId, newCount)
-
     return newCount
-
   }
 
   trackTopics(message) {
-
     const keywords = this.extractKeywords(message)
-
     if (!keywords.length) return
 
     for (const word of keywords) {
@@ -110,9 +98,7 @@ class AiObservationSystem {
 
       const count = this.topicTracker.get(word) || 0
       this.topicTracker.set(word, count + 1)
-
     }
-
   }
 
   async observeMessage(message) {
@@ -134,13 +120,11 @@ class AiObservationSystem {
 
       this.trackTopics(text)
 
-      if (activity === this.activityThreshold) {
-
-        const memory = `${username} عضو نشط في السيرفر`
-
-        await aiMemorySystem.storeServerMemory(memory)
-
-      }
+      // ❌ disabled temporarily (fix error)
+      // if (activity === this.activityThreshold) {
+      //   const memory = `${username} عضو نشط في السيرفر`
+      //   await aiMemorySystem.storeServerMemory(memory)
+      // }
 
       await this.detectTrendingTopic()
 
@@ -164,14 +148,10 @@ class AiObservationSystem {
       let topCount = 0
 
       for (const [word, count] of this.topicTracker.entries()) {
-
         if (count > topCount) {
-
           topWord = word
           topCount = count
-
         }
-
       }
 
       if (!topWord) return
@@ -182,9 +162,9 @@ class AiObservationSystem {
       if (this.lastTrendingTopic === topWord) return
       if (now - this.lastTrendingTime < this.trendingCooldown) return
 
-      const memory = `الموضوع الشائع حالياً هو ${topWord}`
-
-      await aiMemorySystem.storeServerMemory(memory)
+      // ❌ disabled temporarily
+      // const memory = `الموضوع الشائع حالياً هو ${topWord}`
+      // await aiMemorySystem.storeServerMemory(memory)
 
       this.lastTrendingTopic = topWord
       this.lastTrendingTime = now

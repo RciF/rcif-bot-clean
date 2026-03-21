@@ -1,5 +1,5 @@
 /**
- * AI Memory System (Advanced Decision + Smart Filtering)
+ * AI Memory System (Ultimate Version — Advanced Intelligence + Behavior + Emotion + Ranking + Long-Term Tracking + Prediction Aware)
  */
 
 const memoryRepository = require("../repositories/memoryRepository")
@@ -13,6 +13,10 @@ class AiMemorySystem {
     this.maxServerMemories = 20
     this.maxRelevantMemories = 5
 
+    this.userBehaviorProfile = new Map()
+    this.userEmotionProfile = new Map()
+    this.userPredictionProfile = new Map() // ✅ NEW
+
     this.forbiddenWords = [
       "password","token","credit","bank","secret","pass","pin"
     ]
@@ -23,7 +27,12 @@ class AiMemorySystem {
       interest: 6,
       opinion: 5,
       fact: 4,
-      relationship: 8
+      relationship: 8,
+      behavior: 9,
+      goal: 8,
+      skill: 7,
+      emotion: 9,
+      prediction: 6 // ✅ NEW
     }
 
   }
@@ -95,18 +104,13 @@ class AiMemorySystem {
     return Math.max(0, 10 - (days * 0.4))
   }
 
-  // 🔥 NEW: decision filter (IMPORTANT)
   shouldStoreMemory(message) {
 
     const text = this.normalize(message)
 
-    // ❌ ignore questions
     if (text.includes("?")) return false
-
-    // ❌ ignore very short
     if (text.length < 5) return false
 
-    // ❌ ignore temporary words
     if (
       text.includes("اليوم") ||
       text.includes("الحين") ||
@@ -114,6 +118,162 @@ class AiMemorySystem {
     ) return false
 
     return true
+  }
+
+  updateBehaviorProfile(userId, message) {
+
+    if (!this.userBehaviorProfile.has(userId)) {
+      this.userBehaviorProfile.set(userId, {
+        totalMessages: 0,
+        emotionalCount: 0,
+        aggressiveCount: 0,
+        shortMessages: 0
+      })
+    }
+
+    const profile = this.userBehaviorProfile.get(userId)
+    const text = this.normalize(message)
+
+    profile.totalMessages++
+
+    if (
+      text.includes("حزين") ||
+      text.includes("زعلان") ||
+      text.includes("تعبان")
+    ) {
+      profile.emotionalCount++
+    }
+
+    if (
+      text.includes("غبي") ||
+      text.includes("اخرس") ||
+      text.includes("كلب")
+    ) {
+      profile.aggressiveCount++
+    }
+
+    if (text.length < 5) {
+      profile.shortMessages++
+    }
+
+    return profile
+  }
+
+  updateEmotionProfile(userId, emotion) {
+
+    if (!emotion || !emotion.type) return
+
+    if (!this.userEmotionProfile.has(userId)) {
+      this.userEmotionProfile.set(userId, {
+        sad: 0,
+        happy: 0,
+        angry: 0,
+        fear: 0,
+        last: null
+      })
+    }
+
+    const profile = this.userEmotionProfile.get(userId)
+
+    if (emotion.type !== "neutral") {
+      profile[emotion.type] = (profile[emotion.type] || 0) + 1
+      profile.last = emotion.type
+    }
+
+    return profile
+  }
+
+  // ✅ NEW — Prediction Profile
+  updatePredictionProfile(userId, predictedBehavior) {
+
+    if (!predictedBehavior || !predictedBehavior.type) return
+
+    if (!this.userPredictionProfile.has(userId)) {
+      this.userPredictionProfile.set(userId, {})
+    }
+
+    const profile = this.userPredictionProfile.get(userId)
+
+    profile[predictedBehavior.type] =
+      (profile[predictedBehavior.type] || 0) + 1
+
+    return profile
+  }
+
+  async buildEmotionMemory(userId, profile) {
+
+    if (!profile) return
+
+    const entries = Object.entries(profile)
+      .filter(([k]) => k !== "last")
+
+    const dominant = entries.sort((a, b) => b[1] - a[1])[0]
+
+    if (!dominant || dominant[1] < 3) return
+
+    let summary = null
+
+    if (dominant[0] === "sad") summary = "يميل للحزن غالباً"
+    else if (dominant[0] === "angry") summary = "يميل للغضب غالباً"
+    else if (dominant[0] === "fear") summary = "يميل للتوتر والقلق"
+    else if (dominant[0] === "happy") summary = "شخص إيجابي غالباً"
+
+    if (!summary) return
+
+    await this.storeMemory({
+      userId,
+      type: "emotion",
+      memory: summary
+    })
+  }
+
+  // ✅ NEW — Prediction Memory
+  async buildPredictionMemory(userId, profile) {
+
+    if (!profile) return
+
+    const entries = Object.entries(profile)
+    const dominant = entries.sort((a, b) => b[1] - a[1])[0]
+
+    if (!dominant || dominant[1] < 4) return
+
+    let summary = null
+
+    if (dominant[0] === "repeat") summary = "يميل لتكرار نفس الرسائل"
+    else if (dominant[0] === "deep_engagement") summary = "يميل للنقاش العميق"
+    else if (dominant[0] === "escalation") summary = "يميل للتصعيد"
+    else if (dominant[0] === "emotional_continuation") summary = "يستمر في الحالة العاطفية"
+
+    if (!summary) return
+
+    await this.storeMemory({
+      userId,
+      type: "prediction",
+      memory: summary
+    })
+  }
+
+  async buildBehaviorMemory(userId, profile) {
+
+    if (!profile || profile.totalMessages < 5) return
+
+    let summary = null
+
+    if (profile.aggressiveCount >= 3) {
+      summary = "يميل للتعامل بعدوانية"
+    } else if (profile.emotionalCount >= 3) {
+      summary = "يتحدث بمشاعر عالية"
+    } else if (profile.shortMessages >= 3) {
+      summary = "يرسل رسائل قصيرة غالباً"
+    }
+
+    if (!summary) return
+
+    await this.storeMemory({
+      userId,
+      type: "behavior",
+      memory: summary
+    })
   }
 
   async storeMemory({ userId, type, memory }) {
@@ -196,8 +356,8 @@ class AiMemorySystem {
 
         score += this.similarity(memoryText, text) * 4
 
-        if (text.includes(memoryText)) score += 8
-        if (memoryText.includes(text)) score += 4
+        if (text.includes(memoryText)) score += 10
+        if (memoryText.includes(text)) score += 6
 
         score += this.typeWeights[m.type] || 1
         score += this.memoryDecay(m)
@@ -212,7 +372,7 @@ class AiMemorySystem {
       })
 
       return scored
-        .filter(m => m.score > 4)
+        .filter(m => m.score > 5)
         .sort((a, b) => b.score - a.score)
         .slice(0, this.maxRelevantMemories)
         .map(m => m.memory)
@@ -256,14 +416,27 @@ ${context}
     }
   }
 
-  async extractMemoryFromMessage(userId, message) {
+  async extractMemoryFromMessage(userId, message, emotion = null, predictedBehavior = null) {
 
     try {
 
       if (!this.shouldStoreMemory(message)) return false
 
-      const cleaned = this.cleanText(message)
+      const profile = this.updateBehaviorProfile(userId, message)
+      await this.buildBehaviorMemory(userId, profile)
 
+      if (emotion) {
+        const emotionProfile = this.updateEmotionProfile(userId, emotion)
+        await this.buildEmotionMemory(userId, emotionProfile)
+      }
+
+      // ✅ NEW — Prediction Tracking
+      if (predictedBehavior) {
+        const predictionProfile = this.updatePredictionProfile(userId, predictedBehavior)
+        await this.buildPredictionMemory(userId, predictionProfile)
+      }
+
+      const cleaned = this.cleanText(message)
       if (!cleaned || cleaned.length < 5) return false
 
       const patterns = [
@@ -283,10 +456,14 @@ ${context}
         { type: "fact", regex: /انا\s+(.+)/i },
         { type: "fact", regex: /i am\s+(.+)/i },
 
-        // 🔥 NEW: relationships
         { type: "relationship", regex: /(.+)\s+صديقي/i },
-        { type: "relationship", regex: /(.+)\s+my friend/i }
+        { type: "relationship", regex: /(.+)\s+my friend/i },
 
+        { type: "goal", regex: /هدفي\s+(.+)/i },
+        { type: "goal", regex: /my goal is\s+(.+)/i },
+
+        { type: "skill", regex: /اجيد\s+(.+)/i },
+        { type: "skill", regex: /i can\s+(.+)/i }
       ]
 
       for (const p of patterns) {
@@ -306,6 +483,15 @@ ${context}
         return true
       }
 
+      if (cleaned.length > 20) {
+        await this.storeMemory({
+          userId,
+          type: "fact",
+          memory: cleaned
+        })
+        return true
+      }
+
       return false
 
     } catch (error) {
@@ -316,6 +502,54 @@ ${context}
 
       return false
     }
+  }
+
+  async storeServerMemory(memory) {
+
+    try {
+
+      if (!memory) return false
+
+      const clean = this.cleanText(memory)
+
+      if (!this.validateMemory(clean)) return false
+
+      await memoryRepository.createMemory({
+        userId: "server",
+        type: "server",
+        memory: clean,
+        createdAt: new Date()
+      })
+
+      return true
+
+    } catch (error) {
+
+      logger.error("AI_SERVER_MEMORY_FAILED", {
+        error: error.message
+      })
+
+      return false
+    }
+
+  }
+
+  async markUserAsAggressive(userId) {
+
+    try {
+
+      await this.storeMemory({
+        userId,
+        type: "behavior",
+        memory: "يتحدث بأسلوب سيء"
+      })
+
+    } catch (error) {
+      logger.error("AI_BEHAVIOR_STORE_FAILED", {
+        error: error.message
+      })
+    }
+
   }
 
 }

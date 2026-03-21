@@ -1,6 +1,5 @@
 /**
- * AI Response Formatter System
- * Advanced Human-like Formatting (Smart Clean + Natural Flow)
+ * AI Response Formatter System (Ultimate Version — Humanization + Style + Anti-AI Detection + Smart Flow + Context Awareness)
  */
 
 class AIResponseFormatterSystem {
@@ -13,7 +12,6 @@ class AIResponseFormatterSystem {
 
         cleaned = cleaned.replace(/\n{3,}/g, "\n\n")
 
-        // remove AI disclaimers
         cleaned = cleaned.replace(/كذكاء اصطناعي[^.!\n]*/gi, "")
         cleaned = cleaned.replace(/كنموذج لغة[^.!\n]*/gi, "")
         cleaned = cleaned.replace(/as an ai[^.!\n]*/gi, "")
@@ -67,7 +65,6 @@ class AIResponseFormatterSystem {
             .trim()
     }
 
-    // 🔥 NEW: remove robotic phrases
     removeRoboticPhrases(text) {
 
         return text
@@ -76,19 +73,64 @@ class AIResponseFormatterSystem {
             .replace(/عادةً/gi, "")
             .replace(/يمكن القول أن/gi, "")
             .replace(/من المهم أن/gi, "")
+            .replace(/أولاً|ثانياً|ثالثاً/gi, "")
             .trim()
     }
 
-    // 🔥 NEW: smart shortening (keeps meaning)
-    smartTrim(text) {
+    humanize(text) {
+
+        if (!text) return text
+
+        return text
+            .replace(/يجب عليك/gi, "ممكن")
+            .replace(/من الأفضل أن/gi, "الأفضل")
+            .replace(/يمكنك أن/gi, "تقدر")
+            .replace(/لا تنسى أن/gi, "انتبه")
+    }
+
+    varyStart(text) {
+
+        const starters = ["", "بصراحة", "شوف", "صراحة", "خلني أوضح"]
+
+        if (Math.random() > 0.7) {
+            const random = starters[Math.floor(Math.random() * starters.length)]
+            if (random) {
+                return `${random} ${text}`
+            }
+        }
+
+        return text
+    }
+
+    reduceOverExplanation(text) {
+
+        const phrases = [
+            "بالتفصيل",
+            "شرح كامل",
+            "دعني أشرح",
+            "سأقوم بشرح"
+        ]
+
+        for (const p of phrases) {
+            text = text.replace(new RegExp(p, "gi"), "")
+        }
+
+        return text.trim()
+    }
+
+    smartTrim(text, context = {}) {
 
         if (!text) return ""
 
         const words = text.split(" ")
 
+        // ✅ NEW — dynamic trim based on context
+        if (context?.mode === "limited" && words.length > 40) {
+            return words.slice(0, 40).join(" ") + "..."
+        }
+
         if (words.length <= 120) return text
 
-        // try cut at sentence boundary
         const sentences = this.splitSentences(text)
 
         if (sentences.length > 1) {
@@ -142,7 +184,48 @@ class AIResponseFormatterSystem {
         return text
     }
 
-    formatResponse(text) {
+    addLightEmoji(text, context = {}) {
+
+        // ✅ NEW — reduce emoji on serious/emotional
+        if (context?.emotion === "negative") return text
+
+        if (Math.random() > 0.85) {
+            const emojis = ["🙂", "👀", "🔥", "👍"]
+            const e = emojis[Math.floor(Math.random() * emojis.length)]
+            return text + " " + e
+        }
+
+        return text
+    }
+
+    ensureMinimumQuality(text) {
+
+        if (!text) return "..."
+
+        const words = text.split(" ")
+
+        if (words.length < 3) {
+            return text + " ..."
+        }
+
+        return text
+    }
+
+    normalizeEmojis(text) {
+        return text.replace(/([🙂👀🔥👍]){2,}/g, "$1")
+    }
+
+    // ✅ NEW — remove overly stiff responses
+    softenTone(text) {
+
+        return text
+            .replace(/بالتأكيد/gi, "")
+            .replace(/بالطبع/gi, "")
+            .replace(/لا شك/gi, "")
+            .trim()
+    }
+
+    formatResponse(text, context = {}) {
 
         if (!text) return "..."
 
@@ -150,16 +233,24 @@ class AIResponseFormatterSystem {
 
         formatted = this.removeRepetition(formatted)
         formatted = this.removeWeakEndings(formatted)
-
-        // 🔥 new layers
         formatted = this.removeRoboticPhrases(formatted)
 
-        formatted = this.smartTrim(formatted)
+        formatted = this.reduceOverExplanation(formatted)
+        formatted = this.humanize(formatted)
+        formatted = this.softenTone(formatted)
+
+        formatted = this.smartTrim(formatted, context)
+
+        formatted = this.varyStart(formatted)
 
         formatted = this.enforceDiscordLimit(formatted)
 
         formatted = this.ensureNaturalEnding(formatted)
 
+        formatted = this.addLightEmoji(formatted, context)
+        formatted = this.normalizeEmojis(formatted)
+
+        formatted = this.ensureMinimumQuality(formatted)
         formatted = this.ensureNonEmpty(formatted)
 
         return formatted

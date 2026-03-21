@@ -37,6 +37,25 @@ class AIKnowledgeSystem {
     return this.sanitizeText(text).toLowerCase()
   }
 
+  extractKeywords(text) {
+    return this.normalize(text)
+      .split(" ")
+      .filter(w => w.length > 3)
+      .slice(0, 10)
+  }
+
+  keywordScore(a, b) {
+    const wa = this.extractKeywords(a)
+    const wb = this.extractKeywords(b)
+
+    let score = 0
+    for (const w of wa) {
+      if (wb.includes(w)) score++
+    }
+
+    return score
+  }
+
   async generateEmbedding(text) {
 
     try {
@@ -78,34 +97,25 @@ class AIKnowledgeSystem {
     }
   }
 
-  // 🔥 decision filter (IMPORTANT)
-  shouldLearn(message) {
+  shouldLearn(message, predictedBehavior = null) {
 
     const text = this.normalize(message)
 
     if (!text) return false
-
-    // ❌ ignore short
     if (text.length < this.minLearnLength) return false
-
-    // ❌ ignore questions
     if (text.includes("?") || text.includes("؟")) return false
 
-    // ❌ ignore casual talk
     if (
       text.includes("كيف حالك") ||
       text.includes("تمام") ||
       text.includes("اوكي")
     ) return false
 
-    // ✅ learning triggers
+    // ✅ NEW — ignore spam/repeat
+    if (predictedBehavior?.type === "repeat") return false
+
     const triggers = [
-      "هو",
-      "هي",
-      "يعني",
-      "definition",
-      "is",
-      "are"
+      "هو","هي","يعني","definition","is","are","سبب","شرح","طريقة"
     ]
 
     return triggers.some(t => text.includes(t))
@@ -126,14 +136,12 @@ class AIKnowledgeSystem {
       const embedding = await this.generateEmbedding(content)
       if (!embedding) return null
 
-      const knowledgeEntry = {
+      return await knowledgeRepository.createKnowledge({
         userId: data.userId || null,
         content,
         source: data.source || "user",
         embedding
-      }
-
-      return await knowledgeRepository.createKnowledge(knowledgeEntry)
+      })
 
     } catch (error) {
 
@@ -180,6 +188,8 @@ class AIKnowledgeSystem {
 
           if (queryNorm.includes(contentNorm)) score += 3
           if (contentNorm.includes(queryNorm)) score += 2
+
+          score += this.keywordScore(queryNorm, contentNorm) * 2
 
           if (contentNorm.length < 120) score += 1
 
@@ -259,11 +269,11 @@ ${formatted}
     }
   }
 
-  async learnFromMessage(userId, message) {
+  async learnFromMessage(userId, message, predictedBehavior = null) {
 
     try {
 
-      if (!this.shouldLearn(message)) return
+      if (!this.shouldLearn(message, predictedBehavior)) return
 
       const sanitized = this.sanitizeText(message)
       if (!sanitized) return

@@ -1,5 +1,5 @@
 /**
- * AI Brain System (FINAL CLEAN — IMPROVED PRECISION)
+ * AI Brain System (ULTIMATE — Precision + Safety + Anti-Exploit)
  */
 
 const economyRepository = require("../repositories/economyRepository")
@@ -44,7 +44,6 @@ function tryDropItem(user){
 
 function getRandomBonus(){
     const roll = Math.random()
-
     if(roll < 0.1) return 2
     if(roll < 0.3) return 1.5
     return 1
@@ -69,25 +68,31 @@ function hasAny(text,words){
     return words.some(w => text.includes(w))
 }
 
+// 🔥 improved intent detection (priority based)
 function detectIntent(message){
     try{
         const text = normalizeText(message)
 
-        if(hasAny(text,["بروفايل","profile","ملفي"])) return "profile"
-        if(hasAny(text,["الاغنى","leaderboard","top","اغنى"])) return "leaderboard"
-        if(hasAny(text,["مساعدة","الاوامر","help"])) return "help"
-        if(hasAny(text,["ماذا تعرف عني","هل تتذكرني"])) return "user_memory"
+        const intents = [
+            ["profile",["بروفايل","profile","ملفي"]],
+            ["leaderboard",["الاغنى","leaderboard","top","اغنى"]],
+            ["help",["مساعدة","الاوامر","help"]],
+            ["user_memory",["ماذا تعرف عني","هل تتذكرني"]],
+            ["balance",["رصيدي","رصيد","balance","فلوسي"]],
+            ["daily",["اليومية","daily"]],
+            ["work",["اشتغل","work","وظيفة"]],
+            ["transfer",["حول","transfer","تحويل"]],
+            ["shop",["المتجر","shop","المحل"]],
+            ["inventory",["حقيبتي","inventory","اغراضي"]],
+            ["buy",["اشتري","buy","شراء"]],
+            ["give",["اعط","give"]],
+            ["remove",["احذف","remove","مسح"]],
+            ["iteminfo",["معلومات","iteminfo","تفاصيل"]]
+        ]
 
-        if(hasAny(text,["رصيدي","رصيد","balance","فلوسي"])) return "balance"
-        if(hasAny(text,["اليومية","daily"])) return "daily"
-        if(hasAny(text,["اشتغل","work","وظيفة"])) return "work"
-        if(hasAny(text,["حول","transfer","تحويل"])) return "transfer"
-        if(hasAny(text,["المتجر","shop","المحل"])) return "shop"
-        if(hasAny(text,["حقيبتي","inventory","اغراضي"])) return "inventory"
-        if(hasAny(text,["اشتري","buy","شراء"])) return "buy"
-        if(hasAny(text,["اعط","give","يعطي"])) return "give"
-        if(hasAny(text,["احذف","remove","مسح"])) return "remove"
-        if(hasAny(text,["معلومات","iteminfo","تفاصيل"])) return "iteminfo"
+        for(const [intent,words] of intents){
+            if(hasAny(text,words)) return intent
+        }
 
         return null
 
@@ -105,13 +110,8 @@ async function ensureUser(userId){
         user = await economyRepository.createUser(userId)
     }
 
-    if(!Array.isArray(user.inventory)){
-        user.inventory=[]
-    }
-
-    if(typeof user.coins!=="number"){
-        user.coins=0
-    }
+    if(!Array.isArray(user.inventory)) user.inventory=[]
+    if(typeof user.coins!=="number") user.coins=0
 
     if(!user.last_daily) user.last_daily=0
     if(!user.last_work) user.last_work=0
@@ -166,51 +166,50 @@ function parseTarget(content){
     return match ? match[1] : null
 }
 
-/* ====== HANDLERS ====== */
+/* ===== HANDLERS ===== */
 
 async function handleProfile(userId){
     const user = await ensureUser(userId)
     const memories = await memoryRepository.getUserMemories(userId)
 
-    return `👤 الملف الشخصي\n\n💰 الرصيد: ${user.coins} كوين\n🎒 العناصر: ${user.inventory.length}\n🧠 الذكريات: ${memories?memories.length:0}`
+    return `👤 الملف الشخصي\n\n💰 ${user.coins}\n🎒 ${user.inventory.length}\n🧠 ${memories?.length || 0}`
 }
 
 async function handleLeaderboard(){
     const users = await economyRepository.getTopUsers(10)
-    if(!users?.length) return "لا يوجد بيانات بعد."
+    if(!users?.length) return "لا يوجد بيانات"
 
-    return "🏆 أغنى اللاعبين:\n\n" + users.map((u,i)=>`${i+1}. <@${u.user_id}> — ${u.coins}`).join("\n")
+    return "🏆\n\n" + users.map((u,i)=>`${i+1}. <@${u.user_id}> — ${u.coins}`).join("\n")
 }
 
 async function handleHelp(){
-return `📜 الأوامر
-رصيدي - اليومية - اشتغل - حول 100 @user
+return `📜
+رصيدي - اليومية - اشتغل
+حول 100 @user
 المتجر - اشتري
-حقيبتي - الاغنى - بروفايل
-معلومات - اعط - احذف`
+حقيبتي - الاغنى - بروفايل`
 }
 
 async function handleMemoryIntent(userId){
     const memories = await memoryRepository.getUserMemories(userId)
-    if(!memories?.length) return "لا أعرف الكثير عنك بعد."
+    if(!memories?.length) return "لا أعرفك بعد"
 
-    return "🧠 ما أعرفه عنك:\n\n" + memories.slice(0,5).map(m=>`• ${m.memory}`).join("\n")
+    return memories.slice(0,5).map(m=>`• ${m.memory}`).join("\n")
 }
 
 async function handleBalance(user){
-    return `💰 رصيدك: ${user.coins} كوين`
+    return `💰 ${user.coins}`
 }
 
 async function handleDaily(userId,user){
 
-    if(checkCooldown(userId)) return "⏳ انتظر شوي"
+    if(checkCooldown(userId)) return "⏳"
 
     const now = Date.now()
     const cooldown = 86400000
 
     if(now-user.last_daily<cooldown){
-        const remaining=Math.ceil((cooldown-(now-user.last_daily))/1000)
-        return `⏳ بعد ${remaining} ثانية`
+        return "⏳ لاحقاً"
     }
 
     let reward=Math.floor(100 * getRandomBonus())
@@ -227,7 +226,7 @@ async function handleDaily(userId,user){
 
 async function handleWork(userId,user){
 
-    if(checkCooldown(userId)) return "⏳ انتظر شوي"
+    if(checkCooldown(userId)) return "⏳"
 
     let reward=Math.floor((Math.random()*150+50) * getRandomBonus())
 
@@ -243,18 +242,18 @@ async function handleWork(userId,user){
 
 async function handleTransfer(userId,user,content){
 
-    if(checkCooldown(userId)) return "⏳ انتظر"
+    if(checkCooldown(userId)) return "⏳"
 
     const {amount,target}=parseTransfer(content)
 
-    if(!amount||!target) return "⚠️ مثال: حول 50 @user"
+    if(!amount||!target) return "⚠️ مثال"
     if(amount<=0) return "⚠️ غير صالح"
-    if(amount>MAX_TRANSFER) return "⚠️ كبير جداً"
-    if(target===userId) return "⚠️ لنفسك؟"
+    if(amount>MAX_TRANSFER) return "⚠️ كبير"
+    if(target===userId) return "⚠️ نفسك؟"
 
     const targetUser=await ensureUser(target)
 
-    if(user.coins<amount) return "❌ رصيدك غير كافي"
+    if(user.coins<amount) return "❌"
 
     user.coins-=amount
     targetUser.coins+=amount
@@ -266,7 +265,7 @@ async function handleTransfer(userId,user,content){
 }
 
 async function handleShop(){
-    return "🛒 المتجر:\n\n" + Object.values(shopItems).map(i=>`${i.name} — ${i.price}`).join("\n")
+    return Object.values(shopItems).map(i=>`${i.name} — ${i.price}`).join("\n")
 }
 
 async function handleBuy(userId,user,content){
@@ -276,7 +275,7 @@ async function handleBuy(userId,user,content){
     const itemKey=parseItem(content)
     const quantity=parseQuantity(content)
 
-    if(!itemKey) return "⚠️ مثال: اشتري 2 fishing_rod"
+    if(!itemKey) return "⚠️ مثال"
 
     const item=shopItems[itemKey]
     const total=item.price*quantity
@@ -302,15 +301,15 @@ async function handleInventory(user){
     const counts={}
     items.forEach(i=>counts[i]=(counts[i]||0)+1)
 
-    return "🎒 حقيبتك:\n\n" + Object.entries(counts).map(([k,v])=>`${shopItems[k]?.name} × ${v}`).join("\n")
+    return Object.entries(counts).map(([k,v])=>`${shopItems[k]?.name} × ${v}`).join("\n")
 }
 
 async function handleItemInfo(content){
     const key=parseItem(content)
-    if(!key) return "⚠️ مثال"
+    if(!key) return "⚠️"
 
     const item=shopItems[key]
-    return `📦 ${item.name}\n💰 ${item.price}\n📝 ${item.description}`
+    return `${item.name}\n${item.price}\n${item.description}`
 }
 
 async function handleGive(userId,user,content){
@@ -318,7 +317,7 @@ async function handleGive(userId,user,content){
     const itemKey=parseItem(content)
     const target=parseTarget(content)
 
-    if(!itemKey||!target) return "⚠️ مثال"
+    if(!itemKey||!target) return "⚠️"
 
     const targetUser=await ensureUser(target)
 
@@ -383,7 +382,7 @@ async function handleIntent(intent,userId,content,message){
 
     }catch(error){
         logger.error("AI_BRAIN_HANDLE_INTENT_FAILED",{error:error.message})
-        return "⚠️ حدث خطأ"
+        return "⚠️ خطأ"
     }
 }
 

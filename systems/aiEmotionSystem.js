@@ -1,0 +1,163 @@
+const aiMemorySystem = require("./aiMemorySystem");
+const aiContextSystem = require("./aiContextSystem");
+
+class AIEmotionSystem {
+  constructor() {
+    this.emotionKeywords = {
+      sad: ["حزين", "زعلان", "تعبان", "مكتئب", "طفشان", "ضايق", "مضايق"],
+      happy: ["مبسوط", "فرحان", "سعيد", "متحمس", "مرتاح"],
+      angry: ["معصب", "غاضب", "مقهور", "منرفز", "مستفز"],
+      fear: ["خايف", "متوتر", "قلق", "مرعوب"]
+    };
+
+    this.intensifiers = ["جداً", "مره", "مرة", "كثير", "قوي"];
+    this.negations = ["مو", "مش", "ما", "ليس", "ماني"];
+  }
+
+  async analyze(message, context = {}, predictedBehavior = null) {
+    try {
+      const text = (message || "").toLowerCase();
+      const words = text.split(/\s+/);
+
+      let scores = {
+        sad: 0,
+        happy: 0,
+        angry: 0,
+        fear: 0
+      };
+
+      let signals = {
+        words: [],
+        patterns: [],
+        context: false,
+        prediction: null // ✅ NEW
+      };
+
+      // --- Keyword Detection ---
+      for (const [emotion, keywords] of Object.entries(this.emotionKeywords)) {
+        for (const word of words) {
+          if (keywords.includes(word)) {
+            scores[emotion] += 1;
+            signals.words.push(word);
+          }
+        }
+      }
+
+      // --- Intensifiers ---
+      let intensityBoost = 0;
+      for (const word of words) {
+        if (this.intensifiers.includes(word)) {
+          intensityBoost += 0.5;
+          signals.patterns.push("intensifier");
+        }
+      }
+
+      // --- Negation Handling ---
+      let negated = false;
+      for (const word of words) {
+        if (this.negations.includes(word)) {
+          negated = true;
+          signals.patterns.push("negation_detected");
+        }
+      }
+
+      // --- Message Length Boost ---
+      if (text.length > 100) {
+        for (const key in scores) {
+          if (scores[key] > 0) scores[key] += 0.5;
+        }
+        signals.patterns.push("long_message");
+      }
+
+      // --- Context Influence ---
+      let contextBoost = 0;
+      if (context?.recentEmotion) {
+        scores[context.recentEmotion] += 0.5;
+        contextBoost = 0.5;
+        signals.context = true;
+      }
+
+      // ✅ NEW — Prediction Influence
+      if (predictedBehavior) {
+        signals.prediction = predictedBehavior.type;
+
+        if (predictedBehavior.type === "emotional_continuation") {
+          for (const key in scores) {
+            if (scores[key] > 0) scores[key] += 0.5;
+          }
+        }
+
+        if (predictedBehavior.type === "escalation") {
+          scores.angry += 0.5;
+        }
+
+        if (predictedBehavior.type === "deep_engagement") {
+          intensityBoost += 0.2;
+        }
+      }
+
+      // --- Determine Primary Emotion ---
+      let primary = "neutral";
+      let max = 0;
+
+      for (const [emotion, value] of Object.entries(scores)) {
+        if (value > max) {
+          max = value;
+          primary = emotion;
+        }
+      }
+
+      // --- Intensity ---
+      let intensity = Math.min(1, (max + intensityBoost) / 3);
+
+      // --- Polarity ---
+      let polarity = "neutral";
+      if (["sad", "angry", "fear"].includes(primary)) polarity = "negative";
+      if (primary === "happy") polarity = "positive";
+
+      // --- Hidden Emotion ---
+      let hidden = [];
+      if (negated && primary !== "neutral") {
+        hidden.push(primary);
+        primary = "neutral";
+      }
+
+      // --- Secondary Emotion ---
+      let secondary = null;
+      let secondMax = 0;
+
+      for (const [emotion, value] of Object.entries(scores)) {
+        if (emotion !== primary && value > secondMax) {
+          secondMax = value;
+          secondary = value > 0 ? emotion : null;
+        }
+      }
+
+      // --- Confidence ---
+      let confidence = Math.min(1, (max + contextBoost + intensityBoost) / 3);
+
+      return {
+        primary,
+        secondary,
+        intensity,
+        polarity,
+        confidence,
+        hidden,
+        signals
+      };
+
+    } catch (error) {
+      return {
+        primary: "neutral",
+        secondary: null,
+        intensity: 0,
+        polarity: "neutral",
+        confidence: 0,
+        hidden: [],
+        signals: {}
+      };
+    }
+  }
+}
+
+module.exports = new AIEmotionSystem();
