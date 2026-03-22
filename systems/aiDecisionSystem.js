@@ -13,12 +13,70 @@ class AIDecisionSystem {
 
     // 🔥 adaptive memory
     this.lastDecisions = new Map();
+
+    // 🔥 self-learning
+    this.learningMemory = new Map();
+    this.globalLearning = {
+      answer: 0,
+      ask: 0,
+      defense: 0,
+      limited: 0,
+      controlled: 0,
+      empathetic: 0
+    };
   }
 
   clampConfidence(value) {
     if (value > this.MAX_CONFIDENCE) return this.MAX_CONFIDENCE;
     if (value < this.MIN_CONFIDENCE) return this.MIN_CONFIDENCE;
     return value;
+  }
+
+  // =========================
+  // SELF LEARNING
+  // =========================
+
+  updateLearning(userId, decision, outcome = "neutral") {
+    const data = this.learningMemory.get(userId) || {
+      answer: 0,
+      ask: 0,
+      defense: 0,
+      limited: 0,
+      controlled: 0,
+      empathetic: 0
+    };
+
+    if (data[decision] !== undefined) {
+      data[decision]++;
+      this.globalLearning[decision]++;
+    }
+
+    this.learningMemory.set(userId, data);
+  }
+
+  getLearningBias(userId) {
+    const data = this.learningMemory.get(userId);
+    if (!data) return 0;
+
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    if (total === 0) return 0;
+
+    const dominant = Object.entries(data).sort((a, b) => b[1] - a[1])[0];
+
+    if (!dominant) return 0;
+
+    const [type, count] = dominant;
+
+    const ratio = count / total;
+
+    if (ratio < 0.4) return 0;
+
+    if (type === "answer") return 0.1;
+    if (type === "ask") return -0.05;
+    if (type === "empathetic") return 0.08;
+    if (type === "defense") return -0.1;
+
+    return 0;
   }
 
   // =========================
@@ -234,7 +292,6 @@ class AIDecisionSystem {
         if (context.networkStrength < -30) boost -= 0.1;
       }
 
-      // 🔥 influence boost
       const influence = aiSocialAwarenessSystem.getUserInfluenceScore(userId);
       if (influence > 30) boost += 0.1;
 
@@ -284,36 +341,50 @@ class AIDecisionSystem {
       context?.targetUserId
     );
 
-    let confidence = this.clampConfidence(analysis.confidence + socialBoost);
+    let confidence = this.clampConfidence(
+      analysis.confidence +
+      socialBoost +
+      this.getLearningBias(userId)
+    );
 
     if (!analysis.needsResponse) return "limited";
 
-    if (isAggressive) return "defense";
+    if (isAggressive) {
+      this.updateLearning(userId, "defense");
+      return "defense";
+    }
 
-    if (isRepeated) return "limited";
+    if (isRepeated) {
+      this.updateLearning(userId, "limited");
+      return "limited";
+    }
 
-    if (trustLevel === "low" && confidence < 0.6) return "limited";
-
-    // =========================
-    // PREDICTION
-    // =========================
+    if (trustLevel === "low" && confidence < 0.6) {
+      this.updateLearning(userId, "limited");
+      return "limited";
+    }
 
     if (predictedBehavior) {
 
       if (["escalation","hostile_pattern"].includes(predictedBehavior.type)) {
+        this.updateLearning(userId, "defense");
         return "defense";
       }
 
       if (predictedBehavior.type === "repeat") {
+        this.updateLearning(userId, "limited");
         return "limited";
       }
 
       if (predictedBehavior.type === "emotional_continuation") {
+        this.updateLearning(userId, "empathetic");
         return "empathetic";
       }
 
       if (predictedBehavior.type === "follow_up") {
-        return confidence > 0.4 ? "answer" : "ask";
+        const result = confidence > 0.4 ? "answer" : "ask";
+        this.updateLearning(userId, result);
+        return result;
       }
 
       if (predictedBehavior.type === "deep_engagement") {
@@ -321,44 +392,58 @@ class AIDecisionSystem {
       }
     }
 
-    // =========================
-    // EMOTION
-    // =========================
-
     if (emotion) {
 
       if (emotion.polarity === "negative" && emotion.intensity > 0.5) {
+        this.updateLearning(userId, "empathetic");
         return "empathetic";
       }
 
       if (emotion.hidden && emotion.hidden.length > 0) {
+        this.updateLearning(userId, "ask");
         return "ask";
       }
     }
 
-    // =========================
-    // INTENT
-    // =========================
+    if (intent === "command") {
+      this.updateLearning(userId, "controlled");
+      return "controlled";
+    }
 
-    if (intent === "command") return "controlled";
+    if (intent === "emotional") {
+      this.updateLearning(userId, "empathetic");
+      return "empathetic";
+    }
 
-    if (intent === "emotional") return "empathetic";
+    if (intent === "question") {
+      const result = confidence > 0.45 ? "answer" : "ask";
+      this.updateLearning(userId, result);
+      return result;
+    }
 
-    if (intent === "question") return confidence > 0.45 ? "answer" : "ask";
+    if (intent === "help") {
+      const result = confidence > 0.45 ? "answer" : "ask";
+      this.updateLearning(userId, result);
+      return result;
+    }
 
-    if (intent === "help") return confidence > 0.45 ? "answer" : "ask";
+    if (analysis.reason === "unclear") {
+      this.updateLearning(userId, "ask");
+      return "ask";
+    }
 
-    if (analysis.reason === "unclear") return "ask";
-
-    // =========================
-    // CONTEXT
-    // =========================
-
-    if (contextStrength < 2 && confidence < 0.65) return "ask";
+    if (contextStrength < 2 && confidence < 0.65) {
+      this.updateLearning(userId, "ask");
+      return "ask";
+    }
 
     const finalDecision = confidence > 0.4 ? "answer" : "ask";
 
-    return this.preventLoop(userId, finalDecision);
+    const safeDecision = this.preventLoop(userId, finalDecision);
+
+    this.updateLearning(userId, safeDecision);
+
+    return safeDecision;
   }
 
 }

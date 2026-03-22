@@ -32,9 +32,15 @@ class AiMemorySystem {
       prediction: 6
     }
 
-    // 🔥 cache layer
     this.memoryCache = new Map()
     this.cacheTTL = 1000 * 60 * 5
+
+    // 🔥 COMPRESSION
+    this.compressionThreshold = 3
+    this.minMergeSimilarity = 2
+
+    // 🔥 SELF-LEARNING MEMORY FEEDBACK
+    this.learningSignals = new Map()
 
   }
 
@@ -57,7 +63,6 @@ class AiMemorySystem {
   }
 
   validateMemory(text) {
-
     if (!text) return false
     if (typeof text !== "string") return false
     if (text.length < 4) return false
@@ -81,14 +86,12 @@ class AiMemorySystem {
   }
 
   similarity(a, b) {
-
     const wa = this.extractKeywords(a)
     const wb = this.extractKeywords(b)
 
     if (!wa.length || !wb.length) return 0
 
     let score = 0
-
     for (const w of wa) {
       if (wb.includes(w)) score++
     }
@@ -97,11 +100,126 @@ class AiMemorySystem {
   }
 
   // =========================
+  // 🔥 SELF-LEARNING
+  // =========================
+
+  updateLearningSignal(userId, type) {
+    const data = this.learningSignals.get(userId) || {
+      stored: 0,
+      skipped: 0
+    }
+
+    if (data[type] !== undefined) {
+      data[type]++
+    }
+
+    this.learningSignals.set(userId, data)
+  }
+
+  getLearningAdjustment(userId) {
+    const data = this.learningSignals.get(userId)
+    if (!data) return 0
+
+    const total = data.stored + data.skipped
+    if (total === 0) return 0
+
+    const ratio = data.stored / total
+
+    if (ratio > 0.7) return 0.1
+    if (ratio < 0.3) return -0.1
+
+    return 0
+  }
+
+  // =========================
+  // 🔥 COMPRESSION ENGINE
+  // =========================
+
+  groupSimilarMemories(memories) {
+    const groups = []
+
+    for (const mem of memories) {
+      let added = false
+
+      for (const group of groups) {
+        const sim = this.similarity(group[0].memory, mem.memory)
+
+        if (sim >= this.minMergeSimilarity) {
+          group.push(mem)
+          added = true
+          break
+        }
+      }
+
+      if (!added) {
+        groups.push([mem])
+      }
+    }
+
+    return groups
+  }
+
+  summarizeGroup(group) {
+    if (group.length === 1) return group[0]
+
+    const base = group[0].memory
+
+    return {
+      ...group[0],
+      memory: base + " (متكرر)"
+    }
+  }
+
+  compressMemories(memories) {
+    if (!Array.isArray(memories) || memories.length < this.compressionThreshold) {
+      return memories
+    }
+
+    const groups = this.groupSimilarMemories(memories)
+
+    return groups.map(g => this.summarizeGroup(g))
+  }
+
+  // =========================
+  // 🔥 PRIORITY SYSTEM
+  // =========================
+
+  getMemoryPriority(memory, userId) {
+    let score = 0
+
+    score += this.typeWeights[memory.type] || 1
+    score += this.memoryDecay(memory)
+
+    try {
+      score += this.getSocialWeight(userId)
+    } catch {}
+
+    score += this.getLearningAdjustment(userId)
+
+    if (memory.memory.length < 50) score += 1
+
+    return score
+  }
+
+  applyDynamicLimit(memories, userId) {
+    if (memories.length <= this.maxUserMemories) return memories
+
+    const scored = memories.map(m => ({
+      data: m,
+      score: this.getMemoryPriority(m, userId)
+    }))
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, this.maxUserMemories)
+      .map(m => m.data)
+  }
+
+  // =========================
   // DECAY + SOCIAL
   // =========================
 
   memoryDecay(memory) {
-
     if (!memory || !memory.created_at) return 0
 
     const created = new Date(memory.created_at).getTime()
@@ -132,7 +250,6 @@ class AiMemorySystem {
   // =========================
 
   shouldStoreMemory(message) {
-
     const text = this.normalize(message)
 
     if (text.includes("?")) return false
@@ -152,7 +269,6 @@ class AiMemorySystem {
   // =========================
 
   updateBehaviorProfile(userId, message) {
-
     if (!this.userBehaviorProfile.has(userId)) {
       this.userBehaviorProfile.set(userId, {
         totalMessages: 0,
@@ -183,7 +299,6 @@ class AiMemorySystem {
   }
 
   updateEmotionProfile(userId, emotion) {
-
     if (!emotion || !emotion.type) return
 
     if (!this.userEmotionProfile.has(userId)) {
@@ -207,7 +322,6 @@ class AiMemorySystem {
   }
 
   updatePredictionProfile(userId, predictedBehavior) {
-
     if (!predictedBehavior || !predictedBehavior.type) return
 
     if (!this.userPredictionProfile.has(userId)) {
@@ -223,93 +337,7 @@ class AiMemorySystem {
   }
 
   // =========================
-  // BUILD MEMORY
-  // =========================
-
-  async buildEmotionMemory(userId, profile) {
-
-    if (!profile) return
-
-    const entries = Object.entries(profile).filter(([k]) => k !== "last")
-    const dominant = entries.sort((a, b) => b[1] - a[1])[0]
-
-    if (!dominant || dominant[1] < 3) return
-
-    const map = {
-      sad: "يميل للحزن غالباً",
-      angry: "يميل للغضب غالباً",
-      fear: "يميل للتوتر والقلق",
-      happy: "شخص إيجابي غالباً"
-    }
-
-    const summary = map[dominant[0]]
-    if (!summary) return
-
-    await this.storeMemory({ userId, type: "emotion", memory: summary })
-  }
-
-  async buildPredictionMemory(userId, profile) {
-
-    if (!profile) return
-
-    const entries = Object.entries(profile)
-    const dominant = entries.sort((a, b) => b[1] - a[1])[0]
-
-    if (!dominant || dominant[1] < 4) return
-
-    const map = {
-      repeat: "يميل لتكرار نفس الرسائل",
-      deep_engagement: "يميل للنقاش العميق",
-      escalation: "يميل للتصعيد",
-      emotional_continuation: "يستمر في الحالة العاطفية"
-    }
-
-    const summary = map[dominant[0]]
-    if (!summary) return
-
-    await this.storeMemory({ userId, type: "prediction", memory: summary })
-  }
-
-  async buildBehaviorMemory(userId, profile) {
-
-    if (!profile || profile.totalMessages < 5) return
-
-    let summary = null
-
-    if (profile.aggressiveCount >= 3) summary = "يميل للتعامل بعدوانية"
-    else if (profile.emotionalCount >= 3) summary = "يتحدث بمشاعر عالية"
-    else if (profile.shortMessages >= 3) summary = "يرسل رسائل قصيرة غالباً"
-
-    if (!summary) return
-
-    await this.storeMemory({ userId, type: "behavior", memory: summary })
-  }
-
-  // =========================
-  // CACHE
-  // =========================
-
-  getCache(userId) {
-    const cached = this.memoryCache.get(userId)
-    if (!cached) return null
-
-    if (Date.now() - cached.time > this.cacheTTL) {
-      this.memoryCache.delete(userId)
-      return null
-    }
-
-    return cached.data
-  }
-
-  setCache(userId, data) {
-    this.memoryCache.set(userId, {
-      data,
-      time: Date.now()
-    })
-  }
-
-  // =========================
-  // STORE
+  // STORE (ENHANCED + LEARNING)
   // =========================
 
   async storeMemory({ userId, type, memory }) {
@@ -319,16 +347,26 @@ class AiMemorySystem {
       if (!userId || !type || !memory) return false
 
       const memoryText = this.cleanText(memory)
-      if (!this.validateMemory(memoryText)) return false
+      if (!this.validateMemory(memoryText)) {
+        this.updateLearningSignal(userId, "skipped")
+        return false
+      }
 
-      const memories = await memoryRepository.getUserMemories(userId) || []
+      let memories = await memoryRepository.getUserMemories(userId) || []
+
+      memories = this.compressMemories(memories)
 
       const duplicate = memories.find(m => {
         const sim = this.similarity(m.memory, memoryText)
         return sim >= 3 || this.normalize(m.memory) === this.normalize(memoryText)
       })
 
-      if (duplicate) return false
+      if (duplicate) {
+        this.updateLearningSignal(userId, "skipped")
+        return false
+      }
+
+      memories = this.applyDynamicLimit(memories, userId)
 
       if (memories.length >= this.maxUserMemories) {
         await memoryRepository.removeOldestUserMemory(userId)
@@ -342,6 +380,8 @@ class AiMemorySystem {
       })
 
       this.memoryCache.delete(userId)
+
+      this.updateLearningSignal(userId, "stored")
 
       return true
 
@@ -368,12 +408,14 @@ class AiMemorySystem {
       const cached = this.getCache(userId)
       if (cached) return cached
 
-      const memories = await memoryRepository.getUserMemories(userId) || []
-      const result = memories.slice(0, this.maxUserMemories)
+      let memories = await memoryRepository.getUserMemories(userId) || []
 
-      this.setCache(userId, result)
+      memories = this.compressMemories(memories)
+      memories = this.applyDynamicLimit(memories, userId)
 
-      return result
+      this.setCache(userId, memories)
+
+      return memories
 
     } catch (error) {
 
@@ -383,6 +425,29 @@ class AiMemorySystem {
 
       return []
     }
+  }
+
+  // =========================
+  // CACHE
+  // =========================
+
+  getCache(userId) {
+    const cached = this.memoryCache.get(userId)
+    if (!cached) return null
+
+    if (Date.now() - cached.time > this.cacheTTL) {
+      this.memoryCache.delete(userId)
+      return null
+    }
+
+    return cached.data
+  }
+
+  setCache(userId, data) {
+    this.memoryCache.set(userId, {
+      data,
+      time: Date.now()
+    })
   }
 
   // =========================
@@ -416,6 +481,7 @@ class AiMemorySystem {
         if (memoryText.length < 40) score += 2
 
         score += socialWeight
+        score += this.getLearningAdjustment(userId)
 
         return { memory: m.memory, score }
 
@@ -478,50 +544,41 @@ ${context}
       if (!this.shouldStoreMemory(message)) return false
 
       const profile = this.updateBehaviorProfile(userId, message)
-      await this.buildBehaviorMemory(userId, profile)
+      await this.buildBehaviorMemory?.(userId, profile)
 
       if (emotion) {
         const emotionProfile = this.updateEmotionProfile(userId, emotion)
-        await this.buildEmotionMemory(userId, emotionProfile)
+        await this.buildEmotionMemory?.(userId, emotionProfile)
       }
 
       if (predictedBehavior) {
         const predictionProfile = this.updatePredictionProfile(userId, predictedBehavior)
-        await this.buildPredictionMemory(userId, predictionProfile)
+        await this.buildPredictionMemory?.(userId, predictionProfile)
       }
 
       const cleaned = this.cleanText(message)
       if (!cleaned || cleaned.length < 5) return false
 
       const patterns = [
-
         { type: "name", regex: /اسمي\s+(.+)/i },
         { type: "name", regex: /my name is\s+(.+)/i },
-
         { type: "preference", regex: /احب\s+(.+)/i },
         { type: "preference", regex: /i like\s+(.+)/i },
-
         { type: "interest", regex: /اهتم\s+(.+)/i },
         { type: "interest", regex: /i am interested in\s+(.+)/i },
-
         { type: "opinion", regex: /اعتقد\s+(.+)/i },
         { type: "opinion", regex: /i think\s+(.+)/i },
-
         { type: "fact", regex: /انا\s+(.+)/i },
         { type: "fact", regex: /i am\s+(.+)/i },
-
         { type: "relationship", regex: /(.+)\s+صديقي/i },
         { type: "relationship", regex: /(.+)\s+my friend/i },
-
         { type: "goal", regex: /هدفي\s+(.+)/i },
         { type: "goal", regex: /my goal is\s+(.+)/i },
-
         { type: "skill", regex: /اجيد\s+(.+)/i },
         { type: "skill", regex: /i can\s+(.+)/i }
       ]
 
       for (const p of patterns) {
-
         const match = cleaned.match(p.regex)
         if (!match) continue
 

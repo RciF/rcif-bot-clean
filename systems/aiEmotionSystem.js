@@ -12,6 +12,48 @@ class AIEmotionSystem {
 
     this.intensifiers = ["جداً", "مره", "مرة", "كثير", "قوي"];
     this.negations = ["مو", "مش", "ما", "ليس", "ماني"];
+
+    // 🔥 self-learning memory
+    this.emotionMemory = new Map();
+  }
+
+  // =========================
+  // 🔥 SELF LEARNING
+  // =========================
+
+  updateLearning(userId, emotion) {
+    if (!userId || !emotion) return;
+
+    const data = this.emotionMemory.get(userId) || {
+      sad: 0,
+      happy: 0,
+      angry: 0,
+      fear: 0
+    };
+
+    if (data[emotion] !== undefined) {
+      data[emotion]++;
+    }
+
+    this.emotionMemory.set(userId, data);
+  }
+
+  getEmotionBias(userId) {
+    const data = this.emotionMemory.get(userId);
+    if (!data) return null;
+
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    if (total === 0) return null;
+
+    const dominant = Object.entries(data).sort((a, b) => b[1] - a[1])[0];
+    if (!dominant) return null;
+
+    const [emotion, count] = dominant;
+    const ratio = count / total;
+
+    if (ratio < 0.4) return null;
+
+    return emotion;
   }
 
   async analyze(message, context = {}, predictedBehavior = null) {
@@ -100,6 +142,13 @@ class AIEmotionSystem {
         }
       }
 
+      // 🔥 learning bias applied
+      const bias = this.getEmotionBias(context?.userId);
+      if (bias && scores[bias] > 0) {
+        primary = bias;
+        max += 0.3;
+      }
+
       let intensity = Math.min(1, (max + intensityBoost) / 3);
 
       let polarity = "neutral";
@@ -123,6 +172,11 @@ class AIEmotionSystem {
       }
 
       let confidence = Math.min(1, (max + contextBoost + intensityBoost) / 3);
+
+      // 🔥 update learning
+      if (primary !== "neutral") {
+        this.updateLearning(context?.userId, primary);
+      }
 
       return {
         primary,

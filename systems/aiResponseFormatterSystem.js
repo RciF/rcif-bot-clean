@@ -1,5 +1,43 @@
 class AIResponseFormatterSystem {
 
+    constructor() {
+        // 🔥 learning tone preferences
+        this.toneMemory = new Map();
+    }
+
+    // =========================
+    // 🔥 SELF LEARNING
+    // =========================
+
+    updateTone(userId, type) {
+        if (!userId || !type) return;
+
+        const data = this.toneMemory.get(userId) || {
+            short: 0,
+            long: 0,
+            emoji: 0,
+            plain: 0
+        };
+
+        if (data[type] !== undefined) {
+            data[type]++;
+        }
+
+        this.toneMemory.set(userId, data);
+    }
+
+    getToneBias(userId) {
+        const data = this.toneMemory.get(userId);
+        if (!data) return {};
+
+        const result = {};
+
+        if (data.short > data.long + 3) result.short = true;
+        if (data.emoji > data.plain + 3) result.emoji = true;
+
+        return result;
+    }
+
     sanitize(text) {
 
         if (!text) return ""
@@ -120,7 +158,10 @@ class AIResponseFormatterSystem {
 
         const words = text.split(" ")
 
-        if (context?.mode === "limited" && words.length > 40) {
+        // 🔥 learning bias
+        const bias = this.getToneBias(context?.userId)
+
+        if ((context?.mode === "limited" || bias.short) && words.length > 40) {
             return words.slice(0, 40).join(" ") + "..."
         }
 
@@ -181,7 +222,13 @@ class AIResponseFormatterSystem {
 
     addLightEmoji(text, context = {}) {
 
+        const bias = this.getToneBias(context?.userId)
+
         if (context?.emotion === "negative") return text
+
+        if (bias.emoji) {
+            return text + " 🙂"
+        }
 
         if (Math.random() > 0.85) {
             const emojis = ["🙂", "👀", "🔥", "👍"]
@@ -218,6 +265,10 @@ class AIResponseFormatterSystem {
             .trim()
     }
 
+    // =========================
+    // 🔥 FINAL FORMAT
+    // =========================
+
     formatResponse(text, context = {}) {
 
         if (!text) return "..."
@@ -245,6 +296,18 @@ class AIResponseFormatterSystem {
 
         formatted = this.ensureMinimumQuality(formatted)
         formatted = this.ensureNonEmpty(formatted)
+
+        // 🔥 update learning
+        if (context?.userId) {
+            const lengthType = formatted.split(" ").length < 40 ? "short" : "long"
+            this.updateTone(context.userId, lengthType)
+
+            if (formatted.includes("🙂")) {
+                this.updateTone(context.userId, "emoji")
+            } else {
+                this.updateTone(context.userId, "plain")
+            }
+        }
 
         return formatted
     }

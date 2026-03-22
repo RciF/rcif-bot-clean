@@ -18,6 +18,42 @@ class AIKnowledgeSystem {
     this.maxCacheSize = 100
 
     this.minRelevanceScore = 0.35
+
+    // 🔥 self-learning signals
+    this.learningStats = new Map()
+  }
+
+  // =========================
+  // 🔥 SELF LEARNING
+  // =========================
+
+  updateLearning(userId, success = true) {
+    if (!userId) return
+
+    const data = this.learningStats.get(userId) || {
+      learned: 0,
+      skipped: 0
+    }
+
+    if (success) data.learned++
+    else data.skipped++
+
+    this.learningStats.set(userId, data)
+  }
+
+  getLearningBias(userId) {
+    const data = this.learningStats.get(userId)
+    if (!data) return 0
+
+    const total = data.learned + data.skipped
+    if (total === 0) return 0
+
+    const ratio = data.learned / total
+
+    if (ratio > 0.7) return 0.1
+    if (ratio < 0.3) return -0.1
+
+    return 0
   }
 
   sanitizeText(text) {
@@ -97,7 +133,7 @@ class AIKnowledgeSystem {
     }
   }
 
-  shouldLearn(message, predictedBehavior = null) {
+  shouldLearn(message, predictedBehavior = null, userId = null) {
 
     const text = this.normalize(message)
 
@@ -117,7 +153,14 @@ class AIKnowledgeSystem {
       "هو","هي","يعني","definition","is","are","سبب","شرح","طريقة"
     ]
 
-    return triggers.some(t => text.includes(t))
+    let result = triggers.some(t => text.includes(t))
+
+    // 🔥 learning bias
+    const bias = this.getLearningBias(userId)
+    if (bias > 0) result = true
+    if (bias < 0 && text.length < 25) result = false
+
+    return result
   }
 
   async storeKnowledge(data) {
@@ -135,12 +178,14 @@ class AIKnowledgeSystem {
       const embedding = await this.generateEmbedding(content)
       if (!embedding) return null
 
-      return await knowledgeRepository.createKnowledge({
+      const result = await knowledgeRepository.createKnowledge({
         userId: data.userId || null,
         content,
         source: data.source || "user",
         embedding
       })
+
+      return result
 
     } catch (error) {
 
@@ -152,7 +197,7 @@ class AIKnowledgeSystem {
     }
   }
 
-  async searchKnowledge(query) {
+  async searchKnowledge(query, userId = null) {
 
     try {
 
@@ -171,6 +216,7 @@ class AIKnowledgeSystem {
       if (!Array.isArray(knowledge) || !knowledge.length) return []
 
       const queryNorm = this.normalize(query)
+      const bias = this.getLearningBias(userId)
 
       const filtered = knowledge
         .map(k => {
@@ -191,6 +237,8 @@ class AIKnowledgeSystem {
           score += this.keywordScore(queryNorm, contentNorm) * 2
 
           if (contentNorm.length < 120) score += 1
+
+          score += bias
 
           return {
             ...k,
@@ -249,11 +297,11 @@ ${formatted}
 `.trim()
   }
 
-  async injectKnowledge(userMessage) {
+  async injectKnowledge(userMessage, userId = null) {
 
     try {
 
-      const knowledge = await this.searchKnowledge(userMessage)
+      const knowledge = await this.searchKnowledge(userMessage, userId)
       if (!knowledge.length) return ""
 
       return this.formatKnowledge(knowledge)
@@ -272,16 +320,26 @@ ${formatted}
 
     try {
 
-      if (!this.shouldLearn(message, predictedBehavior)) return
+      const should = this.shouldLearn(message, predictedBehavior, userId)
+
+      if (!should) {
+        this.updateLearning(userId, false)
+        return
+      }
 
       const sanitized = this.sanitizeText(message)
-      if (!sanitized) return
+      if (!sanitized) {
+        this.updateLearning(userId, false)
+        return
+      }
 
-      await this.storeKnowledge({
+      const stored = await this.storeKnowledge({
         userId,
         content: sanitized,
         source: "conversation"
       })
+
+      this.updateLearning(userId, !!stored)
 
     } catch (error) {
 

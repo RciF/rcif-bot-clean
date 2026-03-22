@@ -5,13 +5,54 @@ class AIAutonomousSystem {
 
   constructor() {
     this.cooldowns = new Map();
-    this.minCooldown = 1000 * 60 * 2; // 2 minutes
+    this.channelCooldowns = new Map();
+    this.minCooldown = 1000 * 60 * 2;
 
-    // 🔥 adaptive cooldown
     this.dynamicCooldown = true;
 
-    // 🔥 anti-spam memory
     this.lastTriggerType = new Map();
+
+    this.activityTracker = new Map();
+
+    this.globalLastTrigger = 0;
+    this.globalCooldown = 1000 * 15;
+
+    // 🔥 self-learning trigger performance
+    this.triggerStats = new Map();
+  }
+
+  // =========================
+  // 🔥 SELF LEARNING
+  // =========================
+
+  updateTriggerLearning(userId, type, success = true) {
+    const data = this.triggerStats.get(userId) || {};
+
+    if (!data[type]) {
+      data[type] = { success: 0, fail: 0 };
+    }
+
+    if (success) data[type].success++;
+    else data[type].fail++;
+
+    this.triggerStats.set(userId, data);
+  }
+
+  getTriggerBias(userId, type) {
+    const data = this.triggerStats.get(userId);
+    if (!data || !data[type]) return 0;
+
+    const stat = data[type];
+    const total = stat.success + stat.fail;
+
+    if (total === 0) return 0;
+
+    const ratio = stat.success / total;
+
+    if (ratio > 0.7) return 1;
+    if (ratio < 0.3) return -1;
+
+    return 0;
   }
 
   // =========================
@@ -21,23 +62,67 @@ class AIAutonomousSystem {
   getCooldown(userId, contextStrength = 0) {
     if (!this.dynamicCooldown) return this.minCooldown;
 
-    // stronger context → shorter cooldown
     if (contextStrength >= 5) return this.minCooldown * 0.5;
     if (contextStrength >= 3) return this.minCooldown * 0.7;
 
     return this.minCooldown;
   }
 
-  canTrigger(userId, contextStrength = 0) {
-    const last = this.cooldowns.get(userId) || 0;
+  canTrigger(userId, channelId, contextStrength = 0) {
     const now = Date.now();
 
+    if (now - this.globalLastTrigger < this.globalCooldown) {
+      return false;
+    }
+
+    const lastUser = this.cooldowns.get(userId) || 0;
     const cooldown = this.getCooldown(userId, contextStrength);
 
-    if (now - last < cooldown) return false;
+    if (now - lastUser < cooldown) return false;
+
+    const lastChannel = this.channelCooldowns.get(channelId) || 0;
+    if (now - lastChannel < this.minCooldown * 0.5) return false;
 
     this.cooldowns.set(userId, now);
+    this.channelCooldowns.set(channelId, now);
+    this.globalLastTrigger = now;
+
     return true;
+  }
+
+  // =========================
+  // ACTIVITY
+  // =========================
+
+  trackActivity(channelId, userId) {
+    if (!channelId || !userId) return;
+
+    const key = channelId;
+
+    if (!this.activityTracker.has(key)) {
+      this.activityTracker.set(key, []);
+    }
+
+    const arr = this.activityTracker.get(key);
+
+    arr.push({
+      userId,
+      time: Date.now()
+    });
+
+    if (arr.length > 20) {
+      arr.shift();
+    }
+  }
+
+  getActivityLevel(channelId) {
+    const arr = this.activityTracker.get(channelId) || [];
+
+    const now = Date.now();
+
+    const active = arr.filter(e => now - e.time < 30000);
+
+    return active.length;
   }
 
   // =========================
@@ -46,6 +131,7 @@ class AIAutonomousSystem {
 
   async decideTrigger({
     userId,
+    channelId,
     message,
     emotion,
     contextStrength,
@@ -53,7 +139,19 @@ class AIAutonomousSystem {
     predictedBehavior
   }) {
 
-    if (!message) return null;
+    if (!message || !userId) return null;
+
+    this.trackActivity(channelId, userId);
+
+    const activity = this.getActivityLevel(channelId);
+
+    if (activity <= 1 && contextStrength < 2) {
+      return null;
+    }
+
+    if (!this.canTrigger(userId, channelId, contextStrength)) {
+      return null;
+    }
 
     let relation = null;
 
@@ -70,14 +168,40 @@ class AIAutonomousSystem {
       }
     }
 
-    // 🔥 influencer boost
     let influenceScore = 0;
     try {
       influenceScore = aiSocialAwarenessSystem.getUserInfluenceScore(userId);
     } catch {}
 
+    let networkHealth = null;
+    try {
+      networkHealth = aiSocialAwarenessSystem.getNetworkHealth();
+    } catch {}
+
+    let priority = 0;
+
+    if (emotion?.intensity > 0.6) priority += 3;
+    if (predictedBehavior?.type === "deep_engagement") priority += 2;
+    if (contextStrength >= 4) priority += 2;
+    if (activity > 5) priority += 2;
+    if (influenceScore > 25) priority += 2;
+
+    if (networkHealth?.status === "strong") priority += 1;
+
+    if (priority < 2) return null;
+
     // =========================
-    // PREDICTION LAYER
+    // LEARNING BIAS
+    // =========================
+
+    const applyBias = (type) => {
+      const bias = this.getTriggerBias(userId, type);
+      if (bias < 0) return null;
+      return this.safeTrigger(userId, type);
+    };
+
+    // =========================
+    // PREDICTION
     // =========================
 
     if (predictedBehavior) {
@@ -86,22 +210,22 @@ class AIAutonomousSystem {
       if (predictedBehavior.type === "repeat") return null;
 
       if (predictedBehavior.type === "emotional_continuation") {
-        return this.safeTrigger(userId, "emotional_followup");
+        return applyBias("emotional_followup");
       }
 
       if (predictedBehavior.type === "deep_engagement") {
-        return this.safeTrigger(userId, "curious");
+        return applyBias("curious");
       }
     }
 
     // =========================
-    // SOCIAL LOGIC
+    // SOCIAL
     // =========================
 
     if (relation) {
 
       if (relation.score > 10 && emotion?.type === "sad") {
-        return this.safeTrigger(userId, "social_support");
+        return applyBias("social_support");
       }
 
       if (relation.score < -5 && emotion?.type === "angry") {
@@ -114,38 +238,34 @@ class AIAutonomousSystem {
     // =========================
 
     if (emotion?.type !== "neutral" && emotion?.intensity > 0.5) {
-      return this.safeTrigger(userId, "emotional_followup");
+      return applyBias("emotional_followup");
     }
 
     // =========================
-    // SHORT MESSAGE
+    // ACTIVITY
     // =========================
+
+    if (activity >= 6) {
+      return applyBias("engage");
+    }
 
     if (message.length < 6) {
-      return this.safeTrigger(userId, "engage");
+      return applyBias("engage");
     }
-
-    // =========================
-    // LOW CONTEXT
-    // =========================
 
     if (contextStrength < 2) {
-      return this.safeTrigger(userId, "curious");
+      return applyBias("curious");
     }
 
-    // =========================
-    // 🔥 HIGH INFLUENCE USERS
-    // =========================
-
     if (influenceScore > 30) {
-      return this.safeTrigger(userId, "engage");
+      return applyBias("engage");
     }
 
     return null;
   }
 
   // =========================
-  // 🔥 ANTI-SPAM TRIGGER
+  // ANTI-SPAM
   // =========================
 
   safeTrigger(userId, type) {
@@ -156,6 +276,10 @@ class AIAutonomousSystem {
     }
 
     this.lastTriggerType.set(userId, type);
+
+    // 🔥 learning update (assume success initially)
+    this.updateTriggerLearning(userId, type, true);
+
     return type;
   }
 

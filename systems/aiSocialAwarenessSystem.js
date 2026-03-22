@@ -15,6 +15,11 @@ class AISocialAwarenessSystem {
     this.centralityCache = new Map();
     this.lastCentralityUpdate = 0;
     this.CENTRALITY_TTL = 1000 * 60 * 5; // 5 min
+
+    // 🔥 NEW: graph metrics cache
+    this.graphMetricsCache = null;
+    this.lastGraphMetricsUpdate = 0;
+    this.GRAPH_METRICS_TTL = 1000 * 60 * 5;
   }
 
   // =========================
@@ -59,8 +64,8 @@ class AISocialAwarenessSystem {
     this.graph.get(userA).set(userB, relationship);
     this.graph.get(userB).set(userA, relationship);
 
-    // 🔥 invalidate centrality cache
     this.centralityCache.clear();
+    this.graphMetricsCache = null;
   }
 
   getUserNetwork(userId) {
@@ -91,18 +96,14 @@ class AISocialAwarenessSystem {
   // =========================
 
   getDegreeCentrality(userId) {
-    const network = this.getUserNetwork(userId);
-    return network.size;
+    return this.getUserNetwork(userId).size;
   }
 
   getWeightedCentrality(userId) {
-    const network = this.getUserNetwork(userId);
-
     let total = 0;
-    for (const rel of network.values()) {
+    for (const rel of this.getUserNetwork(userId).values()) {
       total += Math.abs(rel.score);
     }
-
     return total;
   }
 
@@ -121,15 +122,14 @@ class AISocialAwarenessSystem {
       totalDist += dist;
       count++;
 
-      const neighbors = this.getUserNetwork(id);
-      for (const next of neighbors.keys()) {
+      for (const next of this.getUserNetwork(id).keys()) {
         if (!visited.has(next)) {
           queue.push({ id: next, dist: dist + 1 });
         }
       }
     }
 
-    if (count <= 1) return 0;
+    if (count <= 1 || totalDist === 0) return 0;
 
     return count / totalDist;
   }
@@ -158,8 +158,8 @@ class AISocialAwarenessSystem {
 
     for (const userId of this.graph.keys()) {
       const score = this.getUserInfluenceScore(userId);
-
       const data = { userId, score };
+
       results.push(data);
       this.centralityCache.set(userId, data);
     }
@@ -186,9 +186,7 @@ class AISocialAwarenessSystem {
       if (visited.has(last)) continue;
       visited.add(last);
 
-      const neighbors = this.getUserNetwork(last);
-
-      for (const next of neighbors.keys()) {
+      for (const next of this.getUserNetwork(last).keys()) {
         if (!visited.has(next)) {
           queue.push([...path, next]);
         }
@@ -208,13 +206,74 @@ class AISocialAwarenessSystem {
 
       visited.add(id);
 
-      const neighbors = this.getUserNetwork(id);
-      for (const next of neighbors.keys()) {
+      for (const next of this.getUserNetwork(id).keys()) {
         queue.push({ id: next, level: level + 1 });
       }
     }
 
     return Array.from(visited);
+  }
+
+  // 🔥 NEW: GLOBAL GRAPH ANALYSIS
+
+  calculateGraphMetrics() {
+    const now = Date.now();
+
+    if (
+      this.graphMetricsCache &&
+      now - this.lastGraphMetricsUpdate < this.GRAPH_METRICS_TTL
+    ) {
+      return this.graphMetricsCache;
+    }
+
+    let totalNodes = this.graph.size;
+    let totalEdges = 0;
+    let totalScore = 0;
+
+    for (const [userId, neighbors] of this.graph.entries()) {
+      totalEdges += neighbors.size;
+      for (const rel of neighbors.values()) {
+        totalScore += rel.score;
+      }
+    }
+
+    totalEdges = totalEdges / 2; // undirected graph fix
+    totalScore = totalScore / 2;
+
+    const density =
+      totalNodes <= 1 ? 0 : totalEdges / (totalNodes * (totalNodes - 1) / 2);
+
+    const avgStrength =
+      totalNodes === 0 ? 0 : totalScore / totalNodes;
+
+    const metrics = {
+      totalNodes,
+      totalEdges,
+      density,
+      avgStrength
+    };
+
+    this.graphMetricsCache = metrics;
+    this.lastGraphMetricsUpdate = now;
+
+    return metrics;
+  }
+
+  getNetworkHealth() {
+    const metrics = this.calculateGraphMetrics();
+
+    let status = "weak";
+
+    if (metrics.density > 0.6 && metrics.avgStrength > 10) {
+      status = "strong";
+    } else if (metrics.density > 0.3) {
+      status = "moderate";
+    }
+
+    return {
+      ...metrics,
+      status
+    };
   }
 
   // =========================
@@ -382,9 +441,11 @@ class AISocialAwarenessSystem {
       networkStrength: this.getNetworkStrength(userId),
       topConnections: this.getTopConnections(userId, 5),
 
-      // 🔥 new intelligence
       influenceScore: this.getUserInfluenceScore(userId),
-      cluster: this.getCluster(userId, 2)
+      cluster: this.getCluster(userId, 2),
+
+      // 🔥 NEW
+      globalNetwork: this.getNetworkHealth()
     };
   }
 
@@ -471,6 +532,7 @@ class AISocialAwarenessSystem {
     }
 
     this.centralityCache.clear();
+    this.graphMetricsCache = null;
   }
 }
 

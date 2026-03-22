@@ -29,9 +29,48 @@ class AIHandler {
     this.maxCacheSize = 50;
 
     this.activeRequests = new Map();
+
+    // 🔥 self-learning feedback loop
+    this.feedbackMemory = new Map();
   }
 
-  // ✅ الدالة المضافة (كانت ناقصة عندك)
+  // =========================
+  // 🔥 SELF LEARNING LOOP
+  // =========================
+
+  updateFeedback(userId, action, success = true) {
+    const data = this.feedbackMemory.get(userId) || {
+      success: 0,
+      fail: 0,
+      lastActions: []
+    };
+
+    if (success) data.success++;
+    else data.fail++;
+
+    data.lastActions.push(action);
+    if (data.lastActions.length > 10) data.lastActions.shift();
+
+    this.feedbackMemory.set(userId, data);
+  }
+
+  getFeedbackBias(userId) {
+    const data = this.feedbackMemory.get(userId);
+    if (!data) return 0;
+
+    const total = data.success + data.fail;
+    if (total === 0) return 0;
+
+    const ratio = data.success / total;
+
+    if (ratio > 0.7) return 0.1;
+    if (ratio < 0.3) return -0.1;
+
+    return 0;
+  }
+
+  // =========================
+
   buildPersonalityEvolutionState(userId, emotion, behaviorData) {
     const profile = aiDecisionSystem.getUserProfile
       ? aiDecisionSystem.getUserProfile(userId)
@@ -148,6 +187,7 @@ class AIHandler {
 
     return { type: prediction, confidence };
   }  
+
   buildEmotionPrompt(emotion) {
     return `
 # EMOTION ANALYSIS
@@ -197,7 +237,7 @@ TYPE: ${type}
 `;
   }
 
-  buildLearningPrompt(stats) {
+  buildLearningPrompt(stats, feedbackBias) {
     return `
 # LEARNING STATE
 
@@ -207,7 +247,9 @@ defense: ${stats.defense}
 controlled: ${stats.controlled}
 empathetic: ${stats.empathetic}
 
-AI must adapt based on past interaction style.
+feedback_bias: ${feedbackBias}
+
+AI must adapt based on past interaction style AND success rate.
 `;
   }
 
@@ -480,7 +522,7 @@ confidence: ${predictedBehavior.confidence}
         });
       }
 
-      const action = await aiDecisionSystem.decide({
+      let action = await aiDecisionSystem.decide({
         intent,
         contextStrength,
         isAggressive,
@@ -492,6 +534,11 @@ confidence: ${predictedBehavior.confidence}
         context,
         predictedBehavior
       });
+
+      // 🔥 apply feedback bias
+      const bias = this.getFeedbackBias(userId);
+      if (bias < 0 && action === "answer") action = "ask";
+      if (bias > 0 && action === "ask") action = "answer";
 
       if (
         !analysis.needsResponse ||
@@ -573,7 +620,7 @@ ${aiAutonomousSystem.buildAutonomousPrompt(autoType)}
         knowledgeContext,
         decisionRules,
         this.buildEvolutionPrompt(personalityMode, evolutionState.profile),
-        this.buildLearningPrompt(stats),
+        this.buildLearningPrompt(stats, bias),
         this.buildControlPrompt(state),
         this.buildEmotionPrompt(emotion),
         predictionPrompt
@@ -597,11 +644,15 @@ ${aiAutonomousSystem.buildAutonomousPrompt(autoType)}
       this.activeRequests.delete(requestKey);
 
       if (!reply) return "⚠️";
-            reply = this.sanitize(reply);
+
+      reply = this.sanitize(reply);
       reply = aiResponseFormatterSystem.formatResponse(reply);
 
       memoryManager.addMessage(userId, "user", cleanMessage);
       memoryManager.addMessage(userId, "assistant", reply);
+
+      // 🔥 update feedback loop
+      this.updateFeedback(userId, action, true);
 
       this.processLearning(
         userId,

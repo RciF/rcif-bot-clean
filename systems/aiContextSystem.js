@@ -1,5 +1,51 @@
 class AIContextSystem {
 
+    constructor() {
+        // 🔥 self-learning signals
+        this.learningMemory = new Map();
+    }
+
+    // =========================
+    // 🔥 SELF LEARNING
+    // =========================
+
+    updateLearning(userId, type) {
+        if (!userId) return;
+
+        const data = this.learningMemory.get(userId) || {
+            rich: 0,
+            medium: 0,
+            light: 0
+        };
+
+        if (data[type] !== undefined) {
+            data[type]++;
+        }
+
+        this.learningMemory.set(userId, data);
+    }
+
+    getLearningBias(userId) {
+        const data = this.learningMemory.get(userId);
+        if (!data) return 0;
+
+        const total = Object.values(data).reduce((a, b) => a + b, 0);
+        if (total === 0) return 0;
+
+        const dominant = Object.entries(data).sort((a, b) => b[1] - a[1])[0];
+        if (!dominant) return 0;
+
+        const [type, count] = dominant;
+        const ratio = count / total;
+
+        if (ratio < 0.4) return 0;
+
+        if (type === "rich") return 1;
+        if (type === "light") return -1;
+
+        return 0;
+    }
+
     sanitize(text) {
         if (!text) return "Unknown";
 
@@ -139,7 +185,7 @@ class AIContextSystem {
             .map(i => i.value);
     }
 
-    detectContextMode({ memories, knowledge, intent, emotion, predictedBehavior, socialScore }) {
+    detectContextMode({ memories, knowledge, intent, emotion, predictedBehavior, socialScore, multiUserScore, userId }) {
         let score = 0;
 
         if (memories?.length) score += memories.length;
@@ -154,8 +200,13 @@ class AIContextSystem {
         if (socialScore > 20) score += 2;
         if (socialScore < -10) score -= 2;
 
-        if (score >= 7) return "rich";
-        if (score >= 3) return "medium";
+        if (multiUserScore > 0) score += 3;
+
+        // 🔥 learning bias
+        score += this.getLearningBias(userId);
+
+        if (score >= 9) return "rich";
+        if (score >= 4) return "medium";
         return "light";
     }
 
@@ -185,7 +236,96 @@ class AIContextSystem {
         return true;
     }
 
-    buildBehaviorRules({ contextMode, complexity, isTopicShift, emotion, predictedBehavior, socialScore }) {
+    // =========================
+    // MULTI USER
+    // =========================
+
+    detectMultiUserParticipants(messageObj) {
+        if (!messageObj) return [];
+
+        const users = new Set();
+
+        if (messageObj.author?.id) {
+            users.add(messageObj.author.id);
+        }
+
+        if (messageObj.mentions?.users) {
+            for (const u of messageObj.mentions.users.values()) {
+                users.add(u.id);
+            }
+        }
+
+        return Array.from(users);
+    }
+
+    analyzeGroupDynamics(participants, socialMap = {}) {
+        if (participants.length <= 1) {
+            return { type: "solo", tension: 0 };
+        }
+
+        let positive = 0;
+        let negative = 0;
+
+        for (const pair of participants) {
+            const score = socialMap[pair] || 0;
+
+            if (score > 10) positive++;
+            if (score < -10) negative++;
+        }
+
+        if (negative > positive) {
+            return { type: "conflict", tension: negative };
+        }
+
+        if (positive > negative) {
+            return { type: "friendly", tension: 0 };
+        }
+
+        return { type: "neutral", tension: 0 };
+    }
+
+    detectDominantUser(participants, influenceMap = {}) {
+        let max = null;
+        let maxScore = -Infinity;
+
+        for (const userId of participants) {
+            const score = influenceMap[userId] || 0;
+
+            if (score > maxScore) {
+                maxScore = score;
+                max = userId;
+            }
+        }
+
+        return max;
+    }
+
+    buildMultiUserContext({ messageObj, socialData }) {
+        if (!messageObj) return null;
+
+        const participants = this.detectMultiUserParticipants(messageObj);
+
+        if (participants.length <= 1) return null;
+
+        const socialMap = socialData?.relationships || {};
+        const influenceMap = socialData?.influence || {};
+
+        const dynamics = this.analyzeGroupDynamics(participants, socialMap);
+        const dominant = this.detectDominantUser(participants, influenceMap);
+
+        return {
+            participants,
+            dynamics,
+            dominant,
+            score: participants.length
+        };
+    }
+
+    // =========================
+    // RULES
+    // =========================
+
+    buildBehaviorRules({ contextMode, complexity, isTopicShift, emotion, predictedBehavior, socialScore, multiUser }) {
 
         let rules = "";
 
@@ -205,6 +345,32 @@ class AIContextSystem {
         if (contextMode === "light") {
             rules += `
 - تجاهل السياق وركز على الرسالة
+`;
+        }
+
+        if (multiUser) {
+            rules += `
+- انتبه لتفاعل أكثر من مستخدم
+- راقب العلاقات بينهم
+`;
+        }
+
+        if (multiUser?.dynamics?.type === "conflict") {
+            rules += `
+- هدّئ الوضع
+- لا تنحاز
+`;
+        }
+
+        if (multiUser?.dynamics?.type === "friendly") {
+            rules += `
+- كن اجتماعي وخفيف
+`;
+        }
+
+        if (multiUser?.dominant) {
+            rules += `
+- انتبه للشخص المسيطر على الحوار
 `;
         }
 
@@ -287,6 +453,8 @@ class AIContextSystem {
             guild: data?.guild || {},
             channel: data?.channel || {},
             message: data?.message || "",
+            messageObj: data?.messageObj || null,
+            socialData: data?.socialData || null,
             intent: data?.intent || "normal",
             memories: Array.isArray(data?.memories) ? data.memories : [],
             knowledge: Array.isArray(data?.knowledge) ? data.knowledge : [],
@@ -303,6 +471,8 @@ class AIContextSystem {
             guild,
             channel,
             message,
+            messageObj,
+            socialData,
             intent,
             memories,
             knowledge,
@@ -310,6 +480,8 @@ class AIContextSystem {
             predictedBehavior,
             socialScore
         } = this.normalizeInput(input);
+
+        const multiUser = this.buildMultiUserContext({ messageObj, socialData });
 
         const username = this.sanitize(user?.username || "Unknown User");
         const userId = user?.id || "unknown";
@@ -343,8 +515,13 @@ class AIContextSystem {
             intent,
             emotion,
             predictedBehavior,
-            socialScore
+            socialScore,
+            multiUserScore: multiUser?.score || 0,
+            userId
         });
+
+        // 🔥 update learning
+        this.updateLearning(userId, contextMode);
 
         const complexity = this.detectMessageComplexity(userMessage);
 
@@ -359,7 +536,8 @@ class AIContextSystem {
             isTopicShift,
             emotion,
             predictedBehavior,
-            socialScore
+            socialScore,
+            multiUser
         });
 
         const memoryContext = compressed.length
@@ -392,6 +570,16 @@ confidence: ${predictedBehavior.confidence}
 score: ${socialScore}
 `;
 
+        const multiUserContext = multiUser
+            ? `
+[Multi-User Context]
+participants: ${multiUser.participants.join(", ")}
+dynamics: ${multiUser.dynamics.type}
+tension: ${multiUser.dynamics.tension}
+dominantUser: ${multiUser.dominant}
+`
+            : "";
+
         const context = `
 [Discord Context]
 
@@ -410,6 +598,8 @@ ${emotionContext}
 ${predictionContext}
 
 ${socialContext}
+
+${multiUserContext}
 
 [Context Mode]
 ${contextMode}
