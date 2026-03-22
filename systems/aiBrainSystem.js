@@ -1,9 +1,10 @@
 /**
- * AI Brain System (ULTIMATE — Precision + Safety + Anti-Exploit)
+ * AI Brain System (PRODUCTION STABLE)
  */
 
 const economyRepository = require("../repositories/economyRepository")
 const memoryRepository = require("../repositories/memoryRepository")
+const aiDecisionSystem = require("./aiDecisionSystem")
 const logger = require("./loggerSystem")
 
 const MAX_TRANSFER = 100000
@@ -25,21 +26,27 @@ function checkCooldown(userId){
 }
 
 function tryDropItem(user){
-    const chance = Math.random()
+    try{
+        const chance = Math.random()
 
-    if(chance < 0.15){
-        const keys = Object.keys(shopItems)
-        const item = keys[Math.floor(Math.random()*keys.length)]
+        if(chance < 0.15){
+            const keys = Object.keys(shopItems)
+            if(!keys.length) return null
 
-        if(!Array.isArray(user.inventory)){
-            user.inventory = []
+            const item = keys[Math.floor(Math.random()*keys.length)]
+
+            if(!Array.isArray(user.inventory)){
+                user.inventory = []
+            }
+
+            user.inventory.push(item)
+            return item
         }
 
-        user.inventory.push(item)
-        return item
+        return null
+    }catch{
+        return null
     }
-
-    return null
 }
 
 function getRandomBonus(){
@@ -68,7 +75,6 @@ function hasAny(text,words){
     return words.some(w => text.includes(w))
 }
 
-// 🔥 improved intent detection (priority based)
 function detectIntent(message){
     try{
         const text = normalizeText(message)
@@ -103,35 +109,48 @@ function detectIntent(message){
 }
 
 async function ensureUser(userId){
+    try{
+        let user = await economyRepository.getUser(userId)
 
-    let user = await economyRepository.getUser(userId)
+        if(!user){
+            user = await economyRepository.createUser(userId)
+        }
 
-    if(!user){
-        user = await economyRepository.createUser(userId)
+        if(!Array.isArray(user.inventory)) user.inventory=[]
+        if(typeof user.coins!=="number") user.coins=0
+
+        if(!user.last_daily) user.last_daily=0
+        if(!user.last_work) user.last_work=0
+
+        return user
+    }catch(error){
+        logger.error("ENSURE_USER_FAILED",{error:error.message})
+        return {
+            coins: 0,
+            inventory: [],
+            last_daily: 0,
+            last_work: 0
+        }
     }
-
-    if(!Array.isArray(user.inventory)) user.inventory=[]
-    if(typeof user.coins!=="number") user.coins=0
-
-    if(!user.last_daily) user.last_daily=0
-    if(!user.last_work) user.last_work=0
-
-    return user
 }
 
 function parseTransfer(content){
-    const text = normalizeNumbers(content)
-    const words = text.split(/\s+/)
+    try{
+        const text = normalizeNumbers(content)
+        const words = text.split(/\s+/)
 
-    let amount=null
-    let target=null
+        let amount=null
+        let target=null
 
-    for(const w of words){
-        if(!amount && !isNaN(w)) amount=parseInt(w)
-        if(w.startsWith("<@")) target=w.replace(/[<@!>]/g,"")
+        for(const w of words){
+            if(!amount && !isNaN(w)) amount=parseInt(w)
+            if(w.startsWith("<@")) target=w.replace(/[<@!>]/g,"")
+        }
+
+        return {amount,target}
+    }catch{
+        return {amount:null,target:null}
     }
-
-    return {amount,target}
 }
 
 function parseItem(content){
@@ -202,7 +221,6 @@ async function handleBalance(user){
 }
 
 async function handleDaily(userId,user){
-
     if(checkCooldown(userId)) return "⏳"
 
     const now = Date.now()
@@ -221,11 +239,12 @@ async function handleDaily(userId,user){
 
     await economyRepository.updateUser(userId,user)
 
+    aiDecisionSystem.applyExternalFeedback(userId,"answer","positive")
+
     return `💰 ${reward}${drop ? `\n🎁 ${shopItems[drop].name}`:""}`
 }
 
 async function handleWork(userId,user){
-
     if(checkCooldown(userId)) return "⏳"
 
     let reward=Math.floor((Math.random()*150+50) * getRandomBonus())
@@ -237,11 +256,12 @@ async function handleWork(userId,user){
 
     await economyRepository.updateUser(userId,user)
 
+    aiDecisionSystem.applyExternalFeedback(userId,"answer","positive")
+
     return `💼 ${reward}${drop ? `\n🎁 ${shopItems[drop].name}`:""}`
 }
 
 async function handleTransfer(userId,user,content){
-
     if(checkCooldown(userId)) return "⏳"
 
     const {amount,target}=parseTransfer(content)
@@ -261,6 +281,8 @@ async function handleTransfer(userId,user,content){
     await economyRepository.updateUser(userId,user)
     await economyRepository.updateUser(target,targetUser)
 
+    aiDecisionSystem.applyExternalFeedback(userId,"controlled","positive")
+
     return `💸 ${amount}`
 }
 
@@ -269,7 +291,6 @@ async function handleShop(){
 }
 
 async function handleBuy(userId,user,content){
-
     if(checkCooldown(userId)) return "⏳"
 
     const itemKey=parseItem(content)
@@ -290,18 +311,19 @@ async function handleBuy(userId,user,content){
 
     await economyRepository.updateUser(userId,user)
 
+    aiDecisionSystem.applyExternalFeedback(userId,"controlled","positive")
+
     return `✅ ${quantity} ${item.name}`
 }
 
 async function handleInventory(user){
-
     const items=user.inventory||[]
     if(!items.length) return "🎒 فارغة"
 
     const counts={}
     items.forEach(i=>counts[i]=(counts[i]||0)+1)
 
-    return Object.entries(counts).map(([k,v])=>`${shopItems[k]?.name} × ${v}`).join("\n")
+    return Object.entries(counts).map(([k,v])=>`${shopItems[k]?.name || k} × ${v}`).join("\n")
 }
 
 async function handleItemInfo(content){
@@ -313,7 +335,6 @@ async function handleItemInfo(content){
 }
 
 async function handleGive(userId,user,content){
-
     const itemKey=parseItem(content)
     const target=parseTarget(content)
 
@@ -330,11 +351,12 @@ async function handleGive(userId,user,content){
     await economyRepository.updateUser(userId,user)
     await economyRepository.updateUser(target,targetUser)
 
+    aiDecisionSystem.applyExternalFeedback(userId,"controlled","positive")
+
     return `🎁 <@${target}>`
 }
 
 async function handleRemove(userId,content,message){
-
     if(!message?.member?.permissions?.has("Administrator")){
         return "❌"
     }
@@ -357,8 +379,15 @@ async function handleRemove(userId,content,message){
 }
 
 async function handleIntent(intent,userId,content,message){
-
     try{
+        const decision = await aiDecisionSystem.decide({
+            message: content,
+            userId,
+            contextStrength: 3
+        })
+
+        if (decision === "defense") return "❌"
+        if (decision === "limited") return "..."
 
         if(intent==="profile") return await handleProfile(userId)
         if(intent==="leaderboard") return await handleLeaderboard()

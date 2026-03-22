@@ -32,6 +32,9 @@ class AiMemorySystem {
       prediction: 6
     }
 
+    // 🔥 NEW: dynamic weights (ما حذفنا الأصلي)
+    this.dynamicTypeWeights = { ...this.typeWeights }
+
     this.memoryCache = new Map()
     this.cacheTTL = 1000 * 60 * 5
 
@@ -41,6 +44,13 @@ class AiMemorySystem {
 
     // 🔥 SELF-LEARNING MEMORY FEEDBACK
     this.learningSignals = new Map()
+
+    // 🔥 PHASE 3: FEEDBACK MEMORY QUALITY
+    this.memoryFeedback = new Map()
+
+    // 🔥 NEW: decay + confidence
+    this.feedbackDecayRate = 0.97
+    this.memoryConfidence = new Map()
 
   }
 
@@ -131,10 +141,52 @@ class AiMemorySystem {
     return 0
   }
 
-  // =========================
-  // 🔥 COMPRESSION ENGINE
-  // =========================
+  // 🔥 UPDATED FEEDBACK (مطور بدون حذف)
+  updateMemoryFeedback(memoryId, outcome, confidence = 0.5) {
+    if (!memoryId) return
 
+    const data = this.memoryFeedback.get(memoryId) || {
+      positive: 0,
+      negative: 0
+    }
+
+    const weight = Math.max(0.5, confidence)
+
+    if (outcome === "positive") data.positive += weight
+    if (outcome === "negative") data.negative += weight
+
+    this.memoryFeedback.set(memoryId, data)
+    this.memoryConfidence.set(memoryId, weight)
+
+    // 🔥 decay
+    data.positive *= this.feedbackDecayRate
+    data.negative *= this.feedbackDecayRate
+
+    // 🔥 adaptive weights
+    const total = data.positive + data.negative
+    if (total > 3) {
+      const score = (data.positive - data.negative) / total
+
+      for (const type in this.dynamicTypeWeights) {
+        this.dynamicTypeWeights[type] += score * 0.01
+        this.dynamicTypeWeights[type] = Math.max(1, Math.min(15, this.dynamicTypeWeights[type]))
+      }
+    }
+  }
+
+  getMemoryFeedbackScore(memoryId) {
+    const data = this.memoryFeedback.get(memoryId)
+    if (!data) return 0
+
+    const total = data.positive + data.negative
+    if (total === 0) return 0
+
+    return (data.positive - data.negative) / total
+  }
+
+  // =========================
+  // COMPRESSION
+  // =========================
   groupSimilarMemories(memories) {
     const groups = []
 
@@ -187,7 +239,9 @@ class AiMemorySystem {
   getMemoryPriority(memory, userId) {
     let score = 0
 
-    score += this.typeWeights[memory.type] || 1
+    // 🔥 dynamic بدل الثابت (بدون حذف القديم)
+    score += this.dynamicTypeWeights[memory.type] || this.typeWeights[memory.type] || 1
+
     score += this.memoryDecay(memory)
 
     try {
@@ -195,6 +249,11 @@ class AiMemorySystem {
     } catch {}
 
     score += this.getLearningAdjustment(userId)
+
+    // 🔥 FEEDBACK BOOST (محسن)
+    if (memory.id) {
+      score += this.getMemoryFeedbackScore(memory.id) * 6
+    }
 
     if (memory.memory.length < 50) score += 1
 
@@ -220,10 +279,10 @@ class AiMemorySystem {
   // =========================
 
   memoryDecay(memory) {
-    if (!memory || !memory.created_at) return 0
+    if (!memory || !memory.createdAt) return 0
 
-    const created = new Date(memory.created_at).getTime()
-    if (!created) return 0
+    const created = new Date(memory.createdAt).getTime()
+    if (isNaN(created)) return 0
 
     const age = Date.now() - created
     const days = age / (1000 * 60 * 60 * 24)
@@ -245,10 +304,6 @@ class AiMemorySystem {
     }
   }
 
-  // =========================
-  // STORE DECISION
-  // =========================
-
   shouldStoreMemory(message) {
     const text = this.normalize(message)
 
@@ -265,10 +320,10 @@ class AiMemorySystem {
   }
 
   // =========================
-  // PROFILES
-  // =========================
+// PROFILES
+// =========================
 
-  updateBehaviorProfile(userId, message) {
+updateBehaviorProfile(userId, message) {
     if (!this.userBehaviorProfile.has(userId)) {
       this.userBehaviorProfile.set(userId, {
         totalMessages: 0,
@@ -337,7 +392,7 @@ class AiMemorySystem {
   }
 
   // =========================
-  // STORE (ENHANCED + LEARNING)
+  // STORE
   // =========================
 
   async storeMemory({ userId, type, memory }) {
@@ -372,7 +427,7 @@ class AiMemorySystem {
         await memoryRepository.removeOldestUserMemory(userId)
       }
 
-      await memoryRepository.createMemory({
+      const created = await memoryRepository.createMemory({
         userId: String(userId),
         type,
         memory: memoryText,
@@ -383,7 +438,7 @@ class AiMemorySystem {
 
       this.updateLearningSignal(userId, "stored")
 
-      return true
+      return created
 
     } catch (error) {
 
@@ -475,7 +530,9 @@ class AiMemorySystem {
         if (text.includes(memoryText)) score += 10
         if (memoryText.includes(text)) score += 6
 
-        score += this.typeWeights[m.type] || 1
+        // 🔥 dynamic weights
+        score += this.dynamicTypeWeights[m.type] || this.typeWeights[m.type] || 1
+
         score += this.memoryDecay(m)
 
         if (memoryText.length < 40) score += 2
@@ -483,7 +540,11 @@ class AiMemorySystem {
         score += socialWeight
         score += this.getLearningAdjustment(userId)
 
-        return { memory: m.memory, score }
+        if (m.id) {
+          score += this.getMemoryFeedbackScore(m.id) * 6
+        }
+
+        return { memory: m.memory, id: m.id, score }
 
       })
 

@@ -30,12 +30,11 @@ class AIHandler {
 
     this.activeRequests = new Map();
 
-    // 🔥 self-learning feedback loop
     this.feedbackMemory = new Map();
   }
 
   // =========================
-  // 🔥 SELF LEARNING LOOP
+  // SELF LEARNING LOOP
   // =========================
 
   updateFeedback(userId, action, success = true) {
@@ -469,7 +468,6 @@ ${(social.topConnections || [])
       const behaviorData = aiDecisionSystem.updateBehavior(userId, isAggressive);
       const trustLevel = aiDecisionSystem.getTrustLevel(behaviorData.score);
 
-      const isRepeated = aiDecisionSystem.detectRepetition(userId, cleanMessage);
       const analysis = aiDecisionSystem.analyzeMessage(cleanMessage);
 
       const predictedBehavior = this.predictUserBehavior(
@@ -527,7 +525,6 @@ confidence: ${predictedBehavior.confidence}
         contextStrength,
         isAggressive,
         trustLevel,
-        isRepeated,
         message: cleanMessage,
         emotion,
         userId,
@@ -535,16 +532,14 @@ confidence: ${predictedBehavior.confidence}
         predictedBehavior
       });
 
-      // 🔥 apply feedback bias
       const bias = this.getFeedbackBias(userId);
       if (bias < 0 && action === "answer") action = "ask";
       if (bias > 0 && action === "ask") action = "answer";
 
       if (
-        !analysis.needsResponse ||
-        (analysis.confidence < 0.45 && action !== "ask") ||
-        (isRepeated && analysis.confidence < 0.65)
-      ) {
+  !analysis.needsResponse ||
+  (analysis.confidence < 0.45 && action !== "ask")
+) {
         this.activeRequests.delete(requestKey);
         return null;
       }
@@ -651,8 +646,28 @@ ${aiAutonomousSystem.buildAutonomousPrompt(autoType)}
       memoryManager.addMessage(userId, "user", cleanMessage);
       memoryManager.addMessage(userId, "assistant", reply);
 
-      // 🔥 update feedback loop
+      // 🔥 REAL LEARNING (NEW)
       this.updateFeedback(userId, action, true);
+
+      let outcome = "neutral";
+
+      if (predictedBehavior?.type === "follow_up" || predictedBehavior?.type === "deep_engagement") {
+        outcome = "positive";
+      }
+
+      if (predictedBehavior?.type === "escalation" || predictedBehavior?.type === "hostile_pattern") {
+        outcome = "negative";
+      }
+
+      if (predictedBehavior?.type === "repeat") {
+        outcome = "negative";
+      }
+
+      if (predictedBehavior?.type === "emotional_continuation") {
+        outcome = "positive";
+      }
+
+      aiDecisionSystem.applyExternalFeedback(userId, action, outcome);
 
       this.processLearning(
         userId,

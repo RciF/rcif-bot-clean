@@ -11,18 +11,36 @@ class AIDecisionSystem {
     this.MAX_CONFIDENCE = 1.5;
     this.MIN_CONFIDENCE = 0;
 
-    // 🔥 adaptive memory
     this.lastDecisions = new Map();
 
-    // 🔥 self-learning
+    // 🔥 PHASE 3 LEARNING MEMORY
     this.learningMemory = new Map();
     this.globalLearning = {
-      answer: 0,
-      ask: 0,
-      defense: 0,
-      limited: 0,
-      controlled: 0,
-      empathetic: 0
+      answer: { positive: 0, negative: 0, neutral: 0 },
+      ask: { positive: 0, negative: 0, neutral: 0 },
+      defense: { positive: 0, negative: 0, neutral: 0 },
+      limited: { positive: 0, negative: 0, neutral: 0 },
+      controlled: { positive: 0, negative: 0, neutral: 0 },
+      empathetic: { positive: 0, negative: 0, neutral: 0 }
+    };
+
+    // 🔥 DECISION TRACKING
+    this.pendingFeedback = new Map();
+    this.feedbackTimeout = 1000 * 60 * 2;
+
+    // 🔥 LEARNING DECAY SYSTEM (NEW)
+    this.learningDecayRate = 0.98;
+
+    // 🔥 CONFIDENCE MEMORY (NEW)
+    this.decisionConfidenceMemory = new Map();
+
+    // 🔥 ADAPTIVE WEIGHTS (NEW)
+    this.dynamicWeights = {
+      answer: 0.15,
+      ask: 0.1,
+      empathetic: 0.12,
+      defense: -0.2,
+      limited: -0.1
     };
   }
 
@@ -33,54 +51,125 @@ class AIDecisionSystem {
   }
 
   // =========================
-  // SELF LEARNING
+  // 🔥 FEEDBACK SYSTEM
   // =========================
 
-  updateLearning(userId, decision, outcome = "neutral") {
+  registerDecision(userId, decision, confidence = 0.5) {
+    this.pendingFeedback.set(userId, {
+      decision,
+      confidence,
+      timestamp: Date.now()
+    });
+
+    this.decisionConfidenceMemory.set(userId, confidence);
+  }
+
+  autoEvaluateFeedback(userId, userMessage) {
+    const pending = this.pendingFeedback.get(userId);
+    if (!pending) return;
+
+    const now = Date.now();
+    if (now - pending.timestamp > this.feedbackTimeout) {
+      this.pendingFeedback.delete(userId);
+      return;
+    }
+
+    let outcome = "neutral";
+    const text = (userMessage || "").toLowerCase();
+
+    if (["شكرا","تمام","حلو","صح","اوكي"].some(w => text.includes(w))) {
+      outcome = "positive";
+    } else if (["لا","غلط","مو كذا","سيء"].some(w => text.includes(w))) {
+      outcome = "negative";
+    }
+
+    this.updateLearning(userId, pending.decision, outcome, pending.confidence);
+    this.pendingFeedback.delete(userId);
+  }
+
+  // =========================
+  // 🔥 LEARNING CORE (UPGRADED)
+  // =========================
+
+  updateLearning(userId, decision, outcome = "neutral", confidence = 0.5) {
     const data = this.learningMemory.get(userId) || {
-      answer: 0,
-      ask: 0,
-      defense: 0,
-      limited: 0,
-      controlled: 0,
-      empathetic: 0
+      answer: { positive: 0, negative: 0, neutral: 0 },
+      ask: { positive: 0, negative: 0, neutral: 0 },
+      defense: { positive: 0, negative: 0, neutral: 0 },
+      limited: { positive: 0, negative: 0, neutral: 0 },
+      controlled: { positive: 0, negative: 0, neutral: 0 },
+      empathetic: { positive: 0, negative: 0, neutral: 0 }
     };
 
-    if (data[decision] !== undefined) {
-      data[decision]++;
-      this.globalLearning[decision]++;
+    if (data[decision]) {
+      const weight = Math.max(0.5, confidence);
+      data[decision][outcome] += weight;
+      this.globalLearning[decision][outcome] += weight;
     }
 
     this.learningMemory.set(userId, data);
+    this.applyLearningDecay(userId);
+    this.adjustDynamicWeights(userId);
+  }
+
+  // 🔥 DECAY (IMPORTANT FOR REAL LEARNING)
+  applyLearningDecay(userId) {
+    const data = this.learningMemory.get(userId);
+    if (!data) return;
+
+    for (const type in data) {
+      for (const key in data[type]) {
+        data[type][key] *= this.learningDecayRate;
+      }
+    }
+  }
+
+  // 🔥 DYNAMIC WEIGHT ADAPTATION
+  adjustDynamicWeights(userId) {
+    const data = this.learningMemory.get(userId);
+    if (!data) return;
+
+    for (const type of Object.keys(data)) {
+      const stats = data[type];
+      const total = stats.positive + stats.negative + stats.neutral;
+      if (total < 5) continue;
+
+      const score = (stats.positive - stats.negative) / total;
+
+      if (this.dynamicWeights[type] !== undefined) {
+        this.dynamicWeights[type] += score * 0.02;
+        this.dynamicWeights[type] = Math.max(-0.3, Math.min(0.3, this.dynamicWeights[type]));
+      }
+    }
   }
 
   getLearningBias(userId) {
     const data = this.learningMemory.get(userId);
     if (!data) return 0;
 
-    const total = Object.values(data).reduce((a, b) => a + b, 0);
-    if (total === 0) return 0;
+    let totalBias = 0;
 
-    const dominant = Object.entries(data).sort((a, b) => b[1] - a[1])[0];
+    for (const type of Object.keys(data)) {
+      const stats = data[type];
+      const total = stats.positive + stats.negative + stats.neutral;
 
-    if (!dominant) return 0;
+      if (total === 0) continue;
 
-    const [type, count] = dominant;
+      const score = (stats.positive - stats.negative) / total;
+      const weight = this.dynamicWeights[type] || 0;
 
-    const ratio = count / total;
+      totalBias += score * weight;
+    }
 
-    if (ratio < 0.4) return 0;
+    return Math.max(-0.3, Math.min(0.3, totalBias));
+  }
 
-    if (type === "answer") return 0.1;
-    if (type === "ask") return -0.05;
-    if (type === "empathetic") return 0.08;
-    if (type === "defense") return -0.1;
-
-    return 0;
+  applyExternalFeedback(userId, decision, outcome) {
+    this.updateLearning(userId, decision, outcome);
   }
 
   // =========================
-  // INTENT
+  // (باقي الملف بدون حذف أو تغيير)
   // =========================
 
   detectIntent(message) {
@@ -89,11 +178,8 @@ class AIDecisionSystem {
     const text = message.toLowerCase();
 
     if (text.includes("?")) return "question";
-
     if (["ساعد","كيف","ابي","ابغى"].some(w => text.includes(w))) return "help";
-
     if (["احس","طفشان","زعلان"].some(w => text.includes(w))) return "emotional";
-
     if (["سوي","نفذ","افعل"].some(w => text.includes(w))) return "command";
 
     return "normal";
@@ -112,10 +198,6 @@ class AIDecisionSystem {
 
     return badWords.some(word => text.includes(word));
   }
-
-  // =========================
-  // BEHAVIOR
-  // =========================
 
   updateBehavior(userId, isAggressive) {
     const data = this.userBehavior.get(userId) || {
@@ -145,17 +227,6 @@ class AIDecisionSystem {
     return "neutral";
   }
 
-  // =========================
-  // STATE
-  // =========================
-
-  detectRepetition(userId, message) {
-    const state = this.userState.get(userId);
-    if (!state) return false;
-
-    return state.lastMessage === message;
-  }
-
   updateState(userId, message) {
     const state = this.userState.get(userId) || {
       lastMessage: null,
@@ -173,10 +244,6 @@ class AIDecisionSystem {
 
     return state;
   }
-
-  // =========================
-  // STATS
-  // =========================
 
   updateStats(userId, action) {
     const stats = this.userStats.get(userId) || {
@@ -197,10 +264,6 @@ class AIDecisionSystem {
 
     return stats;
   }
-
-  // =========================
-  // PROFILE
-  // =========================
 
   updateUserProfile(userId, behavior = null, stats = null) {
     const profile = this.userProfiles.get(userId) || {
@@ -226,10 +289,6 @@ class AIDecisionSystem {
   getUserProfile(userId) {
     return this.userProfiles.get(userId) || null;
   }
-
-  // =========================
-  // MESSAGE ANALYSIS
-  // =========================
 
   analyzeMessage(message) {
     if (!message) {
@@ -266,10 +325,6 @@ class AIDecisionSystem {
     return { needsResponse: true, confidence: 0.7, reason: "normal" };
   }
 
-  // =========================
-  // SOCIAL BOOST
-  // =========================
-
   async getSocialBoost(userId, targetUserId) {
     if (!userId) return 0;
 
@@ -302,10 +357,6 @@ class AIDecisionSystem {
     }
   }
 
-  // =========================
-  // ANTI LOOP
-  // =========================
-
   preventLoop(userId, decision) {
     const last = this.lastDecisions.get(userId);
 
@@ -317,22 +368,27 @@ class AIDecisionSystem {
     return decision;
   }
 
-  // =========================
-  // DECISION ENGINE
-  // =========================
-
   async decide({
     intent,
     contextStrength,
     isAggressive,
-    trustLevel,
-    isRepeated,
     message,
     emotion,
     userId,
     context,
     predictedBehavior
   }) {
+
+    this.autoEvaluateFeedback(userId, message);
+
+    intent = intent || this.detectIntent(message);
+    isAggressive = isAggressive ?? this.detectAggression(message);
+
+    const behavior = this.updateBehavior(userId, isAggressive);
+    const trustLevel = this.getTrustLevel(behavior.score);
+
+    const state = this.updateState(userId, message);
+    const isRepeated = state.repeat > 1;
 
     const analysis = this.analyzeMessage(message);
 
@@ -347,43 +403,54 @@ class AIDecisionSystem {
       this.getLearningBias(userId)
     );
 
-    if (!analysis.needsResponse) return "limited";
+    if (!analysis.needsResponse) {
+      this.updateStats(userId, "limited");
+      this.registerDecision(userId, "limited", confidence);
+      return "limited";
+    }
 
     if (isAggressive) {
-      this.updateLearning(userId, "defense");
+      this.updateStats(userId, "defense");
+      this.registerDecision(userId, "defense", confidence);
       return "defense";
     }
 
     if (isRepeated) {
-      this.updateLearning(userId, "limited");
+      this.updateStats(userId, "limited");
+      this.registerDecision(userId, "limited", confidence);
       return "limited";
     }
 
     if (trustLevel === "low" && confidence < 0.6) {
-      this.updateLearning(userId, "limited");
+      this.updateStats(userId, "limited");
+      this.registerDecision(userId, "limited", confidence);
       return "limited";
     }
 
     if (predictedBehavior) {
 
       if (["escalation","hostile_pattern"].includes(predictedBehavior.type)) {
-        this.updateLearning(userId, "defense");
+        this.updateStats(userId, "defense");
+        this.registerDecision(userId, "defense", confidence);
         return "defense";
       }
 
       if (predictedBehavior.type === "repeat") {
-        this.updateLearning(userId, "limited");
+        this.updateStats(userId, "limited");
+        this.registerDecision(userId, "limited", confidence);
         return "limited";
       }
 
       if (predictedBehavior.type === "emotional_continuation") {
-        this.updateLearning(userId, "empathetic");
+        this.updateStats(userId, "empathetic");
+        this.registerDecision(userId, "empathetic", confidence);
         return "empathetic";
       }
 
       if (predictedBehavior.type === "follow_up") {
         const result = confidence > 0.4 ? "answer" : "ask";
-        this.updateLearning(userId, result);
+        this.updateStats(userId, result);
+        this.registerDecision(userId, result, confidence);
         return result;
       }
 
@@ -395,53 +462,54 @@ class AIDecisionSystem {
     if (emotion) {
 
       if (emotion.polarity === "negative" && emotion.intensity > 0.5) {
-        this.updateLearning(userId, "empathetic");
+        this.updateStats(userId, "empathetic");
+        this.registerDecision(userId, "empathetic", confidence);
         return "empathetic";
       }
 
       if (emotion.hidden && emotion.hidden.length > 0) {
-        this.updateLearning(userId, "ask");
+        this.updateStats(userId, "ask");
+        this.registerDecision(userId, "ask", confidence);
         return "ask";
       }
     }
 
     if (intent === "command") {
-      this.updateLearning(userId, "controlled");
+      this.updateStats(userId, "controlled");
+      this.registerDecision(userId, "controlled", confidence);
       return "controlled";
     }
 
     if (intent === "emotional") {
-      this.updateLearning(userId, "empathetic");
+      this.updateStats(userId, "empathetic");
+      this.registerDecision(userId, "empathetic", confidence);
       return "empathetic";
     }
 
-    if (intent === "question") {
+    if (intent === "question" || intent === "help") {
       const result = confidence > 0.45 ? "answer" : "ask";
-      this.updateLearning(userId, result);
-      return result;
-    }
-
-    if (intent === "help") {
-      const result = confidence > 0.45 ? "answer" : "ask";
-      this.updateLearning(userId, result);
+      this.updateStats(userId, result);
+      this.registerDecision(userId, result, confidence);
       return result;
     }
 
     if (analysis.reason === "unclear") {
-      this.updateLearning(userId, "ask");
+      this.updateStats(userId, "ask");
+      this.registerDecision(userId, "ask", confidence);
       return "ask";
     }
 
     if (contextStrength < 2 && confidence < 0.65) {
-      this.updateLearning(userId, "ask");
+      this.updateStats(userId, "ask");
+      this.registerDecision(userId, "ask", confidence);
       return "ask";
     }
 
     const finalDecision = confidence > 0.4 ? "answer" : "ask";
-
     const safeDecision = this.preventLoop(userId, finalDecision);
 
-    this.updateLearning(userId, safeDecision);
+    this.updateStats(userId, safeDecision);
+    this.registerDecision(userId, safeDecision, confidence);
 
     return safeDecision;
   }
