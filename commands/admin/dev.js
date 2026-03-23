@@ -5,7 +5,6 @@ const fs = require("fs")
 const path = require("path")
 
 function formatUptime(seconds) {
-
   seconds = Math.floor(seconds)
 
   const days = Math.floor(seconds / 86400)
@@ -17,7 +16,6 @@ function formatUptime(seconds) {
 }
 
 function getCPUUsage() {
-
   const cpus = os.cpus()
 
   let idle = 0
@@ -30,29 +28,36 @@ function getCPUUsage() {
     idle += cpu.times.idle
   }
 
-  const usage = 100 - Math.floor((idle / total) * 100)
-
-  return usage
+  return Math.round(100 - (idle / total) * 100)
 }
 
+let cachedCommandCount = null
+
 function countCommands() {
+  try {
+    if (cachedCommandCount !== null) return cachedCommandCount
 
-  const commandsPath = path.join(__dirname, "../../commands")
+    const commandsPath = path.join(__dirname, "../../commands")
 
-  let count = 0
+    let count = 0
 
-  const folders = fs.readdirSync(commandsPath)
+    const folders = fs.readdirSync(commandsPath)
 
-  for (const folder of folders) {
+    for (const folder of folders) {
+      const folderPath = path.join(commandsPath, folder)
 
-    const folderPath = path.join(commandsPath, folder)
+      if (!fs.lstatSync(folderPath).isDirectory()) continue
 
-    const files = fs.readdirSync(folderPath).filter(f => f.endsWith(".js"))
+      const files = fs.readdirSync(folderPath).filter(f => f.endsWith(".js"))
 
-    count += files.length
+      count += files.length
+    }
+
+    cachedCommandCount = count
+    return count
+  } catch {
+    return 0
   }
-
-  return count
 }
 
 module.exports = {
@@ -62,28 +67,39 @@ module.exports = {
     .setDescription("لوحة المطور"),
 
   async execute(interaction) {
+    try {
+      const isOwner = await requireOwner(interaction)
 
-    if (!requireOwner(interaction)) return
+      if (!isOwner) {
+        return interaction.reply({
+          content: "❌ هذا الأمر مخصص لمالك البوت فقط",
+          ephemeral: true,
+        })
+      }
 
-    const uptime = formatUptime(process.uptime())
+      const uptime = formatUptime(process.uptime())
 
-    const servers = interaction.client.guilds.cache.size
-    const users = interaction.client.users.cache.size
-    const channels = interaction.client.channels.cache.size
+      const servers = interaction.client.guilds.cache.size
+      const channels = interaction.client.channels.cache.size
 
-    const gatewayPing = interaction.client.ws.ping
-    const apiPing = Date.now() - interaction.createdTimestamp
+      const users = interaction.client.guilds.cache.reduce(
+        (acc, g) => acc + (g.memberCount || 0),
+        0
+      )
 
-    const cpu = getCPUUsage()
+      const gatewayPing = interaction.client.ws.ping
+      const apiPing = Date.now() - interaction.createdTimestamp
 
-    const commands = countCommands()
+      const cpu = getCPUUsage()
+      const commands = countCommands()
 
-    await interaction.reply(
+      await interaction.reply({
+        content:
 `🛠 لوحة المطور
 
 📊 Discord
 السيرفرات: ${servers}
-المستخدمون: ${users}
+المستخدمون (تقريبي): ${users}
 القنوات: ${channels}
 
 📡 الشبكة
@@ -97,9 +113,16 @@ ${uptime}
 الاستخدام: ${cpu} %
 
 🤖 البوت
-عدد الأوامر: ${commands}`
-    )
+عدد الأوامر: ${commands}`,
+        ephemeral: true
+      })
 
+    } catch (error) {
+      await interaction.reply({
+        content: "❌ حصل خطأ في لوحة المطور",
+        ephemeral: true
+      })
+    }
   }
 
 }

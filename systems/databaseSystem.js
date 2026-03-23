@@ -86,9 +86,11 @@ async function execute(sql, params = []) {
  * Transaction wrapper
  */
 async function transaction(callback) {
-  const client = await databaseManager.getClient();
+  let client;
 
   try {
+
+    client = await databaseManager.getClient();
 
     await client.query("BEGIN");
 
@@ -100,7 +102,9 @@ async function transaction(callback) {
 
   } catch (error) {
 
-    await client.query("ROLLBACK");
+    if (client) {
+      await client.query("ROLLBACK");
+    }
 
     logger.error("DATABASE_TRANSACTION_FAILED", {
       error: error.message
@@ -109,7 +113,9 @@ async function transaction(callback) {
     throw error;
 
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 

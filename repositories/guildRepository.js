@@ -1,5 +1,5 @@
 const databaseSystem = require("../systems/databaseSystem");
-const logger = require("../utils/logger");
+const logger = require("../systems/loggerSystem");
 
 async function getGuild(guildId) {
 
@@ -10,15 +10,17 @@ async function getGuild(guildId) {
             [guildId]
         );
 
-        if (result.length === 0) {
+        if (!result?.rows?.length) {
             return null;
         }
 
-        return result[0];
+        return result.rows[0];
 
     } catch (error) {
 
-        logger.error("Failed to fetch guild:", error);
+        logger.error("GUILD_GET_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }
@@ -33,11 +35,13 @@ async function createGuild(guildId) {
             [guildId]
         );
 
-        return result[0];
+        return result.rows[0] || null;
 
     } catch (error) {
 
-        logger.error("Failed to create guild:", error);
+        logger.error("GUILD_CREATE_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }
@@ -63,11 +67,13 @@ async function updateGuildSetting(guildId, field, value) {
             [value, guildId]
         );
 
-        return result[0];
+        return result.rows[0] || null;
 
     } catch (error) {
 
-        logger.error("Failed to update guild setting:", error);
+        logger.error("GUILD_UPDATE_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }

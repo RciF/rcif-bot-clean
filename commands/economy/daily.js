@@ -1,46 +1,58 @@
 const { SlashCommandBuilder } = require("discord.js")
-const dataManager = require("../../utils/dataManager")
-const cooldownSystem = require("../../systems/commandCooldownSystem")
+const economyRepository = require("../../repositories/economyRepository")
+
+const DAILY_COOLDOWN = 86400000 // 24 ساعة
 
 module.exports = {
+  data: new SlashCommandBuilder()
+    .setName("daily")
+    .setDescription("الحصول على المكافأة اليومية"),
 
-data: new SlashCommandBuilder()
-.setName("daily")
-.setDescription("الحصول على المكافأة اليومية"),
+  async execute(interaction) {
+    try {
+      const userId = interaction.user.id
 
-async execute(interaction) {
+      let user = await economyRepository.getUser(userId)
 
-const userId = interaction.user.id
+      if (!user) {
+        user = await economyRepository.createUser(userId)
+      }
 
-const remaining = cooldownSystem.checkCooldown(userId, "daily", 86400)
+      const now = Date.now()
+      const lastDaily = user.last_daily || 0
 
-if (remaining > 0) {
+      if (now - lastDaily < DAILY_COOLDOWN) {
 
-return interaction.reply({
-content: `⏳ يمكنك استخدام الأمر بعد **${remaining} ثانية**`,
-ephemeral: true
-})
+        const remaining = Math.ceil(
+          (DAILY_COOLDOWN - (now - lastDaily)) / (1000 * 60 * 60)
+        )
 
-}
+        return interaction.reply({
+          content: `⏳ يمكنك استخدام الأمر بعد **${remaining} ساعة**`,
+          ephemeral: true
+        })
+      }
 
-let users = dataManager.load("users.json")
+      const reward = 100
 
-if (!users[userId]) {
-users[userId] = {
-coins: 0
-}
-}
+      user.coins = (user.coins || 0) + reward
+      user.last_daily = now
 
-const reward = 100
+      await economyRepository.updateUser(userId, user)
 
-users[userId].coins += reward
+      await interaction.reply({
+        content: `💰 حصلت على **${reward}** كوين كمكافأة يومية!`
+      })
 
-dataManager.save("users.json", users)
+    } catch (error) {
 
-await interaction.reply({
-content: `💰 حصلت على **${reward}** كوين كمكافأة يومية!`
-})
+      console.error("DAILY_COMMAND_ERROR", error)
 
-}
+      await interaction.reply({
+        content: "❌ حصل خطأ في المكافأة اليومية",
+        ephemeral: true
+      })
 
+    }
+  }
 }

@@ -1,5 +1,5 @@
 const databaseSystem = require("./databaseSystem");
-const logger = require("../utils/logger");
+const logger = require("./loggerSystem");
 
 async function getDatabaseStats() {
 
@@ -11,15 +11,17 @@ async function getDatabaseStats() {
         const warnings = await databaseSystem.query("SELECT COUNT(*) FROM warnings");
 
         return {
-            users: users[0].count,
-            guilds: guilds[0].count,
-            xpRecords: xp[0].count,
-            warnings: warnings[0].count
+            users: users.rows[0]?.count || 0,
+            guilds: guilds.rows[0]?.count || 0,
+            xpRecords: xp.rows[0]?.count || 0,
+            warnings: warnings.rows[0]?.count || 0
         };
 
     } catch (error) {
 
-        logger.error("Database stats failed:", error);
+        logger.error("DATABASE_STATS_FAILED", {
+            error: error.message
+        });
 
         return null;
 

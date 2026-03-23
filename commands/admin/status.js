@@ -7,12 +7,17 @@ module.exports = {
     .setDescription("عرض حالة البوت"),
 
   async execute(interaction) {
+    try {
+      const status = statusSystem.getStatus?.() || {}
 
-    const status = statusSystem.getStatus()
+      const bot = status.bot || "unknown"
+      const time = status.time || new Date().toLocaleString()
 
-    await interaction.reply(
-      `🤖 Bot: ${status.bot}\n🕒 Time: ${status.time}`
-    )
-
+      await interaction.reply(
+        `🤖 Bot: ${bot}\n🕒 Time: ${time}`
+      )
+    } catch (error) {
+      await interaction.reply("❌ حصل خطأ في عرض الحالة")
+    }
   },
 }

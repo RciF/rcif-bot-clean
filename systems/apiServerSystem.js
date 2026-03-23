@@ -66,13 +66,16 @@ function startApiServer(client) {
     const database = await checkDatabaseHealth()
     const repositories = checkRepositories()
 
+    const guilds = client?.guilds?.cache?.size || 0
+    const users = client?.users?.cache?.size || 0
+
     res.json({
-      bot: client.user ? client.user.tag : "not ready",
-      status: client.isReady() ? "online" : "starting",
+      bot: client?.user ? client.user.tag : "not ready",
+      status: client?.isReady?.() ? "online" : "starting",
       uptime: process.uptime(),
       memory: process.memoryUsage().rss,
-      guilds: client.guilds.cache.size,
-      users: client.users.cache.size,
+      guilds,
+      users,
       database,
       repositories
     })

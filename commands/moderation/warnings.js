@@ -13,21 +13,37 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
   async execute(interaction) {
+    try {
+      if (!interaction.guild) {
+        return interaction.reply({
+          content: "❌ هذا الأمر داخل السيرفر فقط",
+          ephemeral: true
+        })
+      }
 
-    const member = interaction.options.getUser("العضو")
-    const warnings = dataManager.load("warnings.json")
+      const user = interaction.options.getUser("العضو")
+      const warnings = dataManager.load("warnings.json") || {}
 
-    if (!warnings[member.id] || warnings[member.id].length === 0) {
-      return interaction.reply("لا يوجد تحذيرات لهذا العضو")
+      if (!warnings[user.id] || warnings[user.id].length === 0) {
+        return interaction.reply({
+          content: "لا يوجد تحذيرات لهذا العضو",
+          ephemeral: true
+        })
+      }
+
+      let text = `⚠️ تحذيرات ${user.username}:\n\n`
+
+      warnings[user.id].forEach((w, i) => {
+        text += `${i + 1}. ${w.reason}\n`
+      })
+
+      await interaction.reply(text)
+
+    } catch (error) {
+      await interaction.reply({
+        content: "❌ حصل خطأ في عرض التحذيرات",
+        ephemeral: true
+      })
     }
-
-    let text = `⚠️ تحذيرات ${member.username}:\n\n`
-
-    warnings[member.id].forEach((w, i) => {
-      text += `${i + 1}. ${w.reason}\n`
-    })
-
-    await interaction.reply(text)
-
   },
 }

@@ -1,5 +1,5 @@
 const databaseManager = require("../utils/databaseManager");
-const logger = require("../utils/logger");
+const logger = require("./loggerSystem");
 
 async function checkDatabaseHealth() {
 
@@ -9,12 +9,14 @@ async function checkDatabaseHealth() {
 
         return {
             status: "ok",
-            time: result.now
+            time: result?.now || result?.time || result
         };
 
     } catch (error) {
 
-        logger.error("Database health check failed:", error);
+        logger.error("DATABASE_HEALTH_CHECK_FAILED", {
+            error: error.message
+        });
 
         return {
             status: "error"

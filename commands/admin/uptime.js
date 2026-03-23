@@ -7,10 +7,12 @@ module.exports = {
     .setDescription("عرض وقت تشغيل البوت"),
 
   async execute(interaction) {
+    try {
+      const uptime = uptimeSystem.getUptime?.() || 0
 
-    const uptime = uptimeSystem.getUptime()
-
-    await interaction.reply(`⏱ Uptime: ${uptime} seconds`)
-
+      await interaction.reply(`⏱ Uptime: ${uptime} seconds`)
+    } catch (error) {
+      await interaction.reply("❌ حصل خطأ في حساب وقت التشغيل")
+    }
   },
 }

@@ -1,5 +1,5 @@
 const repositories = require("./repositoryIndex");
-const logger = require("../utils/logger");
+const logger = require("./loggerSystem");
 
 function checkRepositories() {
 
@@ -14,7 +14,9 @@ function checkRepositories() {
 
     } catch (error) {
 
-        logger.error("Repository health check failed:", error);
+        logger.error("REPOSITORY_HEALTH_CHECK_FAILED", {
+            error: error.message
+        });
 
         return {
             status: "error"

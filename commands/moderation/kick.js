@@ -17,15 +17,33 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
 
   async execute(interaction) {
+    try {
+      if (!interaction.guild) {
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+      }
 
-    const member = interaction.options.getUser("العضو")
-    const reason = interaction.options.getString("السبب") || "بدون سبب"
+      const user = interaction.options.getUser("العضو")
+      const reason = interaction.options.getString("السبب") || "بدون سبب"
 
-    const target = await interaction.guild.members.fetch(member.id)
+      const member = await interaction.guild.members.fetch(user.id).catch(() => null)
 
-    await target.kick(reason)
+      if (!member) {
+        return interaction.reply({ content: "❌ لم يتم العثور على العضو", ephemeral: true })
+      }
 
-    await interaction.reply(`👢 تم طرد ${member.username}\nالسبب: ${reason}`)
+      if (!member.kickable) {
+        return interaction.reply({ content: "❌ لا يمكن طرد هذا العضو", ephemeral: true })
+      }
 
+      await member.kick(reason)
+
+      await interaction.reply(`👢 تم طرد ${user.username}\nالسبب: ${reason}`)
+
+    } catch (error) {
+      await interaction.reply({
+        content: "❌ حصل خطأ في الطرد",
+        ephemeral: true
+      })
+    }
   },
 }

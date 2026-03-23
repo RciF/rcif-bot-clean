@@ -7,10 +7,19 @@ module.exports = {
     .setDescription("اختبار صلاحية مالك البوت"),
 
   async execute(interaction) {
+    try {
+      const isOwner = await requireOwner(interaction)
 
-    if (!requireOwner(interaction)) return
+      if (!isOwner) {
+        return interaction.reply({
+          content: "❌ هذا الأمر مخصص لمالك البوت فقط",
+          ephemeral: true,
+        })
+      }
 
-    await interaction.reply("✅ تم التحقق من صلاحية مالك البوت")
-
-  }
+      await interaction.reply("✅ تم التحقق من صلاحية مالك البوت")
+    } catch (error) {
+      await interaction.reply("❌ حصل خطأ في التحقق من الصلاحيات")
+    }
+  },
 }

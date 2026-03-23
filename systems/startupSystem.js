@@ -21,7 +21,7 @@ async function startupSystem() {
 
     logger.info("DATABASE_CONNECTING");
 
-    databaseManager.initDatabase(dbUrl);
+    await databaseManager.initDatabase(dbUrl);
 
     const dbTime = await databaseManager.testConnection();
 

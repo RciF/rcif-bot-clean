@@ -1,5 +1,5 @@
 const databaseSystem = require("../systems/databaseSystem");
-const logger = require("../utils/logger");
+const logger = require("../systems/loggerSystem");
 
 async function getXP(userId, guildId) {
 

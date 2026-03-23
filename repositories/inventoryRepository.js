@@ -1,5 +1,6 @@
 const databaseSystem = require("../systems/databaseSystem");
-const logger = require("../utils/logger");
+const databaseManager = require("../utils/databaseManager");
+const logger = require("../systems/loggerSystem");
 
 async function getInventory(userId, guildId) {
     try {
@@ -8,10 +9,12 @@ async function getInventory(userId, guildId) {
             [userId, guildId]
         );
 
-        return result || [];
+        return result.rows || [];
 
     } catch (error) {
-        logger.error("Failed to fetch inventory:", error);
+        logger.error("INVENTORY_GET_FAILED", {
+            error: error.message
+        });
         throw error;
     }
 }
@@ -27,16 +30,18 @@ async function addItem(userId, guildId, itemId, quantity = 1) {
             [userId, guildId, itemId, quantity]
         );
 
-        return result[0];
+        return result.rows[0] || null;
 
     } catch (error) {
-        logger.error("Failed to add item:", error);
+        logger.error("INVENTORY_ADD_FAILED", {
+            error: error.message
+        });
         throw error;
     }
 }
 
 async function removeItem(userId, guildId, itemId, quantity = 1) {
-    const client = await databaseSystem.getClient();
+    const client = await databaseManager.getClient();
 
     try {
         await client.query("BEGIN");
@@ -70,7 +75,9 @@ async function removeItem(userId, guildId, itemId, quantity = 1) {
 
     } catch (error) {
         await client.query("ROLLBACK");
-        logger.error("Failed to remove item:", error);
+        logger.error("INVENTORY_REMOVE_FAILED", {
+            error: error.message
+        });
         throw error;
     } finally {
         client.release();
@@ -87,7 +94,9 @@ async function clearInventory(userId, guildId) {
         return true;
 
     } catch (error) {
-        logger.error("Failed to clear inventory:", error);
+        logger.error("INVENTORY_CLEAR_FAILED", {
+            error: error.message
+        });
         throw error;
     }
 }

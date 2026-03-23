@@ -1,5 +1,5 @@
 const databaseSystem = require("../systems/databaseSystem");
-const logger = require("../utils/logger");
+const logger = require("../systems/loggerSystem");
 
 async function trackCommand(command) {
 
@@ -14,11 +14,13 @@ async function trackCommand(command) {
             [command]
         );
 
-        return result[0];
+        return result.rows[0] || null;
 
     } catch (error) {
 
-        logger.error("Failed to track command:", error);
+        logger.error("ANALYTICS_TRACK_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }
@@ -32,11 +34,13 @@ async function getAnalytics() {
             "SELECT * FROM analytics ORDER BY count DESC"
         );
 
-        return result;
+        return result.rows || [];
 
     } catch (error) {
 
-        logger.error("Failed to fetch analytics:", error);
+        logger.error("ANALYTICS_FETCH_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }

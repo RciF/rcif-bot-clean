@@ -1,5 +1,6 @@
 function isAdmin(member) {
-  return member.permissions.has("Administrator")
+  if (!member || !member.permissions) return false;
+  return member.permissions.has("Administrator");
 }
 
 module.exports = {

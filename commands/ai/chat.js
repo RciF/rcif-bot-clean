@@ -12,14 +12,24 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    try {
+      const question = interaction.options.getString("سؤال")
 
-    const question = interaction.options.getString("سؤال")
+      await interaction.deferReply()
 
-    await interaction.deferReply()
+      const answer = await aiHandler.askAI?.(interaction.user.id, question)
 
-    const answer = await aiHandler.askAI(interaction.user.id, question)
+      if (!answer) {
+        return interaction.editReply("❌ ماقدرت أجيب رد حالياً")
+      }
 
-    await interaction.editReply(`🤖 ${answer}`)
-
+      await interaction.editReply(`🤖 ${answer}`)
+    } catch (error) {
+      try {
+        await interaction.editReply("❌ حصل خطأ في الذكاء الاصطناعي")
+      } catch {
+        await interaction.reply("❌ حصل خطأ في الذكاء الاصطناعي")
+      }
+    }
   },
 }

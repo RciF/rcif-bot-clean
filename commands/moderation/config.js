@@ -29,17 +29,37 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    try {
+      if (!interaction.guild) {
+        return interaction.reply({
+          content: "❌ هذا الأمر داخل السيرفر فقط",
+          ephemeral: true
+        })
+      }
 
-    if (!commandGuardSystem.requireAdmin(interaction)) return
+      const isAdmin = await commandGuardSystem.requireAdmin(interaction)
 
-    const system = interaction.options.getString("system")
-    const state = interaction.options.getString("state")
+      if (!isAdmin) {
+        return interaction.reply({
+          content: "❌ هذا الأمر للإدارة فقط",
+          ephemeral: true
+        })
+      }
 
-    const enabled = state === "on"
+      const system = interaction.options.getString("system")
+      const state = interaction.options.getString("state")
 
-    configSystem.updateSystem(interaction.guild.id, system, enabled)
+      const enabled = state === "on"
 
-    await interaction.reply(`✅ تم تحديث إعداد **${system}** إلى **${state}**`)
+      await configSystem.updateSystem?.(interaction.guild.id, system, enabled)
 
-  }
+      await interaction.reply(`✅ تم تحديث إعداد **${system}** إلى **${state}**`)
+
+    } catch (error) {
+      await interaction.reply({
+        content: "❌ حصل خطأ في الإعدادات",
+        ephemeral: true
+      })
+    }
+  },
 }

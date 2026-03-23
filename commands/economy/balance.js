@@ -1,27 +1,38 @@
-const { SlashCommandBuilder } = require("discord.js")
-const economySystem = require("../../systems/economySystem")
-const dataManager = require("../../utils/dataManager")
+const { SlashCommandBuilder } = require("discord.js");
+const economyRepository = require("../../repositories/economyRepository");
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("رصيدي")
+    .setName("balance")
     .setDescription("عرض رصيدك"),
 
   async execute(interaction) {
+    try {
 
-    if (!economySystem.ensureEconomyEnabled(interaction)) return
+      const userId = interaction.user.id;
 
-    const userId = interaction.user.id
+      let user = await economyRepository.getUser(userId);
 
-    let users = dataManager.load("users.json")
+      if (!user) {
+        user = await economyRepository.createUser(userId);
+      }
 
-    if (!users[userId]) {
-      users[userId] = { coins: 0 }
+      const coins = user.coins || 0;
+
+      await interaction.reply({
+        content: `💰 رصيدك: **${coins}** كوين`,
+        ephemeral: false
+      });
+
+    } catch (error) {
+
+      console.error("BALANCE_COMMAND_ERROR", error);
+
+      await interaction.reply({
+        content: "❌ حدث خطأ",
+        ephemeral: true
+      });
+
     }
-
-    const coins = users[userId].coins || 0
-
-    await interaction.reply(`💰 رصيدك: ${coins} كوين`)
-
-  },
-}
+  }
+};

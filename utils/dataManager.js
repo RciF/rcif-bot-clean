@@ -1,64 +1,19 @@
-const fs = require("fs")
-const path = require("path")
+const warningRepository = require("../repositories/warningRepository");
 
-function getFilePath(file) {
-
-  if (!file) {
-    throw new Error("DATA_FILE_REQUIRED")
-  }
-
-  return path.join(__dirname, "../data", file)
-
+async function addWarning(guildId, userId, moderatorId, reason) {
+  return await warningRepository.addWarning(guildId, userId, moderatorId, reason);
 }
 
-function load(file) {
-
-  try {
-
-    const filePath = getFilePath(file)
-
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify({}, null, 2))
-    }
-
-    const raw = fs.readFileSync(filePath, "utf8")
-
-    if (!raw || raw.trim() === "") {
-      return {}
-    }
-
-    return JSON.parse(raw)
-
-  } catch (error) {
-
-    console.error("DATA_LOAD_ERROR", error)
-
-    return {}
-
-  }
-
+async function getWarnings(guildId, userId) {
+  return await warningRepository.getWarnings(guildId, userId);
 }
 
-function save(file, data) {
-
-  try {
-
-    const filePath = getFilePath(file)
-
-    fs.writeFileSync(
-      filePath,
-      JSON.stringify(data || {}, null, 2)
-    )
-
-  } catch (error) {
-
-    console.error("DATA_SAVE_ERROR", error)
-
-  }
-
+async function clearWarnings(guildId, userId) {
+  return await warningRepository.clearWarnings(guildId, userId);
 }
 
 module.exports = {
-  load,
-  save
-}
+  addWarning,
+  getWarnings,
+  clearWarnings
+};

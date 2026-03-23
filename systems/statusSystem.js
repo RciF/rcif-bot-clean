@@ -8,10 +8,13 @@ function getStatus(client) {
 
   const memoryUsage = process.memoryUsage()
 
+  const guilds = client?.guilds?.cache?.size || 0
+  const users = client?.users?.cache?.size || 0
+
   return {
-    bot: client.user ? client.user.tag : "not ready",
-    guilds: client.guilds.cache.size,
-    users: client.users.cache.size,
+    bot: client?.user ? client.user.tag : "not ready",
+    guilds,
+    users,
     uptime: getUptime(),
     memory: memoryUsage.rss,
 
@@ -19,12 +22,12 @@ function getStatus(client) {
     memoryFormatted: formatBytes(memoryUsage.rss),
 
     stats: {
-      guilds: client.guilds.cache.size,
-      users: client.users.cache.size,
-      channels: client.channels?.cache?.size || 0
+      guilds,
+      users,
+      channels: client?.channels?.cache?.size || 0
     },
 
-    ready: !!client.user,
+    ready: !!client?.user,
 
     timestamp: Date.now()
   }

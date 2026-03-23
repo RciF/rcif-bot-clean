@@ -1,48 +1,23 @@
-const dataManager = require("./dataManager")
+const guildRepository = require("../repositories/guildRepository");
 
-function getGuild(guildId) {
-
-  if (!guildId) return null
-
-  const guilds = dataManager.load("guilds.json")
-
-  if (!guilds[guildId]) {
-
-    guilds[guildId] = {
-      prefix: "/",
-      aiEnabled: true,
-      xpEnabled: true,
-      economyEnabled: true
-    }
-
-    dataManager.save("guilds.json", guilds)
-  }
-
-  return guilds[guildId]
+async function getGuild(guildId) {
+  if (!guildId) return null;
+  return await guildRepository.getOrCreateGuild(guildId);
 }
 
-function updateGuild(guildId, data) {
+async function updateGuild(guildId, data) {
+  if (!guildId || !data) return null;
 
-  if (!guildId) return null
-  if (!data || typeof data !== "object") return null
+  let result = null;
 
-  const guilds = dataManager.load("guilds.json")
-
-  if (!guilds[guildId]) {
-    guilds[guildId] = {}
+  for (const key in data) {
+    result = await guildRepository.updateGuildSetting(guildId, key, data[key]);
   }
 
-  guilds[guildId] = {
-    ...guilds[guildId],
-    ...data
-  }
-
-  dataManager.save("guilds.json", guilds)
-
-  return guilds[guildId]
+  return result;
 }
 
 module.exports = {
   getGuild,
   updateGuild
-}
+};

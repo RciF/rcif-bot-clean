@@ -1,5 +1,5 @@
 const databaseSystem = require("../systems/databaseSystem");
-const logger = require("../utils/logger");
+const logger = require("../systems/loggerSystem");
 
 async function addWarning(guildId, userId, moderatorId, reason) {
 
@@ -12,11 +12,13 @@ async function addWarning(guildId, userId, moderatorId, reason) {
             [guildId, userId, moderatorId, reason]
         );
 
-        return result[0];
+        return result.rows[0] || null;
 
     } catch (error) {
 
-        logger.error("Failed to add warning:", error);
+        logger.error("WARNING_ADD_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }
@@ -33,11 +35,13 @@ async function getWarnings(guildId, userId) {
             [guildId, userId]
         );
 
-        return result;
+        return result.rows || [];
 
     } catch (error) {
 
-        logger.error("Failed to fetch warnings:", error);
+        logger.error("WARNING_FETCH_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }
@@ -55,7 +59,9 @@ async function clearWarnings(guildId, userId) {
 
     } catch (error) {
 
-        logger.error("Failed to clear warnings:", error);
+        logger.error("WARNING_CLEAR_FAILED", {
+            error: error.message
+        });
         throw error;
 
     }

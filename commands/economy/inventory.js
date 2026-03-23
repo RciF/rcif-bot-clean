@@ -1,51 +1,56 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
-const inventorySystem = require("../../systems/inventorySystem")
-const shopSystem = require("../../systems/shopSystem")
+const inventoryRepository = require("../../repositories/inventoryRepository")
 
 module.exports = {
+  data: new SlashCommandBuilder()
+    .setName("inventory")
+    .setDescription("عرض العناصر التي تملكها"),
 
-data: new SlashCommandBuilder()
-.setName("inventory")
-.setDescription("عرض العناصر التي تملكها"),
+  async execute(interaction) {
+    try {
 
-async execute(interaction) {
+      if (!interaction.guild) {
+        return interaction.reply({
+          content: "❌ هذا الأمر داخل السيرفر فقط",
+          ephemeral: true
+        })
+      }
 
-const userId = interaction.user.id
+      const userId = interaction.user.id
+      const guildId = interaction.guild.id
 
-const items = inventorySystem.getInventory(userId)
+      // ❌ احذف optional chaining
+      const items = await inventoryRepository.getInventory(userId, guildId)
 
-if (items.length === 0) {
+      if (!items || items.length === 0) {
+        return interaction.reply({
+          content: "📦 حقيبتك فارغة.",
+          ephemeral: true
+        })
+      }
 
-return interaction.reply({
-content: "📦 حقيبتك فارغة.",
-ephemeral: true
-})
+      const description = items
+        .map(item => `• ${item.item_id} × ${item.quantity}`)
+        .join("\n")
 
-}
+      const embed = new EmbedBuilder()
+        .setTitle("🎒 حقيبتك")
+        .setDescription(description)
+        .setColor(0x00aeff)
 
-const shopItems = shopSystem.getShopItems()
+      await interaction.reply({
+        embeds: [embed]
+      })
 
-let description = ""
+    } catch (error) {
 
-for (const itemId of items) {
+      console.error("INVENTORY_COMMAND_ERROR", error)
 
-const item = shopItems.find(i => i.id === itemId)
+      await interaction.reply({
+        content: "❌ حصل خطأ في عرض الحقيبة",
+        ephemeral: true
+      })
 
-if (item) {
-description += `• ${item.name}\n`
-}
-
-}
-
-const embed = new EmbedBuilder()
-.setTitle("🎒 حقيبتك")
-.setDescription(description)
-.setColor(0x00aeff)
-
-await interaction.reply({
-embeds: [embed]
-})
-
-}
-
+    }
+  }
 }

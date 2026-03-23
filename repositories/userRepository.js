@@ -1,5 +1,6 @@
 const databaseSystem = require("../systems/databaseSystem");
-const logger = require("../utils/logger");
+const databaseManager = require("../utils/databaseManager");
+const logger = require("../systems/loggerSystem");
 
 async function getUser(userId, guildId) {
     try {
@@ -8,14 +9,16 @@ async function getUser(userId, guildId) {
             [userId, guildId]
         );
 
-        if (!result || result.length === 0) {
+        if (!result?.rows?.length) {
             return null;
         }
 
-        return result[0];
+        return result.rows[0];
 
     } catch (error) {
-        logger.error("Failed to fetch user:", error);
+        logger.error("USER_GET_FAILED", {
+            error: error.message
+        });
         throw error;
     }
 }
@@ -30,14 +33,16 @@ async function createUser(userId, guildId) {
             [userId, guildId]
         );
 
-        if (!result || result.length === 0) {
+        if (!result?.rows?.length) {
             return await getUser(userId, guildId);
         }
 
-        return result[0];
+        return result.rows[0];
 
     } catch (error) {
-        logger.error("Failed to create user:", error);
+        logger.error("USER_CREATE_FAILED", {
+            error: error.message
+        });
         throw error;
     }
 }
@@ -59,16 +64,18 @@ async function updateCoins(userId, guildId, newAmount) {
             [newAmount, userId, guildId]
         );
 
-        return result[0];
+        return result.rows[0] || null;
 
     } catch (error) {
-        logger.error("Failed to update coins:", error);
+        logger.error("USER_UPDATE_COINS_FAILED", {
+            error: error.message
+        });
         throw error;
     }
 }
 
 async function addCoins(userId, guildId, amount) {
-    const client = await databaseSystem.getClient();
+    const client = await databaseManager.getClient();
 
     try {
         await client.query("BEGIN");
@@ -83,11 +90,13 @@ async function addCoins(userId, guildId, amount) {
 
         await client.query("COMMIT");
 
-        return result.rows[0];
+        return result.rows[0] || null;
 
     } catch (error) {
         await client.query("ROLLBACK");
-        logger.error("Failed to add coins:", error);
+        logger.error("USER_ADD_COINS_FAILED", {
+            error: error.message
+        });
         throw error;
     } finally {
         client.release();
@@ -101,16 +110,18 @@ async function updateXP(userId, guildId, newXP) {
             [newXP, userId, guildId]
         );
 
-        return result[0];
+        return result.rows[0] || null;
 
     } catch (error) {
-        logger.error("Failed to update XP:", error);
+        logger.error("USER_UPDATE_XP_FAILED", {
+            error: error.message
+        });
         throw error;
     }
 }
 
 async function addXP(userId, guildId, amount) {
-    const client = await databaseSystem.getClient();
+    const client = await databaseManager.getClient();
 
     try {
         await client.query("BEGIN");
@@ -125,11 +136,13 @@ async function addXP(userId, guildId, amount) {
 
         await client.query("COMMIT");
 
-        return result.rows[0];
+        return result.rows[0] || null;
 
     } catch (error) {
         await client.query("ROLLBACK");
-        logger.error("Failed to add XP:", error);
+        logger.error("USER_ADD_XP_FAILED", {
+            error: error.message
+        });
         throw error;
     } finally {
         client.release();

@@ -17,15 +17,33 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
 
   async execute(interaction) {
+    try {
+      if (!interaction.guild) {
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+      }
 
-    const member = interaction.options.getUser("العضو")
-    const reason = interaction.options.getString("السبب") || "بدون سبب"
+      const user = interaction.options.getUser("العضو")
+      const reason = interaction.options.getString("السبب") || "بدون سبب"
 
-    const target = await interaction.guild.members.fetch(member.id)
+      const member = await interaction.guild.members.fetch(user.id).catch(() => null)
 
-    await target.ban({ reason })
+      if (!member) {
+        return interaction.reply({ content: "❌ لم يتم العثور على العضو", ephemeral: true })
+      }
 
-    await interaction.reply(`🚫 تم حظر ${member.username}\nالسبب: ${reason}`)
+      if (!member.bannable) {
+        return interaction.reply({ content: "❌ لا يمكن حظر هذا العضو", ephemeral: true })
+      }
 
+      await member.ban({ reason })
+
+      await interaction.reply(`🚫 تم حظر ${user.username}\nالسبب: ${reason}`)
+
+    } catch (error) {
+      await interaction.reply({
+        content: "❌ حصل خطأ في الحظر",
+        ephemeral: true
+      })
+    }
   },
 }
