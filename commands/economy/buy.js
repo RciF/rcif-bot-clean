@@ -19,9 +19,6 @@ module.exports = {
     ),
 
   async execute(interaction) {
-
-    const client = await database.getClient()
-
     try {
 
       if (!interaction.guild) {
@@ -44,39 +41,33 @@ module.exports = {
         })
       }
 
-      await client.query("BEGIN")
+      await database.transaction(async (client) => {
 
-      // ✅ خصم مشروط (يمنع السبام)
-      const debit = await client.query(
-        `
-        UPDATE economy_users
-        SET coins = coins - $1
-        WHERE user_id = $2 AND coins >= $1
-        RETURNING coins;
-        `,
-        [item.price, userId]
-      )
+        const debit = await client.query(
+          `
+          UPDATE economy_users
+          SET coins = coins - $1
+          WHERE user_id = $2 AND coins >= $1
+          RETURNING coins;
+          `,
+          [item.price, userId]
+        )
 
-      if (!debit.rows.length) {
-        await client.query("ROLLBACK")
-        return interaction.reply({
-          content: "❌ ليس لديك كوين كافي",
-          ephemeral: true
-        })
-      }
+        if (!debit.rows.length) {
+          throw new Error("NO_MONEY")
+        }
 
-      // ✅ إضافة للانفنتوري
-      await client.query(
-        `
-        INSERT INTO inventory (user_id, guild_id, item_id, quantity)
-        VALUES ($1, $2, $3, 1)
-        ON CONFLICT (user_id, guild_id, item_id)
-        DO UPDATE SET quantity = inventory.quantity + 1;
-        `,
-        [userId, guildId, item.id]
-      )
+        await client.query(
+          `
+          INSERT INTO inventory (user_id, guild_id, item_id, quantity)
+          VALUES ($1, $2, $3, 1)
+          ON CONFLICT (user_id, guild_id, item_id)
+          DO UPDATE SET quantity = inventory.quantity + 1;
+          `,
+          [userId, guildId, item.id]
+        )
 
-      await client.query("COMMIT")
+      })
 
       await interaction.reply(
         `🛒 اشتريت **${item.name}** مقابل **${item.price}** كوين`
@@ -84,7 +75,12 @@ module.exports = {
 
     } catch (error) {
 
-      await client.query("ROLLBACK")
+      if (error.message === "NO_MONEY") {
+        return interaction.reply({
+          content: "❌ ليس لديك كوين كافي",
+          ephemeral: true
+        })
+      }
 
       console.error("BUY_ERROR", error)
 
@@ -93,8 +89,6 @@ module.exports = {
         ephemeral: true
       })
 
-    } finally {
-      client.release()
     }
   }
 }
