@@ -1,6 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js")
-const economyRepository = require("../../repositories/economyRepository")
-const inventoryRepository = require("../../repositories/inventoryRepository")
+const database = require("../../systems/databaseSystem")
 
 const shopItems = {
   fishing_rod: { id: "fishing_rod", name: "🎣 صنارة", price: 300 },
@@ -20,6 +19,9 @@ module.exports = {
     ),
 
   async execute(interaction) {
+
+    const client = await database.getClient()
+
     try {
 
       if (!interaction.guild) {
@@ -42,21 +44,39 @@ module.exports = {
         })
       }
 
-      let user = await economyRepository.getUser(userId)
-      if (!user) user = await economyRepository.createUser(userId)
+      await client.query("BEGIN")
 
-      if ((user.coins || 0) < item.price) {
+      // ✅ خصم مشروط (يمنع السبام)
+      const debit = await client.query(
+        `
+        UPDATE economy_users
+        SET coins = coins - $1
+        WHERE user_id = $2 AND coins >= $1
+        RETURNING coins;
+        `,
+        [item.price, userId]
+      )
+
+      if (!debit.rows.length) {
+        await client.query("ROLLBACK")
         return interaction.reply({
           content: "❌ ليس لديك كوين كافي",
           ephemeral: true
         })
       }
 
-      // ✅ خصم آمن
-      await economyRepository.removeCoins(userId, item.price)
-
       // ✅ إضافة للانفنتوري
-      await inventoryRepository.addItem(userId, guildId, item.id, 1)
+      await client.query(
+        `
+        INSERT INTO inventory (user_id, guild_id, item_id, quantity)
+        VALUES ($1, $2, $3, 1)
+        ON CONFLICT (user_id, guild_id, item_id)
+        DO UPDATE SET quantity = inventory.quantity + 1;
+        `,
+        [userId, guildId, item.id]
+      )
+
+      await client.query("COMMIT")
 
       await interaction.reply(
         `🛒 اشتريت **${item.name}** مقابل **${item.price}** كوين`
@@ -64,13 +84,17 @@ module.exports = {
 
     } catch (error) {
 
-      console.error("BUY_COMMAND_ERROR", error)
+      await client.query("ROLLBACK")
+
+      console.error("BUY_ERROR", error)
 
       await interaction.reply({
-        content: "❌ حصل خطأ في عملية الشراء",
+        content: "❌ حصل خطأ في الشراء",
         ephemeral: true
       })
 
+    } finally {
+      client.release()
     }
   }
 }

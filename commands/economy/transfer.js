@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js")
-const economyRepository = require("../../repositories/economyRepository")
+const database = require("../../systems/databaseSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,6 +17,9 @@ module.exports = {
     ),
 
   async execute(interaction) {
+
+    const client = await database.getClient()
+
     try {
 
       const senderId = interaction.user.id
@@ -31,19 +34,36 @@ module.exports = {
         return interaction.reply({ content: "❌ لا يمكنك التحويل لنفسك", ephemeral: true })
       }
 
-      let sender = await economyRepository.getUser(senderId)
-      if (!sender) sender = await economyRepository.createUser(senderId)
+      await client.query("BEGIN")
 
-      let target = await economyRepository.getUser(targetUser.id)
-      if (!target) target = await economyRepository.createUser(targetUser.id)
+      // ✅ خصم آمن (ما ينقص إلا إذا فيه رصيد)
+      const debit = await client.query(
+        `
+        UPDATE economy_users
+        SET coins = coins - $1
+        WHERE user_id = $2 AND coins >= $1
+        RETURNING coins;
+        `,
+        [amount, senderId]
+      )
 
-      if ((sender.coins || 0) < amount) {
+      if (!debit.rows.length) {
+        await client.query("ROLLBACK")
         return interaction.reply({ content: "❌ ليس لديك كوين كافي", ephemeral: true })
       }
 
-      // ✅ الأفضل (آمن)
-      await economyRepository.removeCoins(senderId, amount)
-      await economyRepository.addCoins(targetUser.id, amount)
+      // ✅ إضافة للمستلم
+      await client.query(
+        `
+        INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
+        VALUES ($1, $2, 0, 0, $3)
+        ON CONFLICT (user_id)
+        DO UPDATE SET coins = economy_users.coins + $2;
+        `,
+        [targetUser.id, amount, []]
+      )
+
+      await client.query("COMMIT")
 
       await interaction.reply(
         `💸 تم تحويل **${amount}** كوين إلى ${targetUser.username}`
@@ -51,13 +71,17 @@ module.exports = {
 
     } catch (error) {
 
-      console.error("TRANSFER_COMMAND_ERROR", error)
+      await client.query("ROLLBACK")
+
+      console.error("TRANSFER_ERROR", error)
 
       await interaction.reply({
         content: "❌ حصل خطأ في التحويل",
         ephemeral: true
       })
 
+    } finally {
+      client.release()
     }
   },
 }

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js")
-const economyRepository = require("../../repositories/economyRepository")
+const database = require("../../systems/databaseSystem")
 
 const WORK_COOLDOWN = 60 * 60 * 1000 // ساعة
 
@@ -12,44 +12,37 @@ module.exports = {
     try {
 
       const userId = interaction.user.id
-
-      let user = await economyRepository.getUser(userId)
-
-      if (!user) {
-        user = await economyRepository.createUser(userId)
-      }
-
       const now = Date.now()
-      const lastWork = user.last_work || 0
+      const reward = Math.floor(Math.random() * 50) + 10
 
-      // ✅ cooldown
-      if (now - lastWork < WORK_COOLDOWN) {
+      const result = await database.query(
+        `
+        UPDATE economy_users
+        SET coins = coins + $1,
+            last_work = $2
+        WHERE user_id = $3
+        AND ($2 - last_work) >= $4
+        RETURNING coins;
+        `,
+        [reward, now, userId, WORK_COOLDOWN]
+      )
 
-        const remaining = Math.ceil(
-          (WORK_COOLDOWN - (now - lastWork)) / (1000 * 60)
-        )
-
+      // ❌ cooldown شغال
+      if (!result.rows.length) {
         return interaction.reply({
-          content: `⏳ تقدر تشتغل بعد ${remaining} دقيقة`,
+          content: "⏳ انتظر قبل العمل مرة أخرى",
           ephemeral: true
         })
       }
-
-      const reward = Math.floor(Math.random() * 50) + 10
-
-      user.coins = (user.coins || 0) + reward
-      user.last_work = now
-
-      await economyRepository.updateUser(userId, user)
 
       await interaction.reply(`💼 عملت وكسبت **${reward}** كوين`)
 
     } catch (error) {
 
-      console.error("WORK_COMMAND_ERROR", error)
+      console.error("WORK_ERROR", error)
 
       await interaction.reply({
-        content: "❌ حصل خطأ في العمل",
+        content: "❌ خطأ",
         ephemeral: true
       })
 
