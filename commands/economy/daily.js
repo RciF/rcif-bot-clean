@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js")
-const economyRepository = require("../../repositories/economyRepository")
+const database = require("../../systems/databaseSystem")
 
-const DAILY_COOLDOWN = 86400000 // 24 ساعة
+const DAILY_COOLDOWN = 86400000
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,46 +10,38 @@ module.exports = {
 
   async execute(interaction) {
     try {
+
       const userId = interaction.user.id
-
-      let user = await economyRepository.getUser(userId)
-
-      if (!user) {
-        user = await economyRepository.createUser(userId)
-      }
-
       const now = Date.now()
-      const lastDaily = user.last_daily || 0
+      const reward = 100
 
-      if (now - lastDaily < DAILY_COOLDOWN) {
+      const result = await database.query(
+        `
+        UPDATE economy_users
+        SET coins = coins + $1,
+            last_daily = $2
+        WHERE user_id = $3
+        AND ($2 - last_daily) >= $4
+        RETURNING coins;
+        `,
+        [reward, now, userId, DAILY_COOLDOWN]
+      )
 
-        const remaining = Math.ceil(
-          (DAILY_COOLDOWN - (now - lastDaily)) / (1000 * 60 * 60)
-        )
-
+      if (!result.rows.length) {
         return interaction.reply({
-          content: `⏳ يمكنك استخدام الأمر بعد **${remaining} ساعة**`,
+          content: "⏳ انتظر 24 ساعة",
           ephemeral: true
         })
       }
 
-      const reward = 100
-
-      user.coins = (user.coins || 0) + reward
-      user.last_daily = now
-
-      await economyRepository.updateUser(userId, user)
-
-      await interaction.reply({
-        content: `💰 حصلت على **${reward}** كوين كمكافأة يومية!`
-      })
+      await interaction.reply(`🎁 استلمت ${reward} كوين!`)
 
     } catch (error) {
 
-      console.error("DAILY_COMMAND_ERROR", error)
+      console.error(error)
 
       await interaction.reply({
-        content: "❌ حصل خطأ في المكافأة اليومية",
+        content: "❌ خطأ",
         ephemeral: true
       })
 
