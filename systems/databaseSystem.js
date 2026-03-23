@@ -2,9 +2,18 @@ const databaseManager = require("../utils/databaseManager");
 const logger = require("./loggerSystem");
 
 /**
- * Core database query wrapper (Enhanced)
+ * Normalize result
  */
-async function query(sql, params = []) {
+function normalizeResult(result) {
+  if (!result) return { rows: [] };
+  if (!Array.isArray(result.rows)) result.rows = [];
+  return result;
+}
+
+/**
+ * Core query
+ */
+async function query(sql, params = [], options = {}) {
   try {
 
     if (!sql) {
@@ -21,7 +30,7 @@ async function query(sql, params = []) {
 
     const duration = Date.now() - start;
 
-    // ✅ NEW — slow + very slow detection
+    // 🔥 slow query tracking
     if (duration > 300) {
       logger.warn("DATABASE_SLOW_QUERY", {
         duration,
@@ -36,15 +45,7 @@ async function query(sql, params = []) {
       });
     }
 
-    if (!result) {
-      return { rows: [] };
-    }
-
-    if (!Array.isArray(result.rows)) {
-      result.rows = [];
-    }
-
-    return result;
+    return normalizeResult(result);
 
   } catch (error) {
 
@@ -59,23 +60,23 @@ async function query(sql, params = []) {
 }
 
 /**
- * Return first row or null
+ * Return single row
  */
 async function queryOne(sql, params = []) {
   const result = await query(sql, params);
-  return result.rows.length ? result.rows[0] : null;
+  return result.rows[0] || null;
 }
 
 /**
- * Return rows only
+ * Return multiple rows
  */
 async function queryMany(sql, params = []) {
   const result = await query(sql, params);
-  return result.rows || [];
+  return result.rows;
 }
 
 /**
- * Execute query without caring about result
+ * Execute without caring result
  */
 async function execute(sql, params = []) {
   await query(sql, params);
@@ -83,7 +84,7 @@ async function execute(sql, params = []) {
 }
 
 /**
- * Transaction wrapper
+ * Transaction (SAFE)
  */
 async function transaction(callback) {
   let client;
@@ -103,7 +104,13 @@ async function transaction(callback) {
   } catch (error) {
 
     if (client) {
-      await client.query("ROLLBACK");
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        logger.error("DATABASE_ROLLBACK_FAILED", {
+          error: rollbackError.message
+        });
+      }
     }
 
     logger.error("DATABASE_TRANSACTION_FAILED", {
@@ -113,9 +120,17 @@ async function transaction(callback) {
     throw error;
 
   } finally {
+
     if (client) {
-      client.release();
+      try {
+        client.release();
+      } catch (releaseError) {
+        logger.error("DATABASE_RELEASE_FAILED", {
+          error: releaseError.message
+        });
+      }
     }
+
   }
 }
 
@@ -139,6 +154,7 @@ async function batch(queries = []) {
     }
 
     return results;
+
   });
 }
 
@@ -158,7 +174,7 @@ async function ping() {
 }
 
 /**
- * Stats (basic)
+ * Basic stats
  */
 async function stats() {
   try {
