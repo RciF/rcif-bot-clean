@@ -1,11 +1,24 @@
 const guildSystem = require("./guildSystem")
+const planGateSystem = require("./planGateSystem")
+const logger = require("./loggerSystem")
 
-function ensureEconomyEnabled(interaction) {
+// ✅ FIX: كان ناقص async — الآن مع نظام الخطط
+async function ensureEconomyEnabled(interaction) {
   if (!interaction || !interaction.guild) {
     return false
   }
 
-  const enabled = guildSystem.isEconomyEnabled(interaction.guild.id)
+  const guildId = interaction.guild.id
+
+  // 🔒 تحقق من الخطة أولاً
+  const planCheck = await planGateSystem.checkFeature(guildId, "economy")
+  if (!planCheck.allowed) {
+    safeReply(interaction, planCheck.message)
+    return false
+  }
+
+  // ✅ تحقق من إعدادات السيرفر
+  const enabled = await guildSystem.isEconomyEnabled(guildId)
 
   if (!enabled) {
     safeReply(interaction, "❌ نظام الاقتصاد معطل في هذا السيرفر")
@@ -23,7 +36,7 @@ function safeReply(interaction, content) {
       return interaction.reply({ content, ephemeral: true })
     }
   } catch (error) {
-    // منع أي crash بسبب Discord API
+    logger.error("ECONOMY_SAFE_REPLY_FAILED", { error: error.message })
     return null
   }
 }

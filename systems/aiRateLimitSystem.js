@@ -1,55 +1,57 @@
 const cacheSystem = require("../utils/cacheSystem")
 
-const LIMIT_WINDOW = 60 * 1000 // 1 minute
-const MAX_REQUESTS = 8
+const RATE_LIMIT_SECONDS = 10  // 10 ثواني بين كل استخدام
+const HOURLY_LIMIT = 30        // 30 طلب بالساعة
 
 const OWNER_ID = "529320108032786433"
 
+// ✅ FIX: كان ناقص canUseAI — اللي يستخدمه aiAutoReplySystem
 function canUseAI(userId) {
 
-    if (!userId) return false
-    if (userId === OWNER_ID) return true
+  if (!userId) return false
 
-    const key = `ai_rl_${userId}`
-    const now = Date.now()
+  // المالك بدون حدود
+  if (userId === OWNER_ID) return true
 
-    let data = cacheSystem.get(key)
+  // حد سرعة
+  const rateLimitKey = `ai_rate_${userId}`
+  if (isLimited(rateLimitKey, RATE_LIMIT_SECONDS)) {
+    return false
+  }
 
-    if (!data) {
-        data = { count: 0, start: now }
-    }
+  // حد ساعي
+  const hourlyKey = `ai_hourly_${userId}`
+  const hourlyCount = cacheSystem.get(hourlyKey) || 0
 
-    // reset window
-    if (now - data.start > LIMIT_WINDOW) {
-        data.count = 0
-        data.start = now
-    }
+  if (hourlyCount >= HOURLY_LIMIT) {
+    return false
+  }
 
-    if (data.count >= MAX_REQUESTS) {
-        return false
-    }
+  cacheSystem.set(hourlyKey, hourlyCount + 1, 3600000) // ساعة
 
-    data.count++
-
-    cacheSystem.set(key, data, LIMIT_WINDOW)
-
-    return true
+  return true
 }
 
-function getRemainingRequests(userId) {
+function isLimited(key, seconds) {
 
-    if (!userId) return 0
-    if (userId === OWNER_ID) return Infinity
+  const now = Date.now()
 
-    const key = `ai_rl_${userId}`
-    const data = cacheSystem.get(key)
+  if (cacheSystem.has(key)) {
 
-    if (!data) return MAX_REQUESTS
+    const last = cacheSystem.get(key)
 
-    return Math.max(0, MAX_REQUESTS - data.count)
+    if (now - last < seconds * 1000) {
+      return true
+    }
+
+  }
+
+  cacheSystem.set(key, now)
+
+  return false
 }
 
 module.exports = {
-    canUseAI,
-    getRemainingRequests
+  isLimited,
+  canUseAI  // ✅ الآن موجود
 }

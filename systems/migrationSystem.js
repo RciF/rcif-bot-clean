@@ -10,24 +10,13 @@ async function runMigrations() {
         // USERS
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
+                id TEXT NOT NULL,
+                guild_id TEXT NOT NULL,
                 coins INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT NOW()
+                xp INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (id, guild_id)
             );
-        `)
-
-        // 🔧 FIX OLD DATABASE (rename balance → coins if exists)
-        await databaseSystem.query(`
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.columns
-                    WHERE table_name='users' AND column_name='balance'
-                ) THEN
-                    ALTER TABLE users RENAME COLUMN balance TO coins;
-                END IF;
-            END
-            $$;
         `)
 
         // GUILDS
@@ -62,10 +51,11 @@ async function runMigrations() {
         // INVENTORY
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS inventory (
-                user_id TEXT,
-                item_id TEXT,
+                user_id TEXT NOT NULL,
+                guild_id TEXT NOT NULL,
+                item_id TEXT NOT NULL,
                 quantity INTEGER DEFAULT 1,
-                PRIMARY KEY (user_id, item_id)
+                PRIMARY KEY (user_id, guild_id, item_id)
             );
         `)
 
@@ -88,7 +78,7 @@ async function runMigrations() {
                 user_id TEXT NOT NULL,
                 type TEXT NOT NULL,
                 memory TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000
             );
         `)
 
@@ -103,22 +93,74 @@ async function runMigrations() {
             );
         `)
 
-        // AI KNOWLEDGE VECTOR EXTENSION
+        // RELATIONSHIPS
         await databaseSystem.query(`
-            CREATE EXTENSION IF NOT EXISTS vector;
-        `)
-
-        // AI KNOWLEDGE TABLE
-        await databaseSystem.query(`
-            CREATE TABLE IF NOT EXISTS ai_knowledge (
-                id SERIAL PRIMARY KEY,
-                user_id TEXT,
-                content TEXT NOT NULL,
-                source TEXT,
-                embedding vector(1536),
-                created_at TIMESTAMP DEFAULT NOW()
+            CREATE TABLE IF NOT EXISTS relationships (
+                user_a TEXT NOT NULL,
+                user_b TEXT NOT NULL,
+                count INTEGER DEFAULT 0,
+                score INTEGER DEFAULT 0,
+                last_interaction BIGINT,
+                PRIMARY KEY (user_a, user_b)
             );
         `)
+
+        // ✅ NEW: SUBSCRIPTIONS
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL UNIQUE,
+                plan_id TEXT NOT NULL DEFAULT 'free',
+                status TEXT NOT NULL DEFAULT 'inactive',
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+        `)
+
+        // ✅ NEW: GUILD ↔ SUBSCRIPTION LINKING
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS guild_subscriptions (
+                guild_id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                added_at TIMESTAMP DEFAULT NOW()
+            );
+        `)
+
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_guild_sub_owner
+            ON guild_subscriptions (owner_id);
+        `)
+
+        // AI KNOWLEDGE
+        try {
+            await databaseSystem.query(`CREATE EXTENSION IF NOT EXISTS vector;`)
+
+            await databaseSystem.query(`
+                CREATE TABLE IF NOT EXISTS ai_knowledge (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT,
+                    content TEXT NOT NULL,
+                    source TEXT,
+                    embedding vector(1536),
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            `)
+        } catch (vectorErr) {
+            logger.warn("VECTOR_EXTENSION_UNAVAILABLE", {
+                error: vectorErr.message
+            })
+
+            await databaseSystem.query(`
+                CREATE TABLE IF NOT EXISTS ai_knowledge (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT,
+                    content TEXT NOT NULL,
+                    source TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            `)
+        }
 
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 
