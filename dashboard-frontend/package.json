@@ -1,4 +1,41 @@
 {
+<<<<<<< HEAD
+  "name": "discord-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node scripts/test-lavalink.js",
+    "test:lavalink": "node scripts/test-lavalink.js",
+    "audit:project": "depcheck && madge --circular . && madge --orphans . && madge --warning ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.27.0",
+    "pg": "^8.20.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RciF/discord-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RciF/discord-bot/issues"
+  },
+  "homepage": "https://github.com/RciF/discord-bot#readme",
+  "devDependencies": {
+    "depcheck": "^1.4.7",
+    "eslint": "^10.0.3",
+    "madge": "^8.0.0"
+=======
   "name": "dashboard-frontend",
   "version": "0.1.0",
   "private": true,
@@ -36,5 +73,6 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+>>>>>>> 83a7598 (init frontend)
   }
 }

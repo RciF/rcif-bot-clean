@@ -1,0 +1,124 @@
+📁 root/
+├── commands/
+│   ├── admin/
+│   │   ├── dev.js ✅
+│   │   ├── health.js ✅
+│   │   ├── metrics.js ✅
+│   │   ├── owner.js ✅
+│   │   ├── ping.js ✅
+│   │   ├── status.js ✅
+│   │   └── uptime.js ✅
+│   │
+│   ├── ai/
+│   │   └── chat.js ✅
+│   │
+│   ├── economy/
+│   │   ├── buy.js ✅
+│   │   ├── daily.js ✅
+│   │   ├── inventory.js ✅
+│   │   ├── transfer.js ✅
+│   │   └── work.js ✅
+│   │
+│   └── moderation/
+│       ├── ban.js ✅
+│       ├── clearwarns.js ✅
+│       ├── config.js ✅
+│       ├── kick.js ✅
+│       ├── serverinfo.js ✅
+│       ├── settings.js ✅
+│       ├── test.js ✅
+│       ├── userinfo.js ✅
+│       ├── warn.js ✅
+│       └── warnings.js ✅
+│
+├── events/
+│   ├── guildCreate.js ✅
+│   ├── interactionCreate.js ✅
+│   ├── messageCreate.js ✅
+│   └── ready.js ✅
+│
+├── repositories/
+│   ├── analyticsRepository.js ✅
+│   ├── economyRepository.js ✅
+│   ├── guildRepository.js ✅
+│   ├── inventoryRepository.js ✅
+│   ├── knowledgeRepository.js ✅
+│   ├── memoryRepository.js ✅
+│   ├── relationshipRepository.js ✅
+│   ├── socialGraphRepository.js ✅
+│   ├── userRepository.js ✅
+│   ├── warningRepository.js ✅
+│   └── xpRepository.js ✅
+│
+├── utils/
+│   ├── cacheSystem.js ✅
+│   ├── databaseManager.js ✅
+│   └── logger.js ✅
+│
+├── scripts/
+│   └── deployCommands.js ❓
+│
+├── systems/
+│   ├── apiServerSystem.js ✅
+│   ├── backupSystem.js ✅
+│   ├── commandCooldownSystem.js ❓
+│   ├── commandGuardSystem.js ✅
+│   ├── commandHandler.js ✅
+│   ├── configSystem.js ✅
+│   ├── databaseHealthSystem.js ✅
+│   ├── databaseStatsSystem.js ✅
+│   ├── databaseSystem.js ✅
+│   ├── developerSystem.js ❓
+│   ├── devModeSystem.js ❓
+│   ├── economySystem.js ❓
+│   ├── errorSystem.js ✅
+│   ├── eventHandler.js ✅
+│   ├── guildSystem.js ❓
+│   ├── healthSystem.js ✅
+│   ├── inventorySystem.js ❓
+│   ├── levelSystem.js ❓
+│   ├── loggerSystem.js ✅
+│   ├── logSystem.js ❓
+│   ├── memoryStatsSystem.js ❓
+│   ├── metricsSystem.js ✅
+│   ├── migrationSystem.js ✅
+│   ├── ownerSystem.js ❓
+│   ├── permissionSystem.js ✅
+│   ├── rateLimitSystem.js ✅
+│   ├── repositoryHealthSystem.js ✅
+│   ├── repositoryIndex.js ✅
+│   ├── repositoryLoader.js ❓
+│   ├── settingsSystem.js ❓
+│   ├── shopSystem.js ❓
+│   ├── startupSystem.js ✅
+│   ├── statusSystem.js ✅
+│   ├── uptimeSystem.js ✅
+│   ├── userSystem.js ❓
+│   ├── warningSystem.js ❓
+│   ├── xpCooldownSystem.js ❓
+│   ├── xpSystem.js ❓
+│
+│   ├── aiAutonomousSystem.js ❓
+│   ├── aiAutoReplySystem.js ❓
+│   ├── aiBrainSystem.js ❓
+│   ├── aiContextSystem.js ❓
+│   ├── aiDecisionSystem.js ❓
+│   ├── aiEmotionSystem.js ✅
+│   ├── aiHandler.js ✅
+│   ├── aiIdentitySystem.js ✅
+│   ├── aiKnowledgeSystem.js ❓
+│   ├── aiMemorySystem.js ❓
+│   ├── aiObservationSystem.js ❓
+│   ├── aiPersonalitySystem.js ❓
+│   ├── aiRateLimitSystem.js ✅
+│   ├── aiResponseFormatterSystem.js ❓
+│   ├── aiResponseSystem.js ❓
+│   ├── aiSocialAwarenessSystem.js ❓
+│   ├── aiSystem.js ❓
+│   ├── aiTokenUsageSystem.js ✅
+│   ├── analyticsSystem.js ✅
+│   └── analyticsTracker.js ✅
+│
+├── config.js ✅
+├── index.js ✅
+├── package.json ❓
