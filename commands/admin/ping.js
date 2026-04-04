@@ -5,11 +5,10 @@ module.exports = {
     .setName("ping")
     .setDescription("قياس سرعة البوت"),
 
-  async execute(interaction, client) {
-
+  async execute(interaction) {
+    const gatewayPing = interaction.client.ws.ping
     const latency = Date.now() - interaction.createdTimestamp
 
-    await interaction.reply(`🏓 Pong!\nLatency: ${latency}ms`)
-
+    await interaction.reply(`🏓 Pong!\n📡 Gateway: ${gatewayPing}ms\n⚡ Latency: ${latency}ms`)
   },
 }

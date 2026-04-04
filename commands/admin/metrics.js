@@ -5,16 +5,23 @@ module.exports = {
     .setName("metrics")
     .setDescription("عرض إحصائيات البوت"),
 
-  async execute(interaction, client) {
+  async execute(interaction) {
     try {
+      const client = interaction.client
       const guilds = client.guilds.cache.size
-      const users = client.users.cache.size
+      const users = client.guilds.cache.reduce(
+        (acc, g) => acc + (g.memberCount || 0), 0
+      )
+      const channels = client.channels.cache.size
 
       await interaction.reply(
-        `📊 Guilds: ${guilds}\n👥 Users: ${users}\n⚙ Systems: Active`
+        `📊 السيرفرات: ${guilds}\n👥 المستخدمون: ${users}\n📡 القنوات: ${channels}\n⚙ الأنظمة: نشطة`
       )
     } catch (error) {
-      await interaction.reply("❌ حصل خطأ في عرض الإحصائيات")
+      console.error("[metrics] Error:", error)
+      if (!interaction.replied) {
+        await interaction.reply({ content: "❌ حصل خطأ في عرض الإحصائيات", ephemeral: true })
+      }
     }
   },
 }

@@ -1,24 +1,22 @@
 const guildManager = require("../utils/guildManager")
 
-function isAIEnabled(guildId) {
-
-  const guild = guildManager.getGuild(guildId)
+// ✅ FIX: all functions are now async and await guildManager
+async function isAIEnabled(guildId) {
+  const guild = await guildManager.getGuild(guildId)
+  if (!guild) return true
   return guild.aiEnabled === true
-
 }
 
-function isXPEnabled(guildId) {
-
-  const guild = guildManager.getGuild(guildId)
+async function isXPEnabled(guildId) {
+  const guild = await guildManager.getGuild(guildId)
+  if (!guild) return true
   return guild.xpEnabled === true
-
 }
 
-function isEconomyEnabled(guildId) {
-
-  const guild = guildManager.getGuild(guildId)
+async function isEconomyEnabled(guildId) {
+  const guild = await guildManager.getGuild(guildId)
+  if (!guild) return true
   return guild.economyEnabled === true
-
 }
 
 module.exports = {

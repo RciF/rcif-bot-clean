@@ -1,16 +1,14 @@
 {
   "name": "discord-bot",
   "version": "1.0.0",
-  "description": "",
+  "description": "Discord bot with AI, economy, and moderation",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node scripts/test-lavalink.js",
-    "test:lavalink": "node scripts/test-lavalink.js",
-    "audit:project": "depcheck && madge --circular . && madge --orphans . && madge --warning ."
+    "deploy": "node scripts/deployCommands.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "RciF",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
@@ -20,14 +18,6 @@
     "openai": "^6.27.0",
     "pg": "^8.20.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/RciF/discord-bot.git"
-  },
-  "bugs": {
-    "url": "https://github.com/RciF/discord-bot/issues"
-  },
-  "homepage": "https://github.com/RciF/discord-bot#readme",
   "devDependencies": {
     "depcheck": "^1.4.7",
     "eslint": "^10.0.3",

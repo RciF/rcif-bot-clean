@@ -1,16 +1,26 @@
 const guildManager = require("../utils/guildManager")
+const logger = require("./loggerSystem")
 
-function updateSystem(guildId, system, enabled) {
+async function updateSystem(guildId, system, enabled) {
+  try {
+    let update = {}
 
-  let update = {}
+    if (system === "ai") update.aiEnabled = enabled
+    if (system === "xp") update.xpEnabled = enabled
+    if (system === "economy") update.economyEnabled = enabled
 
-  if (system === "ai") update.aiEnabled = enabled
-  if (system === "xp") update.xpEnabled = enabled
-  if (system === "economy") update.economyEnabled = enabled
+    if (Object.keys(update).length === 0) {
+      logger.warn("CONFIG_INVALID_SYSTEM", { system })
+      return false
+    }
 
-  if (Object.keys(update).length === 0) return false
+    await guildManager.updateGuild(guildId, update)
+    return true
 
-  return guildManager.updateGuild(guildId, update)
+  } catch (error) {
+    logger.error("CONFIG_UPDATE_FAILED", { error: error.message })
+    return false
+  }
 }
 
 module.exports = {

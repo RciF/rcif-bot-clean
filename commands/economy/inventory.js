@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const inventoryRepository = require("../../repositories/inventoryRepository")
+const config = require("../../config")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -8,29 +9,25 @@ module.exports = {
 
   async execute(interaction) {
     try {
-
       if (!interaction.guild) {
-        return interaction.reply({
-          content: "❌ هذا الأمر داخل السيرفر فقط",
-          ephemeral: true
-        })
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
       }
 
       const userId = interaction.user.id
       const guildId = interaction.guild.id
 
-      // ❌ احذف optional chaining
       const items = await inventoryRepository.getInventory(userId, guildId)
 
       if (!items || items.length === 0) {
-        return interaction.reply({
-          content: "📦 حقيبتك فارغة.",
-          ephemeral: true
-        })
+        return interaction.reply({ content: "📦 حقيبتك فارغة.", ephemeral: true })
       }
 
       const description = items
-        .map(item => `• ${item.item_id} × ${item.quantity}`)
+        .map(item => {
+          const shopItem = config.shopItems[item.item_id]
+          const name = shopItem ? shopItem.name : item.item_id
+          return `• ${name} × ${item.quantity}`
+        })
         .join("\n")
 
       const embed = new EmbedBuilder()
@@ -38,19 +35,13 @@ module.exports = {
         .setDescription(description)
         .setColor(0x00aeff)
 
-      await interaction.reply({
-        embeds: [embed]
-      })
+      await interaction.reply({ embeds: [embed] })
 
     } catch (error) {
-
       console.error("INVENTORY_COMMAND_ERROR", error)
-
-      await interaction.reply({
-        content: "❌ حصل خطأ في عرض الحقيبة",
-        ephemeral: true
-      })
-
+      if (!interaction.replied) {
+        await interaction.reply({ content: "❌ حصل خطأ في عرض الحقيبة", ephemeral: true })
+      }
     }
   }
 }

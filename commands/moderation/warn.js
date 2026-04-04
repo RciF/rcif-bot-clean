@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js")
-const dataManager = require("../../utils/dataManager")
+const warningSystem = require("../../systems/warningSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -20,36 +20,26 @@ module.exports = {
   async execute(interaction) {
     try {
       if (!interaction.guild) {
-        return interaction.reply({
-          content: "❌ هذا الأمر داخل السيرفر فقط",
-          ephemeral: true
-        })
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
       }
 
       const user = interaction.options.getUser("العضو")
       const reason = interaction.options.getString("السبب") || "بدون سبب"
 
-      let warnings = dataManager.load("warnings.json") || {}
-
-      if (!warnings[user.id]) {
-        warnings[user.id] = []
-      }
-
-      warnings[user.id].push({
-        reason: reason,
-        moderator: interaction.user.id,
-        date: Date.now()
-      })
-
-      dataManager.save("warnings.json", warnings)
+      await warningSystem.addWarning(
+        interaction.guild.id,
+        user.id,
+        interaction.user.id,
+        reason
+      )
 
       await interaction.reply(`⚠️ تم تحذير ${user.username}\nالسبب: ${reason}`)
 
     } catch (error) {
-      await interaction.reply({
-        content: "❌ حصل خطأ في التحذير",
-        ephemeral: true
-      })
+      console.error("WARN_ERROR", error)
+      if (!interaction.replied) {
+        await interaction.reply({ content: "❌ حصل خطأ في التحذير", ephemeral: true })
+      }
     }
   },
 }

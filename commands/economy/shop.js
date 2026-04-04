@@ -1,11 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
-
-// 🧠 متجر بسيط (نطوره بعدين)
-const SHOP_ITEMS = [
-  { id: "potion", name: "🧪 جرعة", price: 50 },
-  { id: "sword", name: "⚔️ سيف", price: 150 },
-  { id: "shield", name: "🛡️ درع", price: 120 }
-]
+const config = require("../../config")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,31 +8,27 @@ module.exports = {
 
   async execute(interaction) {
     try {
+      const items = config.shopItems
 
       let description = ""
-
-      for (const item of SHOP_ITEMS) {
-        description += `• ${item.name} — **${item.price}** كوين\n`
+      for (const key in items) {
+        const item = items[key]
+        description += `• ${item.name} — **${item.price}** كوين (\`${key}\`)\n`
       }
 
       const embed = new EmbedBuilder()
         .setTitle("🛒 المتجر")
         .setDescription(description || "لا يوجد عناصر")
         .setColor(0x00ff99)
+        .setFooter({ text: "استخدم /buy واكتب اسم العنصر بالانجليزي" })
 
-      await interaction.reply({
-        embeds: [embed]
-      })
+      await interaction.reply({ embeds: [embed] })
 
     } catch (error) {
-
       console.error("SHOP_COMMAND_ERROR", error)
-
-      await interaction.reply({
-        content: "❌ حصل خطأ في المتجر",
-        ephemeral: true
-      })
-
+      if (!interaction.replied) {
+        await interaction.reply({ content: "❌ حصل خطأ في المتجر", ephemeral: true })
+      }
     }
   }
 }

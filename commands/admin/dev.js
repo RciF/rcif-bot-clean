@@ -1,59 +1,36 @@
 const { SlashCommandBuilder } = require("discord.js")
 const { requireOwner } = require("../../systems/commandGuardSystem")
-const os = require("os")
 const fs = require("fs")
 const path = require("path")
 
 function formatUptime(seconds) {
   seconds = Math.floor(seconds)
-
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const secs = seconds % 60
-
   return `${days} يوم ${hours} ساعة ${minutes} دقيقة ${secs} ثانية`
 }
 
-function getCPUUsage() {
-  const cpus = os.cpus()
-
-  let idle = 0
-  let total = 0
-
-  for (const cpu of cpus) {
-    for (const type in cpu.times) {
-      total += cpu.times[type]
-    }
-    idle += cpu.times.idle
+function getMemoryUsage() {
+  const used = process.memoryUsage()
+  return {
+    rss: (used.rss / 1024 / 1024).toFixed(1),
+    heap: (used.heapUsed / 1024 / 1024).toFixed(1),
   }
-
-  return Math.round(100 - (idle / total) * 100)
 }
-
-let cachedCommandCount = null
 
 function countCommands() {
   try {
-    if (cachedCommandCount !== null) return cachedCommandCount
-
     const commandsPath = path.join(__dirname, "../../commands")
-
     let count = 0
-
     const folders = fs.readdirSync(commandsPath)
-
     for (const folder of folders) {
       const folderPath = path.join(commandsPath, folder)
-
       if (!fs.lstatSync(folderPath).isDirectory()) continue
-
       const files = fs.readdirSync(folderPath).filter(f => f.endsWith(".js"))
-
       count += files.length
     }
-
-    cachedCommandCount = count
     return count
   } catch {
     return 0
@@ -61,7 +38,6 @@ function countCommands() {
 }
 
 module.exports = {
-
   data: new SlashCommandBuilder()
     .setName("dev")
     .setDescription("لوحة المطور"),
@@ -69,7 +45,6 @@ module.exports = {
   async execute(interaction) {
     try {
       const isOwner = await requireOwner(interaction)
-
       if (!isOwner) {
         return interaction.reply({
           content: "❌ هذا الأمر مخصص لمالك البوت فقط",
@@ -78,19 +53,13 @@ module.exports = {
       }
 
       const uptime = formatUptime(process.uptime())
-
-      const servers = interaction.client.guilds.cache.size
-      const channels = interaction.client.channels.cache.size
-
-      const users = interaction.client.guilds.cache.reduce(
-        (acc, g) => acc + (g.memberCount || 0),
-        0
-      )
-
-      const gatewayPing = interaction.client.ws.ping
+      const client = interaction.client
+      const servers = client.guilds.cache.size
+      const channels = client.channels.cache.size
+      const users = client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0)
+      const gatewayPing = client.ws.ping
       const apiPing = Date.now() - interaction.createdTimestamp
-
-      const cpu = getCPUUsage()
+      const memory = getMemoryUsage()
       const commands = countCommands()
 
       await interaction.reply({
@@ -109,8 +78,9 @@ module.exports = {
 ⏱ وقت التشغيل
 ${uptime}
 
-🧠 المعالج
-الاستخدام: ${cpu} %
+💾 الذاكرة
+RSS: ${memory.rss} MB
+Heap: ${memory.heap} MB
 
 🤖 البوت
 عدد الأوامر: ${commands}`,
@@ -118,11 +88,13 @@ ${uptime}
       })
 
     } catch (error) {
-      await interaction.reply({
-        content: "❌ حصل خطأ في لوحة المطور",
-        ephemeral: true
-      })
+      console.error("[dev] Error:", error)
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "❌ حصل خطأ في لوحة المطور",
+          ephemeral: true
+        })
+      }
     }
   }
-
 }

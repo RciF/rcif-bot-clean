@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js")
-const dataManager = require("../../utils/dataManager")
+const warningSystem = require("../../systems/warningSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -15,26 +15,28 @@ module.exports = {
   async execute(interaction) {
     try {
       if (!interaction.guild) {
-        return interaction.reply({
-          content: "❌ هذا الأمر داخل السيرفر فقط",
-          ephemeral: true
-        })
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
       }
 
       const user = interaction.options.getUser("العضو")
-      let warnings = dataManager.load("warnings.json") || {}
 
-      warnings[user.id] = []
+      // ✅ NEW: نشوف كم تحذير قبل المسح
+      const warnings = await warningSystem.getWarnings(interaction.guild.id, user.id)
+      const count = warnings?.length || 0
 
-      dataManager.save("warnings.json", warnings)
+      if (count === 0) {
+        return interaction.reply({ content: `✅ ${user.username} ما عنده تحذيرات أصلاً`, ephemeral: true })
+      }
 
-      await interaction.reply(`🧹 تم مسح تحذيرات ${user.username}`)
+      await warningSystem.clearWarnings(interaction.guild.id, user.id)
+
+      await interaction.reply(`🧹 تم مسح **${count}** تحذير لـ ${user.username}`)
 
     } catch (error) {
-      await interaction.reply({
-        content: "❌ حصل خطأ في مسح التحذيرات",
-        ephemeral: true
-      })
+      console.error("CLEARWARNS_ERROR", error)
+      if (!interaction.replied) {
+        await interaction.reply({ content: "❌ حصل خطأ في مسح التحذيرات", ephemeral: true })
+      }
     }
   },
 }

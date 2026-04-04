@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js")
-const dataManager = require("../../utils/dataManager")
+const warningSystem = require("../../systems/warningSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -15,35 +15,30 @@ module.exports = {
   async execute(interaction) {
     try {
       if (!interaction.guild) {
-        return interaction.reply({
-          content: "❌ هذا الأمر داخل السيرفر فقط",
-          ephemeral: true
-        })
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
       }
 
       const user = interaction.options.getUser("العضو")
-      const warnings = dataManager.load("warnings.json") || {}
+      const warnings = await warningSystem.getWarnings(interaction.guild.id, user.id)
 
-      if (!warnings[user.id] || warnings[user.id].length === 0) {
-        return interaction.reply({
-          content: "لا يوجد تحذيرات لهذا العضو",
-          ephemeral: true
-        })
+      if (!warnings || warnings.length === 0) {
+        return interaction.reply({ content: `✅ لا يوجد تحذيرات لـ ${user.username}`, ephemeral: true })
       }
 
-      let text = `⚠️ تحذيرات ${user.username}:\n\n`
+      let text = `⚠️ تحذيرات ${user.username} (${warnings.length}):\n\n`
 
-      warnings[user.id].forEach((w, i) => {
-        text += `${i + 1}. ${w.reason}\n`
+      warnings.forEach((w, i) => {
+        const date = w.created_at ? new Date(w.created_at).toLocaleDateString("ar-SA") : ""
+        text += `${i + 1}. ${w.reason}${date ? ` — ${date}` : ""}\n`
       })
 
       await interaction.reply(text)
 
     } catch (error) {
-      await interaction.reply({
-        content: "❌ حصل خطأ في عرض التحذيرات",
-        ephemeral: true
-      })
+      console.error("WARNINGS_ERROR", error)
+      if (!interaction.replied) {
+        await interaction.reply({ content: "❌ حصل خطأ في عرض التحذيرات", ephemeral: true })
+      }
     }
   },
 }
