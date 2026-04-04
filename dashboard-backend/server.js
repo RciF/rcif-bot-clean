@@ -619,6 +619,61 @@ app.post("/api/admin/payment-requests/:id/approve", requireAuth, requireOwnerAut
     `, [id])
 
     console.log(`✅ تم تفعيل اشتراك: userId=${payReq.user_id} plan=${payReq.plan_id}`)
+
+    // ✅ إرسال DM للمشترك عبر البوت
+    try {
+      const dmChannel = await fetchDiscordJSON(
+        `https://discord.com/api/users/@me/channels`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bot ${CONFIG.BOT_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ recipient_id: payReq.user_id }),
+        }
+      )
+
+      if (dmChannel?.id) {
+        await fetchDiscordJSON(
+          `https://discord.com/api/channels/${dmChannel.id}/messages`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bot ${CONFIG.BOT_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              embeds: [{
+                title: "✅ تم تفعيل اشتراكك!",
+                description: `مبروك! تم تفعيل خطة **${plan.name}** بنجاح.\n\nيمكنك الآن إضافة البوت لسيرفرك والاستمتاع بجميع المميزات.`,
+                color: 0x22d3a2,
+                fields: [
+                  { name: "📋 الخطة", value: plan.name, inline: true },
+                  { name: "💰 السعر", value: `${plan.price} ريال/شهر`, inline: true },
+                  { name: "⏰ المدة", value: `${plan.durationDays} يوم`, inline: true },
+                ],
+                footer: { text: "Lyn AI — شكراً لدعمك!" },
+                timestamp: new Date().toISOString(),
+              }],
+              components: [{
+                type: 1,
+                components: [{
+                  type: 2,
+                  style: 5,
+                  label: "🤖 أضف البوت لسيرفرك",
+                  url: `https://discord.com/oauth2/authorize?client_id=${CONFIG.CLIENT_ID}&permissions=8&scope=bot%20applications.commands`,
+                }],
+              }],
+            }),
+          }
+        )
+        console.log(`📩 تم إرسال DM للمستخدم: ${payReq.user_id}`)
+      }
+    } catch (dmErr) {
+      console.log(`⚠️ تعذر إرسال DM: ${dmErr.message}`)
+    }
+
     res.json({ success: true, message: "تم تفعيل الاشتراك بنجاح" })
   } catch (err) {
     console.error("APPROVE_REQUEST_ERROR:", err.message)

@@ -31,9 +31,10 @@ const PLANS = [
 
 const BANK_INFO = {
   bank: "بنك الراجحي",
-  iban: "SA12 3456 7890 1234 5678 9012",
-  name: "اسم الحساب",
-  stcPay: "05XXXXXXXX",
+  accountName: "ALI TAWI A",
+  accountNumber: "107000010006086076681",
+  iban: "SA55 8000 0107 6080 1607 6681",
+  applePay: "+966509992372",
 };
 
 // ✅ NEW: helper — يرسل requests مع الـ token تلقائياً
@@ -473,9 +474,10 @@ function SubscriptionsSection({ userId, userSubscription, onNotif, onRefresh }) 
         <div style={{ background: "rgba(0,200,255,0.05)", borderRadius: 12, padding: 20, marginBottom: 28, border: "1px solid var(--border)" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: "var(--cyan)" }}>💳 معلومات التحويل البنكي</h3>
           <div className="info-row"><span style={{ color: "var(--muted)" }}>البنك</span><span style={{ fontWeight: 700 }}>{BANK_INFO.bank}</span></div>
+          <div className="info-row"><span style={{ color: "var(--muted)" }}>اسم الحساب</span><span style={{ fontWeight: 700 }}>{BANK_INFO.accountName}</span></div>
+          <div className="info-row"><span style={{ color: "var(--muted)" }}>رقم الحساب</span><span style={{ fontWeight: 700, fontFamily: "monospace", fontSize: 13 }}>{BANK_INFO.accountNumber}</span></div>
           <div className="info-row"><span style={{ color: "var(--muted)" }}>IBAN</span><span style={{ fontWeight: 700, fontFamily: "monospace", fontSize: 13 }}>{BANK_INFO.iban}</span></div>
-          <div className="info-row"><span style={{ color: "var(--muted)" }}>اسم الحساب</span><span style={{ fontWeight: 700 }}>{BANK_INFO.name}</span></div>
-          <div className="info-row" style={{ marginBottom: 0 }}><span style={{ color: "var(--muted)" }}>STC Pay</span><span style={{ fontWeight: 700 }}>{BANK_INFO.stcPay}</span></div>
+          <div className="info-row" style={{ marginBottom: 0 }}><span style={{ color: "var(--muted)" }}> Apple Pay</span><span style={{ fontWeight: 700 }}>{BANK_INFO.applePay}</span></div>
         </div>
 
         <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10, color: "var(--text)" }}>
