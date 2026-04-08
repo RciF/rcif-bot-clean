@@ -34,8 +34,8 @@ module.exports = {
 
       await database.transaction(async (client) => {
         const debit = await client.query(
-          `UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2 AND guild_id = $3 AND coins >= $1 RETURNING coins`,
-          [item.price, userId, guildId]
+          `UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2 AND coins >= $1 RETURNING coins`,
+          [item.price, userId]
         )
 
         if (!debit.rows.length) throw new Error("NO_MONEY")
