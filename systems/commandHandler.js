@@ -75,19 +75,31 @@ module.exports = (client) => {
 
         }
 
-        const name = command.data.name
+        // دعم الأوامر متعددة الأسماء (عربي + إنجليزي)
+        // لو الملف يصدّر commands[] نسجّل كل اسم، وإلا نسجّل data.name العادي
+        const commandList = command.commands
+          ? command.commands
+          : [command.data]
 
-        if (client.commands.has(name)) {
+        let registered = false
 
-          logger.warn(`DUPLICATE_COMMAND ${name}`)
-          skipped++
-          continue
+        for (const cmd of commandList) {
+          const name = cmd.name
 
+          if (client.commands.has(name)) {
+            logger.warn(`DUPLICATE_COMMAND ${name}`)
+            continue
+          }
+
+          client.commands.set(name, command)
+          registered = true
         }
 
-        client.commands.set(name, command)
-
-        loaded++
+        if (registered) {
+          loaded++
+        } else {
+          skipped++
+        }
 
       } catch (error) {
 
