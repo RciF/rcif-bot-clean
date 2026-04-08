@@ -41,11 +41,11 @@ module.exports = {
         if (!debit.rows.length) throw new Error("NO_MONEY")
 
         await client.query(
-          `INSERT INTO inventory (user_id, guild_id, item_id, quantity)
-           VALUES ($1, $2, $3, 1)
-           ON CONFLICT (user_id, guild_id, item_id)
-           DO UPDATE SET quantity = inventory.quantity + 1`,
-          [userId, guildId, itemId]
+          `INSERT INTO inventory (user_id, item_id, quantity)
+ VALUES ($1, $2, 1)
+ ON CONFLICT (user_id, item_id)
+ DO UPDATE SET quantity = inventory.quantity + 1`,
+[userId, itemId]
         )
       })
 
