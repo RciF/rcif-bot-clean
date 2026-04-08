@@ -126,10 +126,10 @@ initDB()
 //  HELPERS
 // ══════════════════════════════════════
 const PLANS = {
-  free:    { id: "free",    name: "مجاني",  price: 0,   durationDays: null, guildLimit: 1 },
-  silver:  { id: "silver",  name: "فضي",    price: 29,  durationDays: 30,   guildLimit: 3 },
-  gold:    { id: "gold",    name: "ذهبي",   price: 79,  durationDays: 30,   guildLimit: 10 },
-  diamond: { id: "diamond", name: "ماسي",   price: 149, durationDays: 30,   guildLimit: -1 },
+  free:    { id: "free",    name: "مجاني", price: 0,   durationDays: null, guildLimit: 1 },
+silver:  { id: "silver",  name: "فضي",    price: 29,  durationDays: 30,   guildLimit: 1 },
+gold:    { id: "gold",    name: "ذهبي",   price: 79,  durationDays: 30,   guildLimit: 1 },
+diamond: { id: "diamond", name: "ماسي",   price: 149, durationDays: 30,   guildLimit: 1 },
 }
 
 async function fetchDiscordJSON(url, options = {}) {
@@ -337,11 +337,37 @@ app.get("/api/auth/callback", async (req, res) => {
 app.post("/api/guild/save", requireAuth, requireGuildAdmin, async (req, res) => {
   const { guildId } = req.body
   if (!guildId) return res.status(400).json({ error: "guildId required" })
+
   try {
     await pool.query(`
       INSERT INTO guild_settings (guild_id)
       VALUES ($1) ON CONFLICT (guild_id) DO NOTHING
     `, [guildId])
+
+    // ✅ ربط تلقائي: لو عنده اشتراك نشط وما ربط سيرفر بعد
+    const userId = req.user.id
+    const subResult = await pool.query(
+      "SELECT plan_id, status FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1",
+      [userId]
+    )
+
+    if (subResult.rows.length > 0) {
+      const existingLink = await pool.query(
+        "SELECT guild_id FROM guild_subscriptions WHERE owner_id = $1",
+        [userId]
+      )
+
+      if (existingLink.rows.length === 0) {
+        await pool.query(`
+          INSERT INTO guild_subscriptions (guild_id, owner_id, added_at)
+          VALUES ($1, $2, NOW())
+          ON CONFLICT (guild_id) DO UPDATE SET owner_id = $2, added_at = NOW()
+        `, [guildId, userId])
+
+        console.log(`🔗 ربط تلقائي: سيرفر ${guildId} ← مستخدم ${userId}`)
+      }
+    }
+
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ error: "Failed to save guild" })
@@ -394,20 +420,16 @@ app.post("/api/guild/:guildId/link", requireAuth, requireGuildAdmin, async (req,
       return res.status(400).json({ error: "لا يوجد اشتراك نشط. اشترك أولاً." })
     }
 
-    const plan = PLANS[subResult.rows[0].plan_id] || PLANS.free
+    // ⚠️ القاعدة: اشتراك واحد = سيرفر واحد فقط
+    const existingLink = await pool.query(
+      "SELECT guild_id FROM guild_subscriptions WHERE owner_id = $1",
+      [userId]
+    )
 
-    if (plan.guildLimit !== -1) {
-      const countResult = await pool.query(
-        "SELECT COUNT(*) as count FROM guild_subscriptions WHERE owner_id = $1",
-        [userId]
-      )
-      const currentCount = parseInt(countResult.rows[0]?.count || 0)
-
-      if (currentCount >= plan.guildLimit) {
-        return res.status(400).json({
-          error: `وصلت الحد الأقصى (${plan.guildLimit} سيرفر). رقّي خطتك.`
-        })
-      }
+    if (existingLink.rows.length > 0 && existingLink.rows[0].guild_id !== guildId) {
+      return res.status(400).json({
+        error: "⚠️ اشتراكك مربوط بسيرفر آخر. فك الربط أولاً أو اشترك اشتراك جديد لهذا السيرفر."
+      })
     }
 
     await pool.query(`
@@ -416,7 +438,7 @@ app.post("/api/guild/:guildId/link", requireAuth, requireGuildAdmin, async (req,
       ON CONFLICT (guild_id) DO UPDATE SET owner_id = $2, added_at = NOW()
     `, [guildId, userId])
 
-    res.json({ success: true, message: "تم ربط السيرفر بالاشتراك" })
+    res.json({ success: true, message: "تم ربط السيرفر بالاشتراك ✅" })
   } catch (err) {
     console.error("LINK_GUILD_ERROR:", err.message)
     res.status(500).json({ error: "فشل ربط السيرفر" })

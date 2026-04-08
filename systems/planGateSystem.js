@@ -1,13 +1,14 @@
 /**
  * Plan Gate System — نظام قفل المميزات حسب الخطة
  * 
- * هذا النظام المركزي اللي يتحقق هل السيرفر عنده اشتراك يسمح له يستخدم ميزة معينة
+ * القاعدة الأساسية: اشتراك واحد = سيرفر واحد فقط
+ * يبي سيرفر ثاني = اشتراك ثاني
  * 
  * الخطط:
  *   free     → إشراف أساسي فقط
  *   silver   → XP + اقتصاد + AI محدود
  *   gold     → كل شيء + أوامر مخصصة
- *   diamond  → كل شيء + API + بدون حدود
+ *   diamond  → كل شيء + API + حدود أعلى
  */
 
 const databaseSystem = require("./databaseSystem")
@@ -25,46 +26,48 @@ const PLAN_HIERARCHY = {
 }
 
 const FEATURE_REQUIREMENTS = {
-  // الميزة: الحد الأدنى للخطة المطلوبة
-  moderation: "free",       // متاح للجميع
-  warnings: "free",         // متاح للجميع
-  serverinfo: "free",       // متاح للجميع
-  userinfo: "free",         // متاح للجميع
+  moderation: "free",
+  warnings: "free",
+  serverinfo: "free",
+  userinfo: "free",
 
-  xp: "silver",             // يحتاج فضي+
-  economy: "silver",        // يحتاج فضي+
-  ai: "silver",             // يحتاج فضي+ (محدود)
-  ai_unlimited: "gold",     // AI بدون حدود يحتاج ذهبي+
-  
-  custom_commands: "gold",   // أوامر مخصصة تحتاج ذهبي+
-  advanced_stats: "gold",    // إحصائيات متقدمة تحتاج ذهبي+
+  xp: "silver",
+  economy: "silver",
+  ai: "silver",
 
-  api_access: "diamond",    // API خاص يحتاج ماسي
-  unlimited: "diamond",     // بدون حدود يحتاج ماسي
+  custom_commands: "gold",
+  advanced_stats: "gold",
+
+  api_access: "diamond",
 }
+
+// ═══════════════════════════════════════
+//  ⚠️ القاعدة الأساسية: كل اشتراك = سيرفر واحد فقط
+//  يبي سيرفر ثاني = يشترك مرة ثانية
+// ═══════════════════════════════════════
 
 const PLAN_LIMITS = {
   free: {
     guilds: 1,
-    ai_requests_per_hour: 0,
+    ai_messages_per_day: 0,
     economy_enabled: false,
     xp_enabled: false,
   },
   silver: {
-    guilds: 3,
-    ai_requests_per_hour: 50,
+    guilds: 1,
+    ai_messages_per_day: 200,
     economy_enabled: true,
     xp_enabled: true,
   },
   gold: {
-    guilds: 10,
-    ai_requests_per_hour: 200,
+    guilds: 1,
+    ai_messages_per_day: 500,
     economy_enabled: true,
     xp_enabled: true,
   },
   diamond: {
-    guilds: -1, // غير محدود
-    ai_requests_per_hour: -1, // غير محدود
+    guilds: 1,
+    ai_messages_per_day: 1000,
     economy_enabled: true,
     xp_enabled: true,
   }
@@ -100,6 +103,108 @@ function clearCache(guildId) {
 }
 
 // ═══════════════════════════════════════
+//  حد يومي لرسائل AI لكل سيرفر
+// ═══════════════════════════════════════
+
+const aiDailyUsage = new Map()
+
+function getToday() {
+  return new Date().toISOString().slice(0, 10) // "2026-04-08"
+}
+
+function getAIUsage(guildId) {
+  const key = `${guildId}:${getToday()}`
+  return aiDailyUsage.get(key) || 0
+}
+
+function incrementAIUsage(guildId) {
+  const key = `${guildId}:${getToday()}`
+  const current = aiDailyUsage.get(key) || 0
+  aiDailyUsage.set(key, current + 1)
+
+  // تنظيف الأيام القديمة (أبقِ بس اليوم)
+  const today = getToday()
+  for (const [k] of aiDailyUsage) {
+    if (!k.endsWith(today)) {
+      aiDailyUsage.delete(k)
+    }
+  }
+
+  return current + 1
+}
+
+/**
+ * تحقق هل السيرفر يقدر يستخدم AI (حسب الحد اليومي)
+ * @returns {{ allowed: boolean, remaining: number, limit: number, message: string }}
+ */
+async function checkAILimit(guildId) {
+  try {
+    const subscription = await getGuildSubscription(guildId)
+    const plan = subscription.plan_id || "free"
+    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free
+    const dailyLimit = limits.ai_messages_per_day
+
+    // خطة مجانية = ما فيه AI
+    if (dailyLimit === 0) {
+      return {
+        allowed: false,
+        remaining: 0,
+        limit: 0,
+        message: "🔒 الذكاء الاصطناعي يحتاج اشتراك فضي أو أعلى."
+      }
+    }
+
+    const used = getAIUsage(guildId)
+    const remaining = Math.max(0, dailyLimit - used)
+
+    if (used >= dailyLimit) {
+      return {
+        allowed: false,
+        remaining: 0,
+        limit: dailyLimit,
+        message: `⚠️ وصلتوا الحد اليومي (${dailyLimit} رسالة). العداد يتجدد بكرة.`
+      }
+    }
+
+    return {
+      allowed: true,
+      remaining,
+      limit: dailyLimit,
+      message: ""
+    }
+  } catch (error) {
+    logger.error("AI_LIMIT_CHECK_FAILED", { error: error.message })
+    return { allowed: true, remaining: 999, limit: 999, message: "" }
+  }
+}
+
+/**
+ * سجّل استخدام رسالة AI (يُستدعى بعد كل رد ناجح)
+ */
+function recordAIUsage(guildId) {
+  return incrementAIUsage(guildId)
+}
+
+/**
+ * جلب إحصائيات AI لسيرفر معين
+ */
+async function getAIStats(guildId) {
+  const subscription = await getGuildSubscription(guildId)
+  const plan = subscription.plan_id || "free"
+  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free
+  const used = getAIUsage(guildId)
+  const limit = limits.ai_messages_per_day
+
+  return {
+    used,
+    limit,
+    remaining: Math.max(0, limit - used),
+    plan,
+    resetDate: getToday()
+  }
+}
+
+// ═══════════════════════════════════════
 //  جلب اشتراك السيرفر
 // ═══════════════════════════════════════
 
@@ -107,12 +212,9 @@ async function getGuildSubscription(guildId) {
   try {
     if (!guildId) return { plan_id: "free", status: "inactive" }
 
-    // تحقق من الكاش أولاً
     const cached = getCachedSubscription(guildId)
     if (cached) return cached
 
-    // جلب من قاعدة البيانات
-    // ملاحظة: هذا الجدول يربط السيرفر بصاحب الاشتراك
     const result = await databaseSystem.query(`
       SELECT gs.guild_id, s.plan_id, s.status, s.expires_at
       FROM guild_subscriptions gs
@@ -129,7 +231,6 @@ async function getGuildSubscription(guildId) {
     } else {
       const row = result.rows[0]
 
-      // تحقق من انتهاء الصلاحية
       if (row.expires_at && new Date(row.expires_at) < new Date()) {
         subscription = { plan_id: "free", status: "expired", expires_at: row.expires_at }
       } else {
@@ -146,7 +247,6 @@ async function getGuildSubscription(guildId) {
 
   } catch (error) {
     logger.error("PLAN_GATE_GET_SUBSCRIPTION_FAILED", { error: error.message })
-    // في حالة الخطأ، اسمح بالاستخدام المجاني بدل ما تمنع الكل
     return { plan_id: "free", status: "inactive" }
   }
 }
@@ -155,12 +255,6 @@ async function getGuildSubscription(guildId) {
 //  التحقق من الميزة
 // ═══════════════════════════════════════
 
-/**
- * تحقق هل السيرفر يقدر يستخدم ميزة معينة
- * @param {string} guildId - معرف السيرفر
- * @param {string} feature - اسم الميزة (مثل: "ai", "economy", "xp")
- * @returns {{ allowed: boolean, message: string, plan: string }}
- */
 async function checkFeature(guildId, feature) {
   try {
     const subscription = await getGuildSubscription(guildId)
@@ -168,7 +262,6 @@ async function checkFeature(guildId, feature) {
     const requiredPlan = FEATURE_REQUIREMENTS[feature]
 
     if (!requiredPlan) {
-      // ميزة غير معروفة — اسمح بها (احتياط)
       return { allowed: true, message: "", plan: currentPlan }
     }
 
@@ -179,50 +272,39 @@ async function checkFeature(guildId, feature) {
       return { allowed: true, message: "", plan: currentPlan }
     }
 
-    // ممنوع
     const planNames = { free: "مجاني", silver: "فضي", gold: "ذهبي", diamond: "ماسي" }
     const requiredName = planNames[requiredPlan] || requiredPlan
 
     return {
       allowed: false,
-      message: `🔒 هذه الميزة تحتاج خطة **${requiredName}** أو أعلى.\n🌐 اشترك من لوحة التحكم: https://yourdomain.com/dashboard`,
+      message: `🔒 هذه الميزة تحتاج خطة **${requiredName}** أو أعلى.\n🌐 اشترك من لوحة التحكم.`,
       plan: currentPlan
     }
 
   } catch (error) {
     logger.error("PLAN_GATE_CHECK_FAILED", { error: error.message, feature })
-    // في حالة الخطأ اسمح
     return { allowed: true, message: "", plan: "free" }
   }
 }
 
-/**
- * تحقق سريع — يرجع true/false فقط
- */
 async function isFeatureAllowed(guildId, feature) {
   const result = await checkFeature(guildId, feature)
   return result.allowed
 }
 
-/**
- * جلب حدود الخطة الحالية للسيرفر
- */
 async function getGuildLimits(guildId) {
   const subscription = await getGuildSubscription(guildId)
   const plan = subscription.plan_id || "free"
   return PLAN_LIMITS[plan] || PLAN_LIMITS.free
 }
 
-/**
- * جلب اسم الخطة الحالية
- */
 async function getGuildPlan(guildId) {
   const subscription = await getGuildSubscription(guildId)
   return subscription.plan_id || "free"
 }
 
 // ═══════════════════════════════════════
-//  Migration — جدول ربط السيرفرات بالاشتراكات
+//  Migration
 // ═══════════════════════════════════════
 
 async function createGuildSubscriptionsTable() {
@@ -236,7 +318,6 @@ async function createGuildSubscriptionsTable() {
       );
     `)
 
-    // Index للبحث السريع
     await databaseSystem.query(`
       CREATE INDEX IF NOT EXISTS idx_guild_sub_owner
       ON guild_subscriptions (owner_id);
@@ -250,35 +331,30 @@ async function createGuildSubscriptionsTable() {
 
 // ═══════════════════════════════════════
 //  ربط/فك سيرفر باشتراك
+//  ⚠️ القاعدة: اشتراك واحد = سيرفر واحد فقط
 // ═══════════════════════════════════════
 
 async function linkGuildToSubscription(guildId, ownerId) {
   try {
-    // تحقق من حدود الخطة (عدد السيرفرات)
     const subscription = await databaseSystem.queryOne(`
       SELECT plan_id FROM subscriptions
       WHERE user_id = $1 AND status = 'active'
     `, [ownerId])
 
     if (!subscription) {
-      return { success: false, message: "لا يوجد اشتراك نشط" }
+      return { success: false, message: "لا يوجد اشتراك نشط. اشترك أولاً." }
     }
 
-    const limits = PLAN_LIMITS[subscription.plan_id] || PLAN_LIMITS.free
+    // ⚠️ تحقق: هل عنده سيرفر مربوط بالفعل؟
+    const existingGuild = await databaseSystem.queryOne(`
+      SELECT guild_id FROM guild_subscriptions
+      WHERE owner_id = $1
+    `, [ownerId])
 
-    if (limits.guilds !== -1) {
-      const countResult = await databaseSystem.queryOne(`
-        SELECT COUNT(*) as count FROM guild_subscriptions
-        WHERE owner_id = $1
-      `, [ownerId])
-
-      const currentCount = parseInt(countResult?.count || 0)
-
-      if (currentCount >= limits.guilds) {
-        return {
-          success: false,
-          message: `وصلت الحد الأقصى (${limits.guilds} سيرفر). رقّي خطتك لإضافة المزيد.`
-        }
+    if (existingGuild && existingGuild.guild_id !== guildId) {
+      return {
+        success: false,
+        message: "⚠️ اشتراكك مربوط بسيرفر آخر. فك الربط أولاً أو اشترك اشتراك جديد لهذا السيرفر."
       }
     }
 
@@ -290,7 +366,7 @@ async function linkGuildToSubscription(guildId, ownerId) {
 
     clearCache(guildId)
 
-    return { success: true, message: "تم ربط السيرفر بالاشتراك" }
+    return { success: true, message: "تم ربط السيرفر بالاشتراك ✅" }
 
   } catch (error) {
     logger.error("LINK_GUILD_FAILED", { error: error.message })
@@ -339,6 +415,11 @@ module.exports = {
   getGuildPlan,
   getGuildSubscription,
 
+  // AI حدود يومية
+  checkAILimit,
+  recordAIUsage,
+  getAIStats,
+
   // الربط
   linkGuildToSubscription,
   unlinkGuild,
@@ -350,7 +431,7 @@ module.exports = {
   // Migration
   createGuildSubscriptionsTable,
 
-  // ثوابت (للاستخدام في أماكن أخرى)
+  // ثوابت
   PLAN_HIERARCHY,
   FEATURE_REQUIREMENTS,
   PLAN_LIMITS
