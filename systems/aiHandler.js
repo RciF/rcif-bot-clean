@@ -115,6 +115,134 @@ class AIHandler {
     }
   }
 
+  // ═══════════════════════════════════════
+  // بناء System Prompt الكامل
+  // يربط: الهوية + الشخصية + المشاعر + الذاكرة + السياق
+  // ═══════════════════════════════════════
+  async buildSystemPrompt(userId, message, context = {}) {
+    try {
+      const user = context.user || {};
+      const guild = context.guild || {};
+      const channel = context.channel || {};
+
+      // 1) تحليل المشاعر
+      let emotion = null;
+      try {
+        emotion = aiEmotionSystem.analyzeEmotion?.(message);
+      } catch (err) {
+        logger.error("EMOTION_ANALYSIS_FAILED", { error: err.message });
+      }
+
+      // 2) تحليل القرار
+      let decision = null;
+      let trustLevel = "neutral";
+      try {
+        if (aiDecisionSystem.analyzeMessage) {
+          const analysis = aiDecisionSystem.analyzeMessage(message);
+          decision = analysis;
+        }
+        if (aiDecisionSystem.getTrustLevel) {
+          const behavior = aiDecisionSystem.updateBehavior?.(userId, aiDecisionSystem.detectAggression?.(message));
+          trustLevel = aiDecisionSystem.getTrustLevel(behavior?.score || 0);
+        }
+      } catch (err) {
+        logger.error("DECISION_ANALYSIS_FAILED", { error: err.message });
+      }
+
+      // 3) الهوية
+      let identityPrompt = "";
+      try {
+        identityPrompt = aiIdentitySystem.buildIdentityPrompt?.({
+          userId,
+          trustLevel,
+        }) || "";
+      } catch (err) {
+        logger.error("IDENTITY_BUILD_FAILED", { error: err.message });
+      }
+
+      // 4) الشخصية
+      let personalityPrompt = "";
+      try {
+        personalityPrompt = aiPersonalitySystem.getSystemPrompt?.({
+          userId,
+          trustLevel,
+          emotion,
+          action: decision?.needsResponse ? "answer" : "normal",
+          messageType: emotion?.type || "normal",
+        }) || "";
+      } catch (err) {
+        logger.error("PERSONALITY_BUILD_FAILED", { error: err.message });
+      }
+
+      // 5) الذاكرة
+      let memoryContext = "";
+      try {
+        const memories = await aiMemorySystem.searchRelevantMemories?.(userId, message);
+        if (memories && memories.length > 0) {
+          memoryContext = `\n[ذكريات سابقة]\n${memories.slice(0, 5).join("\n")}\n`;
+        }
+      } catch (err) {
+        logger.error("MEMORY_FETCH_FAILED", { error: err.message });
+      }
+
+      // 6) المعرفة
+      let knowledgeContext = "";
+      try {
+        const knowledge = await aiKnowledgeSystem.searchRelevantKnowledge?.(message);
+        if (knowledge && knowledge.length > 0) {
+          knowledgeContext = `\n[معرفة مكتسبة]\n${knowledge.slice(0, 3).join("\n")}\n`;
+        }
+      } catch (err) {
+        logger.error("KNOWLEDGE_FETCH_FAILED", { error: err.message });
+      }
+
+      // 7) العلاقات الاجتماعية
+      let socialContext = "";
+      try {
+        const relation = await aiSocialAwarenessSystem.getOrLoadRelationship?.(userId, context.user?.id);
+        if (relation && relation.score !== 0) {
+          const level = relation.score > 10 ? "صديق" : relation.score > 0 ? "معرفة" : relation.score < -5 ? "متوتر" : "محايد";
+          socialContext = `\n[العلاقة مع المستخدم: ${level} (${relation.score})]\n`;
+        }
+      } catch (err) {
+        // صامت — العلاقات اختيارية
+      }
+
+      // 8) سياق المشاعر
+      let emotionContext = "";
+      if (emotion && emotion.type !== "neutral") {
+        emotionContext = `\n[مشاعر المستخدم: ${emotion.type} | الشدة: ${emotion.intensity} | القطبية: ${emotion.polarity}]\n`;
+      }
+
+      // تجميع البرومبت النهائي
+      const systemPrompt = `
+${identityPrompt}
+
+${personalityPrompt}
+
+${emotionContext}
+
+${socialContext}
+
+${memoryContext}
+
+${knowledgeContext}
+
+[معلومات الجلسة]
+المستخدم: ${user.username || "مجهول"}
+السيرفر: ${guild.name || "غير معروف"}
+القناة: ${channel.name || "عام"}
+`.trim();
+
+      return systemPrompt;
+
+    } catch (error) {
+      logger.error("SYSTEM_PROMPT_BUILD_FAILED", { error: error.message });
+      // fallback بسيط لو كل شيء فشل
+      return "اسمك لين. تتكلم عربي. تتصرف كشخص حقيقي داخل سيرفر Discord. لا تقول أنك AI.";
+    }
+  }
+
   async askAI(userId, message, context = {}) {
     let requestKey;
 
@@ -132,11 +260,16 @@ class AIHandler {
 
       this.activeRequests.set(requestKey, true);
 
+      // ═══════════════════════════════════════
+      // بناء System Prompt الكامل بكل الأنظمة
+      // ═══════════════════════════════════════
+      const systemPrompt = await this.buildSystemPrompt(userId, cleanMessage, context);
+
       let memory = memoryManager.getMemory(userId) || [];
       memory = this.trimConversation(memory);
 
       const messages = [
-        { role: "system", content: "You are a helpful AI." },
+        { role: "system", content: systemPrompt },
         ...memory,
         { role: "user", content: cleanMessage }
       ];
@@ -158,6 +291,17 @@ class AIHandler {
       memoryManager.addMessage(userId, "user", cleanMessage);
       memoryManager.addMessage(userId, "assistant", reply);
 
+      // ✅ حفظ ذاكرة تلقائية
+      try {
+        await aiMemorySystem.storeMemory?.({
+          userId,
+          type: "conversation",
+          memory: cleanMessage.slice(0, 200)
+        });
+      } catch (err) {
+        // صامت — الذاكرة اختيارية
+      }
+
       this.updateFeedback(userId, "answer", true);
 
       return reply;
@@ -166,7 +310,7 @@ class AIHandler {
       logger.error("AI_HANDLER_ERROR", { error: error.message });
 
       if (requestKey) {
-        this.activeRequests.delete(requestKey); // ✅ FIX مهم
+        this.activeRequests.delete(requestKey);
       }
 
       return "❌ حصل خطأ في الذكاء الاصطناعي";
