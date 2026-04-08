@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js")
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
 const config = require("../../config")
 
@@ -9,59 +9,59 @@ module.exports = {
     .addStringOption(option =>
       option
         .setName("item")
-        .setDescription("اسم العنصر (بالانجليزي)")
+        .setDescription("اسم العنصر")
         .setRequired(true)
+        .addChoices(
+          ...Object.entries(config.shopItems).map(([key, val]) => ({
+            name: `${val.name} — ${val.price} كوين`,
+            value: key
+          }))
+        )
     ),
 
   async execute(interaction) {
-    try {
-      if (!interaction.guild) {
-        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
-      }
+    await interaction.deferReply({ ephemeral: true })
 
+    try {
       const userId = interaction.user.id
       const guildId = interaction.guild.id
-      const itemId = interaction.options.getString("item").toLowerCase()
-
+      const itemId = interaction.options.getString("item")
       const item = config.shopItems[itemId]
 
       if (!item) {
-        const available = Object.keys(config.shopItems).join(", ")
-        return interaction.reply({
-          content: `❌ العنصر غير موجود.\nالعناصر المتاحة: \`${available}\``,
-          ephemeral: true
-        })
+        return await interaction.editReply({ content: "❌ العنصر غير موجود." })
       }
 
       await database.transaction(async (client) => {
         const debit = await client.query(
-          `UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2 AND coins >= $1 RETURNING coins;`,
-          [item.price, userId]
+          `UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2 AND guild_id = $3 AND coins >= $1 RETURNING coins`,
+          [item.price, userId, guildId]
         )
 
-        if (!debit.rows.length) {
-          throw new Error("NO_MONEY")
-        }
+        if (!debit.rows.length) throw new Error("NO_MONEY")
 
         await client.query(
           `INSERT INTO inventory (user_id, guild_id, item_id, quantity)
            VALUES ($1, $2, $3, 1)
            ON CONFLICT (user_id, guild_id, item_id)
-           DO UPDATE SET quantity = inventory.quantity + 1;`,
-          [userId, guildId, item.id]
+           DO UPDATE SET quantity = inventory.quantity + 1`,
+          [userId, guildId, itemId]
         )
       })
 
-      await interaction.reply(`🛒 اشتريت **${item.name}** مقابل **${item.price}** كوين`)
+      const embed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle("✅ تم الشراء!")
+        .setDescription(`اشتريت **${item.name}** مقابل **${item.price}** كوين`)
+
+      await interaction.editReply({ embeds: [embed] })
 
     } catch (error) {
       if (error.message === "NO_MONEY") {
-        return interaction.reply({ content: "❌ ليس لديك كوين كافي", ephemeral: true })
+        return await interaction.editReply({ content: "❌ ما عندك كوين كافي." })
       }
       console.error("BUY_ERROR", error)
-      if (!interaction.replied) {
-        await interaction.reply({ content: "❌ حصل خطأ في الشراء", ephemeral: true })
-      }
+      await interaction.editReply({ content: "❌ حصل خطأ، حاول مرة ثانية." })
     }
   }
 }
