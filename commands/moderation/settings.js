@@ -15,20 +15,21 @@ module.exports = {
         })
       }
 
-      const settings = settingsSystem.getSettings?.(interaction.guild.id) || {}
+      const settings = await settingsSystem.getSettings(interaction.guild.id)
 
       const embed = new EmbedBuilder()
         .setTitle("⚙️ إعدادات السيرفر")
         .setColor(0x3498db)
         .addFields(
-          { name: "AI", value: settings.ai ? "🟢 Enabled" : "🔴 Disabled", inline: true },
-          { name: "XP", value: settings.xp ? "🟢 Enabled" : "🔴 Disabled", inline: true },
-          { name: "Economy", value: settings.economy ? "🟢 Enabled" : "🔴 Disabled", inline: true }
+          { name: "AI", value: settings.ai ? "🟢 مفعّل" : "🔴 معطّل", inline: true },
+          { name: "XP", value: settings.xp ? "🟢 مفعّل" : "🔴 معطّل", inline: true },
+          { name: "Economy", value: settings.economy ? "🟢 مفعّل" : "🔴 معطّل", inline: true }
         )
 
       await interaction.reply({ embeds: [embed] })
 
     } catch (error) {
+      console.error("[SETTINGS ERROR]", error)
       await interaction.reply({
         content: "❌ حصل خطأ في الإعدادات",
         ephemeral: true
