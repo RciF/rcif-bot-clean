@@ -159,10 +159,10 @@ module.exports = async (message) => {
 
     if (!content || content.length < 2) return
 
-    const dedupeKey = `${userId}:${content}`
+    const dedupeKey = `${userId}:${message.id}`
 
-    if (recentReplies.has(dedupeKey)) return
-    recentReplies.set(dedupeKey, now)
+if (recentReplies.has(dedupeKey)) return
+recentReplies.set(dedupeKey, now)
 
     const intent = aiBrainSystem.detectIntent(content)
 
