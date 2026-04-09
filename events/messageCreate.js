@@ -44,13 +44,14 @@ module.exports = {
       // ✅ FIX: شلنا aiHandler.askAI المنفصل — aiAutoReplySystem يستدعيه داخلياً
       const aiEnabled = await aiSystem.ensureAIEnabled(message)
 
-      if (aiEnabled) {
-        try {
-          await aiAutoReplySystem(message)
-        } catch (err) {
-          logger.error("AI_REPLY_FAILED", { error: err.message })
-        }
-      }
+      if (aiEnabled && !message._aiHandled) {
+    message._aiHandled = true
+    try {
+      await aiAutoReplySystem(message)
+    } catch (err) {
+      logger.error("AI_REPLY_FAILED", { error: err.message })
+    }
+  }
 
       // 🔥 XP system
       const xpEnabled = await xpSystem.ensureXPEnabled(message)
