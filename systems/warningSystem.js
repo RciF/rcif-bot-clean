@@ -20,6 +20,12 @@ async function getWarnings(guildId, userId) {
   return warnings
 }
 
+async function getAllWarnings(guildId) {
+  const warnings = await warningRepository.getAllWarnings(guildId)
+
+  return warnings
+}
+
 async function clearWarnings(guildId, userId) {
   await warningRepository.clearWarnings(
     guildId,
@@ -30,5 +36,6 @@ async function clearWarnings(guildId, userId) {
 module.exports = {
   addWarning,
   getWarnings,
+  getAllWarnings,
   clearWarnings
 }

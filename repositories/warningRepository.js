@@ -47,6 +47,29 @@ async function getWarnings(guildId, userId) {
     }
 }
 
+async function getAllWarnings(guildId) {
+
+    try {
+
+        const result = await databaseSystem.query(
+            `SELECT * FROM warnings
+             WHERE guild_id = $1
+             ORDER BY created_at DESC`,
+            [guildId]
+        );
+
+        return result.rows || [];
+
+    } catch (error) {
+
+        logger.error("WARNING_FETCH_ALL_FAILED", {
+            error: error.message
+        });
+        throw error;
+
+    }
+}
+
 async function clearWarnings(guildId, userId) {
 
     try {
@@ -70,5 +93,6 @@ async function clearWarnings(guildId, userId) {
 module.exports = {
     addWarning,
     getWarnings,
+    getAllWarnings,
     clearWarnings
 };
