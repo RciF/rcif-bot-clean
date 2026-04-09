@@ -2,7 +2,6 @@ const guildSystem = require("./guildSystem")
 const planGateSystem = require("./planGateSystem")
 const logger = require("./loggerSystem")
 
-// ✅ FIX: كان ناقص async — الآن مع نظام الخطط
 async function ensureAIEnabled(message) {
 
   try {
@@ -22,31 +21,7 @@ async function ensureAIEnabled(message) {
     const aiEnabled = await guildSystem.isAIEnabled(guildId)
     if (!aiEnabled) return false
 
-    // ❌ تجاهل الرسائل القصيرة جدًا
-    if (!message.content || message.content.length < 3) return false
-
-    // 🧠 تحديد التفاعل مع البوت
-    const botId = message.client?.user?.id
-
-    const isMention = botId
-      ? message.mentions?.users?.has(botId)
-      : false
-
-    const isReply = message.reference?.messageId
-
-    // 🔥 لازم يكون فيه تفاعل
-    if (!isMention && !isReply) return false
-
-    // ✅ فلترة ذكية
-    const clean = message.content.trim()
-
-    if (clean.length < 6) return false
-
-    if (isMention) {
-      const withoutMention = clean.replace(/<@!?\d+>/g, "").trim()
-      if (!withoutMention) return false
-    }
-
+    // ✅ التحقق من المنشن يصير في aiAutoReplySystem فقط
     return true
 
   } catch (error) {
