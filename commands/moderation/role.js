@@ -4,103 +4,88 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("رتبة")
     .setDescription("إعطاء أو سحب رتبة من عضو أو مجموعة أعضاء")
-    .setNameLocalizations({ "en-US": "role", "en-GB": "role" })
-    .setDescriptionLocalizations({
-      "en-US": "Add or remove a role from a member or group of members",
-      "en-GB": "Add or remove a role from a member or group of members"
-    })
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .addRoleOption(option =>
       option
         .setName("الرتبة")
         .setDescription("الرتبة المراد إعطاؤها أو سحبها")
-        .setNameLocalizations({ "en-US": "role", "en-GB": "role" })
-        .setDescriptionLocalizations({ "en-US": "The role to add or remove", "en-GB": "The role to add or remove" })
         .setRequired(true)
     )
     .addStringOption(option =>
       option
         .setName("الإجراء")
         .setDescription("إعطاء أو سحب الرتبة")
-        .setNameLocalizations({ "en-US": "action", "en-GB": "action" })
-        .setDescriptionLocalizations({ "en-US": "Add or remove the role", "en-GB": "Add or remove the role" })
         .setRequired(true)
         .addChoices(
-          { name: "➕ إعطاء الرتبة", value: "add" },
-          { name: "➖ سحب الرتبة", value: "remove" }
+          { name: "➕ إعطاء الرتبة | Add Role",   value: "add"    },
+          { name: "➖ سحب الرتبة | Remove Role",   value: "remove" }
         )
     )
     .addStringOption(option =>
       option
         .setName("الهدف")
         .setDescription("لمين تبي تعدل الرتبة؟")
-        .setNameLocalizations({ "en-US": "target", "en-GB": "target" })
-        .setDescriptionLocalizations({ "en-US": "Who to modify the role for?", "en-GB": "Who to modify the role for?" })
         .setRequired(true)
         .addChoices(
-          { name: "👤 عضو محدد", value: "single" },
-          { name: "👥 كل الأعضاء (البشر)", value: "all_humans" },
-          { name: "🤖 كل البوتات", value: "all_bots" },
-          { name: "🌐 الكل (بشر + بوتات)", value: "everyone" }
+          { name: "👤 عضو محدد | Single Member",          value: "single"     },
+          { name: "👥 كل الأعضاء البشر | All Humans",     value: "all_humans" },
+          { name: "🤖 كل البوتات | All Bots",             value: "all_bots"   },
+          { name: "🌐 الكل بشر وبوتات | Everyone",        value: "everyone"   }
         )
     )
     .addUserOption(option =>
       option
         .setName("العضو")
         .setDescription("العضو المحدد (مطلوب فقط إذا اخترت عضو محدد)")
-        .setNameLocalizations({ "en-US": "member", "en-GB": "member" })
-        .setDescriptionLocalizations({ "en-US": "Specific member (required only if you chose single member)", "en-GB": "Specific member (required only if you chose single member)" })
         .setRequired(false)
     )
     .addStringOption(option =>
       option
         .setName("السبب")
         .setDescription("سبب تعديل الرتبة (اختياري)")
-        .setNameLocalizations({ "en-US": "reason", "en-GB": "reason" })
-        .setDescriptionLocalizations({ "en-US": "Reason for role change (optional)", "en-GB": "Reason for role change (optional)" })
         .setRequired(false)
     ),
 
   async execute(interaction) {
     try {
-      // ✅ تحقق: داخل سيرفر فقط
+      // ✅ Check: inside a guild only
       if (!interaction.guild) {
-        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+        return interaction.reply({ content: "❌ هذا الأمر يُستخدم داخل السيرفر فقط.", ephemeral: true })
       }
 
-      const role = interaction.options.getRole("الرتبة")
-      const action = interaction.options.getString("الإجراء")
-      const target = interaction.options.getString("الهدف")
+      const role       = interaction.options.getRole("الرتبة")
+      const action     = interaction.options.getString("الإجراء")
+      const target     = interaction.options.getString("الهدف")
       const targetUser = interaction.options.getUser("العضو")
-      const reason = interaction.options.getString("السبب") || "لم يتم تحديد سبب"
+      const reason     = interaction.options.getString("السبب") || "لم يتم تحديد سبب"
 
-      const isAdding = action === "add"
+      const isAdding   = action === "add"
       const actionText = isAdding ? "إعطاء" : "سحب"
 
-      // ✅ تحقق: لا تعدل رتبة @everyone
+      // ✅ Check: cannot modify @everyone role
       if (role.id === interaction.guild.id) {
         return interaction.reply({ content: "❌ ما تقدر تعدل رتبة @everyone.", ephemeral: true })
       }
 
-      // ✅ تحقق: الرتبة مو managed
+      // ✅ Check: managed role (bot integration etc.)
       if (role.managed) {
         return interaction.reply({ content: "❌ هذي رتبة مُدارة (تابعة لبوت أو ربط خارجي) وما تقدر تتحكم فيها.", ephemeral: true })
       }
 
-      // ✅ تحقق: رتبة البوت أعلى من الرتبة المطلوبة
+      // ✅ Check: bot's role must be higher
       const botMember = interaction.guild.members.me
       if (role.position >= botMember.roles.highest.position) {
         return interaction.reply({ content: "❌ رتبة البوت أقل من أو تساوي هذي الرتبة. ارفع رتبة البوت أولاً.", ephemeral: true })
       }
 
-      // ✅ تحقق: رتبة المنفذ أعلى من الرتبة المطلوبة
+      // ✅ Check: executor's role must be higher than the target role
       if (role.position >= interaction.member.roles.highest.position && interaction.user.id !== interaction.guild.ownerId) {
         return interaction.reply({ content: "❌ ما تقدر تعدل رتبة أعلى منك أو تساويك.", ephemeral: true })
       }
 
       // ========================================
-      // 👤 عضو واحد
+      // 👤 Single member
       // ========================================
       if (target === "single") {
         if (!targetUser) {
@@ -109,16 +94,16 @@ module.exports = {
 
         const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null)
         if (!member) {
-          return interaction.reply({ content: "❌ ما قدرت ألقى هذا العضو.", ephemeral: true })
+          return interaction.reply({ content: "❌ ما قدرت أجد هذا العضو.", ephemeral: true })
         }
 
         const hasRole = member.roles.cache.has(role.id)
 
         if (isAdding && hasRole) {
-          return interaction.reply({ content: `⚠️ ${targetUser} عنده رتبة ${role} بالفعل.`, ephemeral: true })
+          return interaction.reply({ content: `⚠️ ${targetUser} يملك رتبة ${role} بالفعل.`, ephemeral: true })
         }
         if (!isAdding && !hasRole) {
-          return interaction.reply({ content: `⚠️ ${targetUser} ما عنده رتبة ${role} أصلاً.`, ephemeral: true })
+          return interaction.reply({ content: `⚠️ ${targetUser} لا يملك رتبة ${role} أصلاً.`, ephemeral: true })
         }
 
         if (isAdding) {
@@ -132,24 +117,24 @@ module.exports = {
           .setTitle(isAdding ? "➕ تم إعطاء الرتبة" : "➖ تم سحب الرتبة")
           .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 128 }))
           .addFields(
-            { name: "👤 العضو", value: `${targetUser} (\`${targetUser.username}\`)`, inline: true },
-            { name: "🏷️ الرتبة", value: `${role}`, inline: true },
-            { name: "🎨 لون الرتبة", value: role.hexColor, inline: true },
-            { name: "📝 السبب", value: reason, inline: false },
-            { name: "👮 بواسطة", value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true }
+            { name: "👤 العضو",      value: `${targetUser} (\`${targetUser.username}\`)`,             inline: true  },
+            { name: "🏷️ الرتبة",    value: `${role}`,                                                inline: true  },
+            { name: "🎨 لون الرتبة", value: role.hexColor,                                           inline: true  },
+            { name: "📝 السبب",      value: reason,                                                   inline: false },
+            { name: "👮 بواسطة",     value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true  }
           )
-          .setFooter({ text: `ID العضو: ${targetUser.id} | ID الرتبة: ${role.id}` })
+          .setFooter({ text: `آيدي العضو: ${targetUser.id} | آيدي الرتبة: ${role.id}` })
           .setTimestamp()
 
         return interaction.reply({ embeds: [embed] })
       }
 
       // ========================================
-      // 👥 عملية جماعية
+      // 👥 Bulk operation
       // ========================================
       await interaction.deferReply()
 
-      // ✅ جلب كل الأعضاء
+      // ✅ Fetch all members
       await interaction.guild.members.fetch()
 
       let targetMembers
@@ -159,11 +144,10 @@ module.exports = {
       } else if (target === "all_bots") {
         targetMembers = interaction.guild.members.cache.filter(m => m.user.bot)
       } else {
-        // everyone
         targetMembers = interaction.guild.members.cache
       }
 
-      // ✅ فلتر: بس اللي يحتاجون تعديل
+      // ✅ Filter: only those who need the change
       if (isAdding) {
         targetMembers = targetMembers.filter(m => !m.roles.cache.has(role.id))
       } else {
@@ -174,16 +158,16 @@ module.exports = {
 
       if (totalMembers === 0) {
         const msg = isAdding
-          ? `⚠️ كل الأعضاء المستهدفين عندهم رتبة ${role} بالفعل.`
-          : `⚠️ ما فيه أحد من المستهدفين عنده رتبة ${role} أصلاً.`
+          ? `⚠️ كل الأعضاء المستهدفين يملكون رتبة ${role} بالفعل.`
+          : `⚠️ لا أحد من المستهدفين يملك رتبة ${role} أصلاً.`
         return interaction.editReply({ content: msg })
       }
 
-      // ✅ إرسال رسالة تقدم
+      // ✅ Progress labels
       const targetLabels = {
         all_humans: "كل الأعضاء (البشر)",
-        all_bots: "كل البوتات",
-        everyone: "الكل (بشر + بوتات)"
+        all_bots:   "كل البوتات",
+        everyone:   "الكل (بشر + بوتات)"
       }
 
       const progressEmbed = new EmbedBuilder()
@@ -194,9 +178,9 @@ module.exports = {
 
       await interaction.editReply({ embeds: [progressEmbed] })
 
-      // ✅ تنفيذ العملية مع تأخير عشان ما نتجاوز Rate Limit
+      // ✅ Execute with delay to avoid rate limits
       let success = 0
-      let failed = 0
+      let failed  = 0
       const members = [...targetMembers.values()]
 
       for (const member of members) {
@@ -211,34 +195,34 @@ module.exports = {
           failed++
         }
 
-        // تأخير 300ms بين كل عضو عشان ما نتجاوز الحد
+        // Delay every 5 members to avoid rate limit
         if (success % 5 === 0) {
           await new Promise(r => setTimeout(r, 300))
         }
       }
 
-      // ✅ Embed النتيجة النهائية
+      // ✅ Final result embed
       const resultEmbed = new EmbedBuilder()
         .setColor(isAdding ? 0x22c55e : 0xef4444)
         .setTitle(isAdding ? "➕ تم إعطاء الرتبة (جماعي)" : "➖ تم سحب الرتبة (جماعي)")
         .addFields(
-          { name: "🏷️ الرتبة", value: `${role}`, inline: true },
-          { name: "🎯 الهدف", value: targetLabels[target], inline: true },
-          { name: "🎨 لون الرتبة", value: role.hexColor, inline: true },
-          { name: "✅ نجح", value: `**${success}** عضو`, inline: true },
-          { name: "❌ فشل", value: `**${failed}** عضو`, inline: true },
-          { name: "📊 الإجمالي", value: `**${totalMembers}** عضو`, inline: true },
-          { name: "📝 السبب", value: reason, inline: false },
-          { name: "👮 بواسطة", value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true }
+          { name: "🏷️ الرتبة",     value: `${role}`,                inline: true  },
+          { name: "🎯 الهدف",       value: targetLabels[target],      inline: true  },
+          { name: "🎨 لون الرتبة",  value: role.hexColor,             inline: true  },
+          { name: "✅ نجح",         value: `**${success}** عضو`,      inline: true  },
+          { name: "❌ فشل",         value: `**${failed}** عضو`,       inline: true  },
+          { name: "📊 الإجمالي",    value: `**${totalMembers}** عضو`, inline: true  },
+          { name: "📝 السبب",       value: reason,                    inline: false },
+          { name: "👮 بواسطة",      value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true }
         )
-        .setFooter({ text: `ID الرتبة: ${role.id}` })
+        .setFooter({ text: `آيدي الرتبة: ${role.id}` })
         .setTimestamp()
 
-      // ✅ تحذير لو فيه فشل
+      // ✅ Warning if some failed
       if (failed > 0) {
         resultEmbed.addFields({
           name: "⚠️ ملاحظة",
-          value: `بعض الأعضاء ما قدر البوت يعدل رتبهم (رتبتهم أعلى من البوت أو صلاحيات ناقصة).`,
+          value: "بعض الأعضاء ما قدر البوت يعدل رتبهم (رتبتهم أعلى من البوت أو صلاحيات ناقصة).",
           inline: false
         })
       }
