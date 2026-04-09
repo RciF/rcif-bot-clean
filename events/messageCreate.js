@@ -28,14 +28,14 @@ module.exports = {
 
       // 🔥 AI observation (non-blocking)
       try {
-        aiObservationSystem.observeMessage(message)
+       //  aiObservationSystem.observeMessage(message)
       } catch (err) {
         logger.error("AI_OBSERVATION_FAILED", { error: err.message })
       }
 
       // 🔥 social awareness
       try {
-        await aiSocialAwarenessSystem.trackInteraction(message)
+         // await aiSocialAwarenessSystem.trackInteraction(message)
       } catch (err) {
         logger.error("AI_SOCIAL_AWARENESS_FAILED", { error: err.message })
       }
