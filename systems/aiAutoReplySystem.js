@@ -95,6 +95,10 @@ module.exports = async (message) => {
     if (!message?.author || message.author.bot) return
     if (!message.content) return
 
+    // 🔒 منع المعالجة المزدوجة — قفل فوري بـ message.id
+    if (message._aiProcessed) return
+    message._aiProcessed = true
+    
     const userId = message.author.id
 
     // 🔥 dev mode commands
