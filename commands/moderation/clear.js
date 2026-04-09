@@ -10,22 +10,12 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("مسح")
     .setDescription("مسح رسائل من القناة الحالية مع فلاتر متقدمة")
-    .setNameLocalizations({ "en-US": "clear", "en-GB": "clear" })
-    .setDescriptionLocalizations({
-      "en-US": "Delete messages from the current channel with advanced filters",
-      "en-GB": "Delete messages from the current channel with advanced filters"
-    })
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addIntegerOption(option =>
       option
         .setName("العدد")
         .setDescription("عدد الرسائل المراد مسحها (1 - 100)")
-        .setNameLocalizations({ "en-US": "amount", "en-GB": "amount" })
-        .setDescriptionLocalizations({
-          "en-US": "Number of messages to delete (1 - 100)",
-          "en-GB": "Number of messages to delete (1 - 100)"
-        })
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(100)
@@ -34,22 +24,12 @@ module.exports = {
       option
         .setName("العضو")
         .setDescription("مسح رسائل عضو معين فقط (اختياري)")
-        .setNameLocalizations({ "en-US": "member", "en-GB": "member" })
-        .setDescriptionLocalizations({
-          "en-US": "Delete messages from a specific member only (optional)",
-          "en-GB": "Delete messages from a specific member only (optional)"
-        })
         .setRequired(false)
     )
     .addStringOption(option =>
       option
         .setName("الفلتر")
         .setDescription("فلتر نوع الرسائل (اختياري)")
-        .setNameLocalizations({ "en-US": "filter", "en-GB": "filter" })
-        .setDescriptionLocalizations({
-          "en-US": "Filter message type (optional)",
-          "en-GB": "Filter message type (optional)"
-        })
         .setRequired(false)
         .addChoices(
           { name: "🤖 رسائل البوتات فقط", value: "bots" },
@@ -64,11 +44,6 @@ module.exports = {
       option
         .setName("السبب")
         .setDescription("سبب المسح (اختياري — يظهر في اللوق)")
-        .setNameLocalizations({ "en-US": "reason", "en-GB": "reason" })
-        .setDescriptionLocalizations({
-          "en-US": "Reason for deletion (optional — shows in logs)",
-          "en-GB": "Reason for deletion (optional — shows in logs)"
-        })
         .setRequired(false)
     ),
 
@@ -150,7 +125,7 @@ module.exports = {
       try {
         deleted = await interaction.channel.bulkDelete(toDelete, true)
       } catch (err) {
-        console.error("[CLEAR] Bulk delete failed:", err.message)
+        console.error("[مسح] فشل الحذف الجماعي:", err.message)
         return interaction.editReply({ content: "❌ فشل حذف الرسائل. تأكد إن الرسائل ما تكون أقدم من 14 يوم." })
       }
 
@@ -222,7 +197,7 @@ module.exports = {
       embed.setFooter({ text: `هذه الرسالة تختفي بعد 15 ثانية` })
       embed.setTimestamp()
 
-      // ✅ إرسال النتيجة (ephemeral) ثم حذفها بعد 15 ثانية
+      // ✅ إرسال النتيجة (ephemeral)
       await interaction.editReply({ embeds: [embed] })
 
       // ✅ رسالة مؤقتة في القناة تختفي بعد 6 ثواني
@@ -240,7 +215,7 @@ module.exports = {
       }
 
     } catch (err) {
-      console.error("[CLEAR ERROR]", err)
+      console.error("[خطأ في المسح]", err)
 
       if (interaction.deferred) {
         return interaction.editReply({ content: "❌ حدث خطأ أثناء مسح الرسائل." })
