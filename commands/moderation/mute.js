@@ -52,27 +52,27 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("اسكت")
     .setDescription("كتم عضو (Timeout) لمدة محددة")
-    .setNameLocalizations({ "en-US": "mute", "en-GB": "mute" })
+    .setNameLocalizations({ "en-US": "اسكات", "en-GB": "اسكات" })
     .setDescriptionLocalizations({
-      "en-US": "Timeout a member for a specified duration",
-      "en-GB": "Timeout a member for a specified duration"
-    })
+  "en-US": "كتم عضو لمدة محددة",
+  "en-GB": "كتم عضو لمدة محددة"
+})
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption(option =>
       option
         .setName("العضو")
         .setDescription("العضو المراد كتمه")
-        .setNameLocalizations({ "en-US": "member", "en-GB": "member" })
-        .setDescriptionLocalizations({ "en-US": "The member to mute", "en-GB": "The member to mute" })
+        .setNameLocalizations({ "en-US": "العضو", "en-GB": "العضو" })
+.setDescriptionLocalizations({ "en-US": "العضو المراد كتمه", "en-GB": "العضو المراد كتمه" })
         .setRequired(true)
     )
     .addIntegerOption(option =>
       option
         .setName("المدة")
         .setDescription("مدة الكتم (رقم)")
-        .setNameLocalizations({ "en-US": "duration", "en-GB": "duration" })
-        .setDescriptionLocalizations({ "en-US": "Duration amount (number)", "en-GB": "Duration amount (number)" })
+        .setNameLocalizations({ "en-US": "المدة", "en-GB": "المدة" })
+.setDescriptionLocalizations({ "en-US": "مدة الكتم (رقم)", "en-GB": "مدة الكتم (رقم)" })
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(672)
@@ -81,8 +81,8 @@ module.exports = {
       option
         .setName("الوحدة")
         .setDescription("وحدة الوقت")
-        .setNameLocalizations({ "en-US": "unit", "en-GB": "unit" })
-        .setDescriptionLocalizations({ "en-US": "Time unit", "en-GB": "Time unit" })
+        .setNameLocalizations({ "en-US": "الوحدة", "en-GB": "الوحدة" })
+.setDescriptionLocalizations({ "en-US": "وحدة الوقت", "en-GB": "وحدة الوقت" })
         .setRequired(true)
         .addChoices(
           { name: "ثانية | Second", value: "ثانية" },
@@ -97,8 +97,8 @@ module.exports = {
       option
         .setName("السبب")
         .setDescription("سبب الكتم")
-        .setNameLocalizations({ "en-US": "reason", "en-GB": "reason" })
-        .setDescriptionLocalizations({ "en-US": "Reason for mute", "en-GB": "Reason for mute" })
+        .setNameLocalizations({ "en-US": "السبب", "en-GB": "السبب" })
+.setDescriptionLocalizations({ "en-US": "سبب الكتم", "en-GB": "سبب الكتم" })
         .setRequired(false)
     ),
 
