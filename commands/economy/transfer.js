@@ -1,87 +1,134 @@
-const { SlashCommandBuilder } = require("discord.js")
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
+const { formatPriceExact } = require("../../config/economyConfig")
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("transfer")
-    .setDescription("تحويل كوين لشخص")
+    .setName("تحويل")
+    .setDescription("تحويل كوينز لعضو آخر")
+    .setDMPermission(false)
     .addUserOption(option =>
-      option.setName("user")
-        .setDescription("الشخص الذي تريد التحويل له")
+      option
+        .setName("العضو")
+        .setDescription("العضو المراد التحويل له")
         .setRequired(true)
     )
     .addIntegerOption(option =>
-      option.setName("amount")
-        .setDescription("عدد الكوين")
+      option
+        .setName("المبلغ")
+        .setDescription("عدد الكوينز المراد تحويلها")
         .setRequired(true)
+        .setMinValue(1)
     ),
 
   async execute(interaction) {
-
-    const client = await database.getClient()
-
     try {
+      if (!interaction.guild) {
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+      }
 
       const senderId = interaction.user.id
-      const targetUser = interaction.options.getUser("user")
-      const amount = interaction.options.getInteger("amount")
+      const targetUser = interaction.options.getUser("العضو")
+      const amount = interaction.options.getInteger("المبلغ")
 
-      if (amount <= 0) {
-        return interaction.reply({ content: "❌ مبلغ غير صالح", ephemeral: true })
-      }
-
+      // ✅ لا تحول لنفسك
       if (targetUser.id === senderId) {
-        return interaction.reply({ content: "❌ لا يمكنك التحويل لنفسك", ephemeral: true })
+        return interaction.reply({ content: "❌ ما تقدر تحول لنفسك!", ephemeral: true })
       }
 
-      await client.query("BEGIN")
+      // ✅ لا تحول لبوت
+      if (targetUser.bot) {
+        return interaction.reply({ content: "❌ ما تقدر تحول لبوت!", ephemeral: true })
+      }
 
-      // ✅ خصم آمن (ما ينقص إلا إذا فيه رصيد)
-      const debit = await client.query(
-        `
-        UPDATE economy_users
-        SET coins = coins - $1
-        WHERE user_id = $2 AND coins >= $1
-        RETURNING coins;
-        `,
-        [amount, senderId]
-      )
+      const client = await database.getClient()
 
-      if (!debit.rows.length) {
+      try {
+        await client.query("BEGIN")
+
+        // ✅ جلب المرسل
+        await client.query(
+          `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
+           VALUES ($1, 0, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
+          [senderId]
+        )
+
+        const senderResult = await client.query(
+          "SELECT coins FROM economy_users WHERE user_id = $1 FOR UPDATE",
+          [senderId]
+        )
+        const senderCoins = senderResult.rows[0]?.coins || 0
+
+        // ✅ تحقق: الرصيد كافي
+        if (senderCoins < amount) {
+          await client.query("ROLLBACK")
+          return interaction.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0xef4444)
+                .setTitle("❌ رصيد غير كافي")
+                .addFields(
+                  { name: "💰 رصيدك", value: `**${formatPriceExact(senderCoins)}** كوين`, inline: true },
+                  { name: "💸 المطلوب", value: `**${formatPriceExact(amount)}** كوين`, inline: true },
+                  { name: "📉 ينقصك", value: `**${formatPriceExact(amount - senderCoins)}** كوين`, inline: true }
+                )
+            ],
+            ephemeral: true
+          })
+        }
+
+        // ✅ خصم من المرسل
+        await client.query(
+          "UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2",
+          [amount, senderId]
+        )
+
+        // ✅ إضافة للمستلم
+        await client.query(
+          `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
+           VALUES ($1, $2, 0, 0, '[]')
+           ON CONFLICT (user_id) DO UPDATE SET coins = economy_users.coins + $2`,
+          [targetUser.id, amount]
+        )
+
+        // ✅ جلب الأرصدة الجديدة
+        const newSender = await client.query("SELECT coins FROM economy_users WHERE user_id = $1", [senderId])
+        const newReceiver = await client.query("SELECT coins FROM economy_users WHERE user_id = $1", [targetUser.id])
+
+        await client.query("COMMIT")
+
+        const senderNewBalance = newSender.rows[0]?.coins || 0
+        const receiverNewBalance = newReceiver.rows[0]?.coins || 0
+
+        // ✅ Embed النجاح
+        const embed = new EmbedBuilder()
+          .setColor(0x22c55e)
+          .setTitle("💸 تم التحويل بنجاح")
+          .addFields(
+            { name: "📤 المرسل", value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true },
+            { name: "📥 المستلم", value: `${targetUser} (\`${targetUser.username}\`)`, inline: true },
+            { name: "💰 المبلغ", value: `**${formatPriceExact(amount)}** كوين`, inline: true },
+            { name: "💳 رصيدك بعد التحويل", value: `**${formatPriceExact(senderNewBalance)}** كوين`, inline: true },
+            { name: "💳 رصيد المستلم", value: `**${formatPriceExact(receiverNewBalance)}** كوين`, inline: true }
+          )
+          .setTimestamp()
+
+        return interaction.reply({ embeds: [embed] })
+
+      } catch (err) {
         await client.query("ROLLBACK")
-        return interaction.reply({ content: "❌ ليس لديك كوين كافي", ephemeral: true })
+        throw err
+      } finally {
+        client.release()
       }
 
-      // ✅ إضافة للمستلم
-      await client.query(
-        `
-        INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-        VALUES ($1, $2, 0, 0, $3)
-        ON CONFLICT (user_id)
-        DO UPDATE SET coins = economy_users.coins + $2;
-        `,
-        [targetUser.id, amount, []]
-      )
+    } catch (err) {
+      console.error("[TRANSFER ERROR]", err)
 
-      await client.query("COMMIT")
-
-      await interaction.reply(
-        `💸 تم تحويل **${amount}** كوين إلى ${targetUser.username}`
-      )
-
-    } catch (error) {
-
-      await client.query("ROLLBACK")
-
-      console.error("TRANSFER_ERROR", error)
-
-      await interaction.reply({
-        content: "❌ حصل خطأ في التحويل",
-        ephemeral: true
-      })
-
-    } finally {
-      client.release()
+      if (interaction.replied || interaction.deferred) {
+        return interaction.followUp({ content: "❌ حدث خطأ في التحويل.", ephemeral: true })
+      }
+      return interaction.reply({ content: "❌ حدث خطأ في التحويل.", ephemeral: true })
     }
   },
 }
