@@ -22,7 +22,7 @@ module.exports = {
 
       const targetUser = interaction.options.getUser("العضو") || interaction.user
       const userId = targetUser.id
-      const guildId = 
+      
 
       // ✅ جلب الممتلكات
       const assetsResult = await database.query(
