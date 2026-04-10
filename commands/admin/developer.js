@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require("discord.js")
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const { requireOwner } = require("../../systems/commandGuardSystem")
 const database = require("../../systems/databaseSystem")
 const fs = require("fs")
@@ -31,23 +31,6 @@ function countFiles(dir) {
   return count
 }
 
-function countCommands() {
-  try {
-    const commandsPath = path.join(__dirname, "../../commands")
-    let count = 0
-    const folders = fs.readdirSync(commandsPath)
-    for (const folder of folders) {
-      const folderPath = path.join(commandsPath, folder)
-      if (!fs.lstatSync(folderPath).isDirectory()) continue
-      const files = fs.readdirSync(folderPath).filter(f => f.endsWith(".js"))
-      count += files.length
-    }
-    return count
-  } catch {
-    return 0
-  }
-}
-
 function getCommandsByFolder() {
   try {
     const commandsPath = path.join(__dirname, "../../commands")
@@ -65,6 +48,228 @@ function getCommandsByFolder() {
   }
 }
 
+// ✅ بناء Embed الرئيسي
+async function buildMainEmbed(client, interaction) {
+  const totalServers = client.guilds.cache.size
+  const totalUsers = client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0)
+  const totalChannels = client.channels.cache.size
+  const gatewayPing = client.ws.ping
+  const apiPing = Date.now() - interaction.createdTimestamp
+  const uptime = formatUptime(process.uptime())
+
+  const memUsage = process.memoryUsage()
+  const rss = (memUsage.rss / 1024 / 1024).toFixed(1)
+  const heap = (memUsage.heapUsed / 1024 / 1024).toFixed(1)
+  const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1)
+  const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1)
+  const cpuCount = os.cpus().length
+  const platform = `${os.platform()} ${os.arch()}`
+
+  const commandsByFolder = getCommandsByFolder()
+  const totalCommands = Object.values(commandsByFolder).reduce((a, b) => a + b, 0)
+  const folderText = Object.entries(commandsByFolder)
+    .map(([folder, count]) => {
+      const emojis = { admin: "⚙️", moderation: "🛡️", economy: "💰", ai: "🤖" }
+      return `${emojis[folder] || "📁"} **${folder}**: ${count}`
+    })
+    .join("\n")
+
+  const totalFiles = countFiles(path.join(__dirname, "../../"))
+
+  // قاعدة البيانات
+  let dbStatus = "❌ غير متصل"
+  let dbDetails = ""
+  try {
+    const dbStart = Date.now()
+    await database.query("SELECT 1")
+    const dbPing = Date.now() - dbStart
+
+    const [users, items, warns, subs] = await Promise.all([
+      database.query("SELECT COUNT(*) as c FROM economy_users"),
+      database.query("SELECT COUNT(*) as c FROM inventory"),
+      database.query("SELECT COUNT(*) as c FROM warnings"),
+      database.query("SELECT COUNT(*) as c FROM subscriptions WHERE status = 'active'")
+    ])
+
+    dbStatus = `✅ متصل (${dbPing}ms)`
+    dbDetails = `👥 المستخدمون: **${users.rows[0]?.c || 0}**\n`
+    dbDetails += `📦 الممتلكات: **${items.rows[0]?.c || 0}**\n`
+    dbDetails += `⚠️ التحذيرات: **${warns.rows[0]?.c || 0}**\n`
+    dbDetails += `👑 الاشتراكات: **${subs.rows[0]?.c || 0}**`
+  } catch {
+    dbStatus = "🔴 غير متصل"
+  }
+
+  // أكبر 5 سيرفرات
+  const topGuilds = client.guilds.cache
+    .sort((a, b) => b.memberCount - a.memberCount)
+    .first(5)
+    .map((g, i) => {
+      const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+      return `${medals[i]} **${g.name}** — ${g.memberCount.toLocaleString("ar-SA")} عضو`
+    })
+    .join("\n")
+
+  return new EmbedBuilder()
+    .setColor(0x8b5cf6)
+    .setTitle("🛠️ لوحة تحكم المطور")
+    .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+    .addFields(
+      {
+        name: "📊 Discord",
+        value: `🌐 السيرفرات: **${totalServers}**\n👥 المستخدمون: **${totalUsers.toLocaleString("ar-SA")}**\n📡 القنوات: **${totalChannels}**`,
+        inline: true
+      },
+      {
+        name: "📡 الشبكة",
+        value: `🏓 البوابة: **${gatewayPing}ms**\n⚡ الاستجابة: **${apiPing}ms**`,
+        inline: true
+      },
+      {
+        name: "⏱ التشغيل",
+        value: uptime,
+        inline: true
+      },
+      {
+        name: "💾 النظام",
+        value: `📊 RSS: **${rss} MB** | Heap: **${heap} MB**\n🖥️ **${platform}**\n🧮 المعالجات: **${cpuCount}** | 💽 **${freeMem}/${totalMem} GB**`,
+        inline: false
+      },
+      {
+        name: `🤖 الأوامر (${totalCommands})`,
+        value: `${folderText}\n📁 إجمالي الملفات: **${totalFiles}**`,
+        inline: true
+      },
+      {
+        name: "🗄️ قاعدة البيانات",
+        value: `${dbStatus}\n${dbDetails}`,
+        inline: true
+      },
+      {
+        name: "🏆 أكبر السيرفرات",
+        value: topGuilds || "لا يوجد",
+        inline: false
+      }
+    )
+    .setFooter({ text: `Node ${process.version} | PID: ${process.pid}` })
+    .setTimestamp()
+}
+
+// ✅ Embed الاستخدام
+async function buildUsageEmbed(client) {
+  const embed = new EmbedBuilder()
+    .setColor(0x3b82f6)
+    .setTitle("📈 إحصائيات الاستخدام")
+    .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+    .setTimestamp()
+
+  try {
+    // أكثر الأوامر استخداماً
+    const topCommands = await database.query(
+      "SELECT command, count FROM analytics ORDER BY count DESC LIMIT 10"
+    )
+    const totalUsage = await database.query(
+      "SELECT SUM(count) as total FROM analytics"
+    )
+
+    const total = parseInt(totalUsage.rows[0]?.total || 0)
+    embed.setDescription(`📊 إجمالي الأوامر المستخدمة: **${total.toLocaleString("ar-SA")}**`)
+
+    if (topCommands.rows.length > 0) {
+      const medals = ["🥇", "🥈", "🥉"]
+      const commandsList = topCommands.rows
+        .map((r, i) => {
+          const rank = i < 3 ? medals[i] : `\`#${i + 1}\``
+          const percentage = total > 0 ? ((r.count / total) * 100).toFixed(1) : 0
+          return `${rank} \`/${r.command}\` — **${r.count}** مرة (${percentage}%)`
+        })
+        .join("\n")
+
+      embed.addFields({ name: "🏆 أكثر الأوامر استخداماً", value: commandsList, inline: false })
+    }
+
+    // إحصائيات الاقتصاد
+    const economyStats = await database.query(
+      "SELECT COUNT(*) as users, SUM(coins) as total_coins FROM economy_users WHERE coins > 0"
+    )
+    const totalCoins = parseInt(economyStats.rows[0]?.total_coins || 0)
+    const activeUsers = parseInt(economyStats.rows[0]?.users || 0)
+
+    const richest = await database.query(
+      "SELECT user_id, coins FROM economy_users ORDER BY coins DESC LIMIT 1"
+    )
+
+    let economyText = `👥 لاعبين نشطين: **${activeUsers}**\n💰 إجمالي الكوينز: **${totalCoins.toLocaleString("ar-SA")}**`
+
+    if (richest.rows[0]) {
+      economyText += `\n👑 أغنى لاعب: <@${richest.rows[0].user_id}> — **${richest.rows[0].coins.toLocaleString("ar-SA")}** كوين`
+    }
+
+    embed.addFields({ name: "💰 إحصائيات الاقتصاد", value: economyText, inline: false })
+
+  } catch (err) {
+    embed.setDescription("❌ ما قدرت أجلب إحصائيات الاستخدام.")
+  }
+
+  return embed
+}
+
+// ✅ Embed السيرفرات
+async function buildServersEmbed(client) {
+  const guilds = client.guilds.cache
+    .sort((a, b) => b.memberCount - a.memberCount)
+    .first(15)
+
+  const embed = new EmbedBuilder()
+    .setColor(0x22c55e)
+    .setTitle("🌐 السيرفرات")
+    .setDescription(`إجمالي: **${client.guilds.cache.size}** سيرفر`)
+    .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+    .setTimestamp()
+
+  let serverList = ""
+  guilds.forEach((g, i) => {
+    const medals = ["🥇", "🥈", "🥉"]
+    const rank = i < 3 ? medals[i] : `\`#${i + 1}\``
+    serverList += `${rank} **${g.name}**\n    👥 ${g.memberCount.toLocaleString("ar-SA")} عضو | 📡 ${g.channels.cache.size} قناة\n\n`
+  })
+
+  embed.addFields({ name: "📊 الترتيب حسب الأعضاء", value: serverList || "لا يوجد", inline: false })
+
+  return embed
+}
+
+// ✅ الأزرار
+function buildButtons(activePage) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("dev_main")
+      .setLabel("الرئيسية")
+      .setStyle(activePage === "main" ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setEmoji("🛠️"),
+    new ButtonBuilder()
+      .setCustomId("dev_usage")
+      .setLabel("الاستخدام")
+      .setStyle(activePage === "usage" ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setEmoji("📈"),
+    new ButtonBuilder()
+      .setCustomId("dev_servers")
+      .setLabel("السيرفرات")
+      .setStyle(activePage === "servers" ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setEmoji("🌐"),
+    new ButtonBuilder()
+      .setLabel("الداشبورد")
+      .setStyle(ButtonStyle.Link)
+      .setURL("https://rcif-dashboard.onrender.com")
+      .setEmoji("🔗"),
+    new ButtonBuilder()
+      .setLabel("GitHub")
+      .setStyle(ButtonStyle.Link)
+      .setURL("https://github.com/RciF/rcif-bot-clean")
+      .setEmoji("📂")
+  )
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("مطور")
@@ -73,7 +278,6 @@ module.exports = {
 
   async execute(interaction) {
     try {
-      // ✅ تحقق: مالك البوت فقط
       const isOwner = await requireOwner(interaction)
       if (!isOwner) {
         return interaction.reply({
@@ -85,132 +289,56 @@ module.exports = {
       await interaction.deferReply({ ephemeral: true })
 
       const client = interaction.client
+      const mainEmbed = await buildMainEmbed(client, interaction)
+      const buttons = buildButtons("main")
 
-      // ✅ إحصائيات Discord
-      const totalServers = client.guilds.cache.size
-      const totalUsers = client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0)
-      const totalChannels = client.channels.cache.size
-      const gatewayPing = client.ws.ping
-      const apiPing = Date.now() - interaction.createdTimestamp
+      const response = await interaction.editReply({
+        embeds: [mainEmbed],
+        components: [buttons]
+      })
 
-      // ✅ النظام
-      const uptime = formatUptime(process.uptime())
-      const memUsage = process.memoryUsage()
-      const rss = (memUsage.rss / 1024 / 1024).toFixed(1)
-      const heap = (memUsage.heapUsed / 1024 / 1024).toFixed(1)
-      const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1)
-      const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1)
-      const cpuCount = os.cpus().length
-      const platform = `${os.platform()} ${os.arch()}`
+      // ✅ انتظار الأزرار (5 دقائق)
+      const collector = response.createMessageComponentCollector({
+        filter: (i) => i.user.id === interaction.user.id,
+        time: 300000
+      })
 
-      // ✅ الأوامر
-      const totalCommands = countCommands()
-      const commandsByFolder = getCommandsByFolder()
-      const folderText = Object.entries(commandsByFolder)
-        .map(([folder, count]) => {
-          const emojis = {
-            admin: "⚙️",
-            moderation: "🛡️",
-            economy: "💰",
-            ai: "🤖"
+      collector.on("collect", async (i) => {
+        try {
+          let embed
+          let page
+
+          switch (i.customId) {
+            case "dev_main":
+              embed = await buildMainEmbed(client, interaction)
+              page = "main"
+              break
+            case "dev_usage":
+              embed = await buildUsageEmbed(client)
+              page = "usage"
+              break
+            case "dev_servers":
+              embed = await buildServersEmbed(client)
+              page = "servers"
+              break
+            default:
+              return
           }
-          return `${emojis[folder] || "📁"} **${folder}**: ${count} أمر`
-        })
-        .join("\n")
 
-      // ✅ ملفات المشروع
-      const totalFiles = countFiles(path.join(__dirname, "../../"))
+          await i.update({
+            embeds: [embed],
+            components: [buildButtons(page)]
+          })
+        } catch (err) {
+          console.error("[DEV BUTTON ERROR]", err)
+        }
+      })
 
-      // ✅ قاعدة البيانات
-      let dbStatus = "❌ غير متصل"
-      let dbDetails = ""
-      try {
-        const dbPing = Date.now()
-        await database.query("SELECT 1")
-        const dbTime = Date.now() - dbPing
-
-        const usersCount = await database.query("SELECT COUNT(*) as count FROM economy_users")
-        const inventoryCount = await database.query("SELECT COUNT(*) as count FROM inventory")
-        const warningsCount = await database.query("SELECT COUNT(*) as count FROM warnings")
-
-        dbStatus = `✅ متصل (${dbTime}ms)`
-        dbDetails = `👥 المستخدمون: **${usersCount.rows[0]?.count || 0}**\n`
-        dbDetails += `📦 الممتلكات: **${inventoryCount.rows[0]?.count || 0}**\n`
-        dbDetails += `⚠️ التحذيرات: **${warningsCount.rows[0]?.count || 0}**`
-      } catch {
-        dbStatus = "❌ غير متصل"
-      }
-
-      // ✅ أكبر 5 سيرفرات
-      const topGuilds = client.guilds.cache
-        .sort((a, b) => b.memberCount - a.memberCount)
-        .first(5)
-        .map((g, i) => {
-          const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
-          return `${medals[i]} **${g.name}** — ${g.memberCount} عضو`
-        })
-        .join("\n")
-
-      // ✅ Embed الرئيسي
-      const embed = new EmbedBuilder()
-        .setColor(0x8b5cf6)
-        .setTitle("🛠️ لوحة تحكم المطور")
-        .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .addFields(
-          {
-            name: "📊 إحصائيات Discord",
-            value: `🌐 السيرفرات: **${totalServers}**\n👥 المستخدمون: **${totalUsers.toLocaleString("ar-SA")}**\n📡 القنوات: **${totalChannels}**`,
-            inline: true
-          },
-          {
-            name: "📡 الشبكة",
-            value: `🏓 البوابة: **${gatewayPing}ms**\n⚡ الاستجابة: **${apiPing}ms**`,
-            inline: true
-          },
-          {
-            name: "⏱ وقت التشغيل",
-            value: uptime,
-            inline: true
-          },
-          {
-            name: "💾 الذاكرة والنظام",
-            value: `📊 RSS: **${rss} MB**\n📊 Heap: **${heap} MB**\n🖥️ النظام: **${platform}**\n🧮 المعالجات: **${cpuCount}**\n💽 الذاكرة: **${freeMem}/${totalMem} GB**`,
-            inline: true
-          },
-          {
-            name: "🤖 الأوامر",
-            value: `📦 الإجمالي: **${totalCommands}** أمر\n📁 الملفات: **${totalFiles}** ملف\n\n${folderText}`,
-            inline: true
-          },
-          {
-            name: "🗄️ قاعدة البيانات",
-            value: `${dbStatus}\n${dbDetails}`,
-            inline: true
-          },
-          {
-            name: "🏆 أكبر السيرفرات",
-            value: topGuilds || "لا يوجد",
-            inline: false
-          }
-        )
-        .setFooter({ text: `Node ${process.version} | PID: ${process.pid}` })
-        .setTimestamp()
-
-      // ✅ أزرار
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setLabel("الداشبورد")
-          .setStyle(ButtonStyle.Link)
-          .setURL("https://rcif-dashboard.onrender.com")
-          .setEmoji("🌐"),
-        new ButtonBuilder()
-          .setLabel("GitHub")
-          .setStyle(ButtonStyle.Link)
-          .setURL("https://github.com/RciF/rcif-bot-clean")
-          .setEmoji("📂")
-      )
-
-      return interaction.editReply({ embeds: [embed], components: [row] })
+      collector.on("end", async () => {
+        try {
+          await interaction.editReply({ components: [] })
+        } catch {}
+      })
 
     } catch (err) {
       console.error("[DEV PANEL ERROR]", err)
