@@ -2,55 +2,18 @@ const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
 const { ALL_ITEMS, CAR_CATEGORIES, checkRequirement, checkCarCapacity, checkWorldDomination, formatPriceExact, formatPrice, getProgressStage, WORLD_CONTINENTS_REQUIRED } = require("../../config/economyConfig")
 
-// جلب ممتلكات اللاعب
-async function getPlayerAssets(userId, "global", client) {
-  const result = await (client || database).query(
-    "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND guild_id = $2",
-    [userId, "global"]
-  )
-  return result.rows || []
-}
-
-// جلب أو إنشاء مستخدم
-async function ensureUser(userId, client) {
-  const result = await (client || database).query(
-    `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-     VALUES ($1, 0, 0, 0, '[]')
-     ON CONFLICT (user_id) DO NOTHING`,
-    [userId]
-  )
-  const user = await (client || database).query(
-    "SELECT * FROM economy_users WHERE user_id = $1",
-    [userId]
-  )
-  return user.rows[0] || null
-}
-
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("شراء")
     .setDescription("شراء عنصر من المتجر (سيارة، عقار، بنية تحتية)")
     .setDMPermission(false)
-    .addStringOption(option => {
+    .addStringOption(option =>
       option
         .setName("العنصر")
-        .setDescription("اسم العنصر المراد شراؤه")
+        .setDescription("اكتب اسم العنصر أو جزء منه")
         .setRequired(true)
-
-      // إضافة كل العناصر كـ choices
-      const items = Object.values(ALL_ITEMS)
-        .sort((a, b) => a.price - b.price)
-        .slice(0, 25) // حد Discord 25 خيار
-
-      for (const item of items) {
-        option.addChoices({
-          name: `${item.emoji} ${item.name} — ${formatPrice(item.price)} كوين`,
-          value: item.id
-        })
-      }
-
-      return option
-    })
+        .setAutocomplete(true)
+    )
     .addIntegerOption(option =>
       option
         .setName("الكمية")
@@ -60,6 +23,31 @@ module.exports = {
         .setMaxValue(10)
     ),
 
+  // ✅ Autocomplete — يقترح العناصر وهو يكتب
+  async autocomplete(interaction) {
+    try {
+      const focused = interaction.options.getFocused().toLowerCase()
+      const items = Object.values(ALL_ITEMS)
+
+      const filtered = items
+        .filter(item => {
+          const searchText = `${item.name} ${item.id} ${item.description}`.toLowerCase()
+          return searchText.includes(focused) || focused === ""
+        })
+        .sort((a, b) => a.price - b.price)
+        .slice(0, 25)
+
+      await interaction.respond(
+        filtered.map(item => ({
+          name: `${item.emoji} ${item.name} — ${formatPrice(item.price)} كوين`,
+          value: item.id
+        }))
+      )
+    } catch {
+      // نتجاهل أخطاء الـ autocomplete
+    }
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
@@ -67,14 +55,13 @@ module.exports = {
       }
 
       const userId = interaction.user.id
-      const "global" = interaction.guild.id
       const itemId = interaction.options.getString("العنصر")
       const quantity = interaction.options.getInteger("الكمية") || 1
 
       // ✅ تحقق: العنصر موجود
       const item = ALL_ITEMS[itemId]
       if (!item) {
-        return interaction.reply({ content: "❌ عنصر غير موجود.", ephemeral: true })
+        return interaction.reply({ content: "❌ عنصر غير موجود. استخدم القائمة المقترحة.", ephemeral: true })
       }
 
       const totalCost = item.price * quantity
@@ -89,20 +76,17 @@ module.exports = {
         await client.query("BEGIN")
 
         // ✅ جلب المستخدم
+        await client.query(
+          `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
+           VALUES ($1, 0, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
+          [userId]
+        )
+
         const userResult = await client.query(
           "SELECT * FROM economy_users WHERE user_id = $1 FOR UPDATE",
           [userId]
         )
-
-        let user = userResult.rows[0]
-        if (!user) {
-          await client.query(
-            `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-             VALUES ($1, 0, 0, 0, '[]')`,
-            [userId]
-          )
-          user = { user_id: userId, coins: 0 }
-        }
+        const user = userResult.rows[0]
 
         // ✅ تحقق: الرصيد كافي
         if (user.coins < totalCost) {
@@ -123,7 +107,11 @@ module.exports = {
         }
 
         // ✅ جلب ممتلكات اللاعب
-        const playerAssets = await getPlayerAssets(userId, "global", client)
+        const assetsResult = await client.query(
+          "SELECT item_id, quantity FROM inventory WHERE user_id = $1",
+          [userId]
+        )
+        const playerAssets = assetsResult.rows || []
 
         // ✅ تحقق: شروط الشراء
         const reqCheck = checkRequirement(item, playerAssets)
@@ -143,30 +131,19 @@ module.exports = {
           })
         }
 
-        // ✅ تحقق: سعة السيارات (لو العنصر سيارة)
+        // ✅ تحقق: سعة السيارات
         if (CAR_CATEGORIES.includes(item.category)) {
-          for (let i = 0; i < quantity; i++) {
-            // نحاكي إضافة السيارات واحدة واحدة للتحقق
-            const tempAssets = [...playerAssets]
-            const existing = tempAssets.find(a => a.item_id === itemId)
-            if (existing) {
-              existing.quantity += i
-            } else if (i > 0) {
-              tempAssets.push({ item_id: itemId, quantity: i })
-            }
-
-            const capCheck = checkCarCapacity(tempAssets)
-            if (!capCheck.allowed) {
-              await client.query("ROLLBACK")
-              return interaction.editReply({
-                embeds: [
-                  new EmbedBuilder()
-                    .setColor(0xef4444)
-                    .setTitle("🚗 ما فيه مكان للسيارة")
-                    .setDescription(capCheck.message)
-                ]
-              })
-            }
+          const capCheck = checkCarCapacity(playerAssets)
+          if (!capCheck.allowed) {
+            await client.query("ROLLBACK")
+            return interaction.editReply({
+              embeds: [
+                new EmbedBuilder()
+                  .setColor(0xef4444)
+                  .setTitle("🚗 ما فيه مكان للسيارة")
+                  .setDescription(capCheck.message)
+              ]
+            })
           }
         }
 
@@ -176,13 +153,13 @@ module.exports = {
           [totalCost, userId]
         )
 
-        // ✅ إضافة العنصر للمخزون
+        // ✅ إضافة العنصر للمخزون (global)
         await client.query(
           `INSERT INTO inventory (user_id, guild_id, item_id, quantity)
-           VALUES ($1, $2, $3, $4)
+           VALUES ($1, 'global', $2, $3)
            ON CONFLICT (user_id, guild_id, item_id)
-           DO UPDATE SET quantity = inventory.quantity + $4`,
-          [userId, "global", itemId, quantity]
+           DO UPDATE SET quantity = inventory.quantity + $3`,
+          [userId, itemId, quantity]
         )
 
         await client.query("COMMIT")
@@ -191,7 +168,11 @@ module.exports = {
         const newBalance = user.coins - totalCost
 
         // ✅ جلب الممتلكات المحدثة
-        const updatedAssets = await getPlayerAssets(userId, "global")
+        const updatedAssetsResult = await database.query(
+          "SELECT item_id, quantity FROM inventory WHERE user_id = $1",
+          [userId]
+        )
+        const updatedAssets = updatedAssetsResult.rows || []
         const stage = getProgressStage(updatedAssets)
 
         // ✅ Embed النجاح
@@ -214,25 +195,22 @@ module.exports = {
         if (worldCheck.dominated) {
           embed.addFields({
             name: "🌍👑 مستولٍ على العالم!",
-            value: `**${interaction.user.username}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات** وأصبح **مستولٍ على العالم!**`,
+            value: `**${interaction.user.username}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات** وأصبح مستولٍ على العالم!`,
             inline: false
           })
 
-          // إعلان عام في القناة
           try {
             await interaction.channel.send({
               embeds: [
                 new EmbedBuilder()
                   .setColor(0xfbbf24)
                   .setTitle("🌍👑 إعلان عالمي!")
-                  .setDescription(`🎉 **${interaction.user}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات** وأصبح **مستولٍ على العالم!**\n\nتقدر تنافسه باستخدام \`/متجر\` وتبدأ رحلتك!`)
+                  .setDescription(`🎉 **${interaction.user}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات** وأصبح **مستولٍ على العالم!**\n\nتقدر تنافسه باستخدام \`/متجر\`!`)
                   .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
                   .setTimestamp()
               ]
             })
-          } catch {
-            // لو ما قدر يرسل — نتجاهل
-          }
+          } catch {}
         }
 
         return interaction.editReply({ embeds: [embed] })

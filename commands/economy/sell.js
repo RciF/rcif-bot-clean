@@ -2,7 +2,6 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 const database = require("../../systems/databaseSystem")
 const { ALL_ITEMS, formatPriceExact, formatPrice, getProgressStage } = require("../../config/economyConfig")
 
-// سعر البيع = 60% من سعر الشراء
 const SELL_PERCENTAGE = 0.6
 
 module.exports = {
@@ -10,26 +9,13 @@ module.exports = {
     .setName("بيع")
     .setDescription("بيع عنصر من ممتلكاتك")
     .setDMPermission(false)
-    .addStringOption(option => {
+    .addStringOption(option =>
       option
         .setName("العنصر")
-        .setDescription("العنصر المراد بيعه")
+        .setDescription("اكتب اسم العنصر أو جزء منه")
         .setRequired(true)
-
-      const items = Object.values(ALL_ITEMS)
-        .sort((a, b) => a.price - b.price)
-        .slice(0, 25)
-
-      for (const item of items) {
-        const sellPrice = Math.floor(item.price * SELL_PERCENTAGE)
-        option.addChoices({
-          name: `${item.emoji} ${item.name} — يُباع بـ ${formatPrice(sellPrice)} كوين`,
-          value: item.id
-        })
-      }
-
-      return option
-    })
+        .setAutocomplete(true)
+    )
     .addIntegerOption(option =>
       option
         .setName("الكمية")
@@ -39,6 +25,47 @@ module.exports = {
         .setMaxValue(10)
     ),
 
+  // ✅ Autocomplete — يعرض بس العناصر اللي يملكها
+  async autocomplete(interaction) {
+    try {
+      const focused = interaction.options.getFocused().toLowerCase()
+      const userId = interaction.user.id
+
+      // جلب ممتلكات اللاعب
+      const assetsResult = await database.query(
+        "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
+        [userId]
+      )
+      const assets = assetsResult.rows || []
+
+      const filtered = assets
+        .map(a => {
+          const def = ALL_ITEMS[a.item_id]
+          if (!def) return null
+          return { ...def, ownedQty: a.quantity }
+        })
+        .filter(item => {
+          if (!item) return false
+          const searchText = `${item.name} ${item.id} ${item.description}`.toLowerCase()
+          return searchText.includes(focused) || focused === ""
+        })
+        .sort((a, b) => b.price - a.price)
+        .slice(0, 25)
+
+      await interaction.respond(
+        filtered.map(item => {
+          const sellPrice = Math.floor(item.price * SELL_PERCENTAGE)
+          return {
+            name: `${item.emoji} ${item.name} × ${item.ownedQty} — يُباع بـ ${formatPrice(sellPrice)} كوين`,
+            value: item.id
+          }
+        })
+      )
+    } catch {
+      // نتجاهل
+    }
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
@@ -46,20 +73,19 @@ module.exports = {
       }
 
       const userId = interaction.user.id
-      const "global" = interaction.guild.id
       const itemId = interaction.options.getString("العنصر")
       const quantity = interaction.options.getInteger("الكمية") || 1
 
       // ✅ تحقق: العنصر موجود
       const item = ALL_ITEMS[itemId]
       if (!item) {
-        return interaction.reply({ content: "❌ عنصر غير موجود.", ephemeral: true })
+        return interaction.reply({ content: "❌ عنصر غير موجود. استخدم القائمة المقترحة.", ephemeral: true })
       }
 
       // ✅ تحقق: يملك العنصر
       const assetResult = await database.query(
-        "SELECT quantity FROM inventory WHERE user_id = $1 AND guild_id = $2 AND item_id = $3",
-        [userId, "global", itemId]
+        "SELECT quantity FROM inventory WHERE user_id = $1 AND item_id = $2 AND quantity > 0",
+        [userId, itemId]
       )
       const owned = assetResult.rows[0]?.quantity || 0
 
@@ -123,13 +149,15 @@ module.exports = {
         })
 
         if (btnInteraction.customId === "sell_cancel") {
-          const cancelEmbed = new EmbedBuilder()
-            .setColor(0x64748b)
-            .setTitle("❌ تم إلغاء البيع")
-            .setDescription("ما تم بيع شيء.")
-            .setTimestamp()
-
-          return btnInteraction.update({ embeds: [cancelEmbed], components: [] })
+          return btnInteraction.update({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0x64748b)
+                .setTitle("❌ تم إلغاء البيع")
+                .setDescription("ما تم بيع شيء.")
+            ],
+            components: []
+          })
         }
 
         // ✅ تنفيذ البيع
@@ -138,10 +166,10 @@ module.exports = {
         try {
           await client.query("BEGIN")
 
-          // تحقق مرة ثانية من الكمية (ممكن تتغير)
+          // تحقق مرة ثانية
           const recheckResult = await client.query(
-            "SELECT quantity FROM inventory WHERE user_id = $1 AND guild_id = $2 AND item_id = $3 FOR UPDATE",
-            [userId, "global", itemId]
+            "SELECT quantity FROM inventory WHERE user_id = $1 AND item_id = $2 FOR UPDATE",
+            [userId, itemId]
           )
           const currentQty = recheckResult.rows[0]?.quantity || 0
 
@@ -161,13 +189,13 @@ module.exports = {
           // خصم من المخزون
           if (currentQty === quantity) {
             await client.query(
-              "DELETE FROM inventory WHERE user_id = $1 AND guild_id = $2 AND item_id = $3",
-              [userId, "global", itemId]
+              "DELETE FROM inventory WHERE user_id = $1 AND item_id = $2",
+              [userId, itemId]
             )
           } else {
             await client.query(
-              "UPDATE inventory SET quantity = quantity - $1 WHERE user_id = $2 AND guild_id = $3 AND item_id = $4",
-              [quantity, userId, "global", itemId]
+              "UPDATE inventory SET quantity = quantity - $1 WHERE user_id = $2 AND item_id = $3",
+              [quantity, userId, itemId]
             )
           }
 
@@ -188,25 +216,27 @@ module.exports = {
 
           // جلب المرحلة
           const assetsResult = await database.query(
-            "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND guild_id = $2 AND quantity > 0",
-            [userId, "global"]
+            "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
+            [userId]
           )
           const stage = getProgressStage(assetsResult.rows || [])
 
-          // Embed النجاح
-          const successEmbed = new EmbedBuilder()
-            .setColor(0x22c55e)
-            .setTitle("✅ تم البيع بنجاح")
-            .addFields(
-              { name: "📦 العنصر", value: `${item.emoji} ${item.name}`, inline: true },
-              { name: "📦 الكمية", value: `${quantity}`, inline: true },
-              { name: "💰 حصلت على", value: `**+${formatPriceExact(totalSellPrice)}** كوين`, inline: true },
-              { name: "💳 رصيدك الجديد", value: `**${formatPriceExact(newBalance)}** كوين`, inline: true },
-              { name: "📊 مرحلتك", value: `${stage.emoji} ${stage.stage}`, inline: true }
-            )
-            .setTimestamp()
-
-          return btnInteraction.update({ embeds: [successEmbed], components: [] })
+          return btnInteraction.update({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0x22c55e)
+                .setTitle("✅ تم البيع بنجاح")
+                .addFields(
+                  { name: "📦 العنصر", value: `${item.emoji} ${item.name}`, inline: true },
+                  { name: "📦 الكمية", value: `${quantity}`, inline: true },
+                  { name: "💰 حصلت على", value: `**+${formatPriceExact(totalSellPrice)}** كوين`, inline: true },
+                  { name: "💳 رصيدك الجديد", value: `**${formatPriceExact(newBalance)}** كوين`, inline: true },
+                  { name: "📊 مرحلتك", value: `${stage.emoji} ${stage.stage}`, inline: true }
+                )
+                .setTimestamp()
+            ],
+            components: []
+          })
 
         } catch (err) {
           await client.query("ROLLBACK")
@@ -216,15 +246,16 @@ module.exports = {
         }
 
       } catch (err) {
-        // انتهت المهلة
         if (err.code === "InteractionCollectorError" || err.message?.includes("time")) {
-          const timeoutEmbed = new EmbedBuilder()
-            .setColor(0x64748b)
-            .setTitle("⏰ انتهت المهلة")
-            .setDescription("ما تم تأكيد البيع خلال 30 ثانية.")
-            .setTimestamp()
-
-          return interaction.editReply({ embeds: [timeoutEmbed], components: [] })
+          return interaction.editReply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(0x64748b)
+                .setTitle("⏰ انتهت المهلة")
+                .setDescription("ما تم تأكيد البيع خلال 30 ثانية.")
+            ],
+            components: []
+          })
         }
         throw err
       }
