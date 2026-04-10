@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const database = require("../../systems/databaseSystem")
+const databaseManager = require("../../utils/databaseManager")
 const { ALL_ITEMS, formatPriceExact, formatPrice, getProgressStage } = require("../../config/economyConfig")
 
 const SELL_PERCENTAGE = 0.6
@@ -25,13 +26,11 @@ module.exports = {
         .setMaxValue(10)
     ),
 
-  // ✅ Autocomplete — يعرض بس العناصر اللي يملكها
   async autocomplete(interaction) {
     try {
       const focused = interaction.options.getFocused().toLowerCase()
       const userId = interaction.user.id
 
-      // جلب ممتلكات اللاعب
       const assetsResult = await database.query(
         "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
         [userId]
@@ -61,9 +60,7 @@ module.exports = {
           }
         })
       )
-    } catch {
-      // نتجاهل
-    }
+    } catch {}
   },
 
   async execute(interaction) {
@@ -76,13 +73,11 @@ module.exports = {
       const itemId = interaction.options.getString("العنصر")
       const quantity = interaction.options.getInteger("الكمية") || 1
 
-      // ✅ تحقق: العنصر موجود
       const item = ALL_ITEMS[itemId]
       if (!item) {
         return interaction.reply({ content: "❌ عنصر غير موجود. استخدم القائمة المقترحة.", ephemeral: true })
       }
 
-      // ✅ تحقق: يملك العنصر
       const assetResult = await database.query(
         "SELECT quantity FROM inventory WHERE user_id = $1 AND item_id = $2 AND quantity > 0",
         [userId, itemId]
@@ -103,11 +98,9 @@ module.exports = {
         })
       }
 
-      // ✅ حساب سعر البيع
       const sellPrice = Math.floor(item.price * SELL_PERCENTAGE)
       const totalSellPrice = sellPrice * quantity
 
-      // ✅ زر تأكيد
       const confirmBtn = new ButtonBuilder()
         .setCustomId("sell_confirm")
         .setLabel(`✅ تأكيد البيع — ${formatPriceExact(totalSellPrice)} كوين`)
@@ -120,7 +113,6 @@ module.exports = {
 
       const row = new ActionRowBuilder().addComponents(confirmBtn, cancelBtn)
 
-      // ✅ Embed التأكيد
       const confirmEmbed = new EmbedBuilder()
         .setColor(0xf59e0b)
         .setTitle("🏷️ تأكيد البيع")
@@ -141,7 +133,6 @@ module.exports = {
         components: [row]
       })
 
-      // ✅ انتظار التأكيد
       try {
         const btnInteraction = await response.awaitMessageComponent({
           filter: (i) => i.user.id === interaction.user.id,
@@ -160,13 +151,11 @@ module.exports = {
           })
         }
 
-        // ✅ تنفيذ البيع
-        const client = await database.getClient()
+        const client = await databaseManager.getClient()
 
         try {
           await client.query("BEGIN")
 
-          // تحقق مرة ثانية
           const recheckResult = await client.query(
             "SELECT quantity FROM inventory WHERE user_id = $1 AND item_id = $2 FOR UPDATE",
             [userId, itemId]
@@ -186,7 +175,6 @@ module.exports = {
             })
           }
 
-          // خصم من المخزون
           if (currentQty === quantity) {
             await client.query(
               "DELETE FROM inventory WHERE user_id = $1 AND item_id = $2",
@@ -199,7 +187,6 @@ module.exports = {
             )
           }
 
-          // إضافة الكوينز
           await client.query(
             "UPDATE economy_users SET coins = coins + $1 WHERE user_id = $2",
             [totalSellPrice, userId]
@@ -207,14 +194,12 @@ module.exports = {
 
           await client.query("COMMIT")
 
-          // جلب الرصيد الجديد
           const newBalanceResult = await database.query(
             "SELECT coins FROM economy_users WHERE user_id = $1",
             [userId]
           )
           const newBalance = newBalanceResult.rows[0]?.coins || 0
 
-          // جلب المرحلة
           const assetsResult = await database.query(
             "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
             [userId]

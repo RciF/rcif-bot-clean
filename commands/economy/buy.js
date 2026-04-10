@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
+const databaseManager = require("../../utils/databaseManager")
 const { ALL_ITEMS, CAR_CATEGORIES, checkRequirement, checkCarCapacity, checkWorldDomination, formatPriceExact, formatPrice, getProgressStage, WORLD_CONTINENTS_REQUIRED } = require("../../config/economyConfig")
 
 module.exports = {
@@ -23,7 +24,6 @@ module.exports = {
         .setMaxValue(10)
     ),
 
-  // ✅ Autocomplete — يقترح العناصر وهو يكتب
   async autocomplete(interaction) {
     try {
       const focused = interaction.options.getFocused().toLowerCase()
@@ -43,9 +43,7 @@ module.exports = {
           value: item.id
         }))
       )
-    } catch {
-      // نتجاهل أخطاء الـ autocomplete
-    }
+    } catch {}
   },
 
   async execute(interaction) {
@@ -58,7 +56,6 @@ module.exports = {
       const itemId = interaction.options.getString("العنصر")
       const quantity = interaction.options.getInteger("الكمية") || 1
 
-      // ✅ تحقق: العنصر موجود
       const item = ALL_ITEMS[itemId]
       if (!item) {
         return interaction.reply({ content: "❌ عنصر غير موجود. استخدم القائمة المقترحة.", ephemeral: true })
@@ -66,16 +63,13 @@ module.exports = {
 
       const totalCost = item.price * quantity
 
-      // ✅ تأجيل الرد
       await interaction.deferReply()
 
-      // ✅ بدء المعاملة
-      const client = await database.getClient()
+      const client = await databaseManager.getClient()
 
       try {
         await client.query("BEGIN")
 
-        // ✅ جلب المستخدم
         await client.query(
           `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
            VALUES ($1, 0, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
@@ -88,7 +82,6 @@ module.exports = {
         )
         const user = userResult.rows[0]
 
-        // ✅ تحقق: الرصيد كافي
         if (user.coins < totalCost) {
           await client.query("ROLLBACK")
           const shortage = totalCost - user.coins
@@ -106,14 +99,12 @@ module.exports = {
           })
         }
 
-        // ✅ جلب ممتلكات اللاعب
         const assetsResult = await client.query(
           "SELECT item_id, quantity FROM inventory WHERE user_id = $1",
           [userId]
         )
         const playerAssets = assetsResult.rows || []
 
-        // ✅ تحقق: شروط الشراء
         const reqCheck = checkRequirement(item, playerAssets)
         if (!reqCheck.allowed) {
           await client.query("ROLLBACK")
@@ -131,7 +122,6 @@ module.exports = {
           })
         }
 
-        // ✅ تحقق: سعة السيارات
         if (CAR_CATEGORIES.includes(item.category)) {
           const capCheck = checkCarCapacity(playerAssets)
           if (!capCheck.allowed) {
@@ -147,27 +137,23 @@ module.exports = {
           }
         }
 
-        // ✅ خصم الرصيد
         await client.query(
           "UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2",
           [totalCost, userId]
         )
 
-        // ✅ إضافة العنصر للمخزون (global)
         await client.query(
-          `INSERT INTO inventory (user_id, guild_id, item_id, quantity)
-           VALUES ($1, 'global', $2, $3)
-           ON CONFLICT (user_id, guild_id, item_id)
+          `INSERT INTO inventory (user_id, item_id, quantity)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, item_id)
            DO UPDATE SET quantity = inventory.quantity + $3`,
           [userId, itemId, quantity]
         )
 
         await client.query("COMMIT")
 
-        // ✅ الرصيد بعد الشراء
         const newBalance = user.coins - totalCost
 
-        // ✅ جلب الممتلكات المحدثة
         const updatedAssetsResult = await database.query(
           "SELECT item_id, quantity FROM inventory WHERE user_id = $1",
           [userId]
@@ -175,7 +161,6 @@ module.exports = {
         const updatedAssets = updatedAssetsResult.rows || []
         const stage = getProgressStage(updatedAssets)
 
-        // ✅ Embed النجاح
         const embed = new EmbedBuilder()
           .setColor(0x22c55e)
           .setTitle("✅ تم الشراء بنجاح!")
@@ -190,12 +175,11 @@ module.exports = {
           .setFooter({ text: `ID: ${interaction.user.id}` })
           .setTimestamp()
 
-        // ✅ تحقق: سيطرة على العالم
         const worldCheck = checkWorldDomination(updatedAssets)
         if (worldCheck.dominated) {
           embed.addFields({
             name: "🌍👑 مستولٍ على العالم!",
-            value: `**${interaction.user.username}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات** وأصبح مستولٍ على العالم!`,
+            value: `**${interaction.user.username}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات**!`,
             inline: false
           })
 
@@ -205,7 +189,7 @@ module.exports = {
                 new EmbedBuilder()
                   .setColor(0xfbbf24)
                   .setTitle("🌍👑 إعلان عالمي!")
-                  .setDescription(`🎉 **${interaction.user}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات** وأصبح **مستولٍ على العالم!**\n\nتقدر تنافسه باستخدام \`/متجر\`!`)
+                  .setDescription(`🎉 **${interaction.user}** سيطر على **${WORLD_CONTINENTS_REQUIRED} قارات** وأصبح **مستولٍ على العالم!**`)
                   .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
                   .setTimestamp()
               ]
