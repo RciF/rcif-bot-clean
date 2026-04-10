@@ -1,6 +1,6 @@
 require("dotenv").config()
 
-const { Client, GatewayIntentBits, Partials, Collection } = require("discord.js")
+const { Client, GatewayIntentBits, Collection } = require("discord.js")
 
 const startupSystem = require("./systems/startupSystem")
 const { startApiServer } = require("./systems/apiServerSystem")
@@ -20,13 +20,8 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildPresences
   ],
-  partials: [
-    Partials.Message,
-    Partials.Channel,
-    Partials.GuildMember
-  ]
+  
 })
 
 client.commands = new Collection()
