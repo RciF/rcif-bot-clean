@@ -26,7 +26,7 @@ module.exports = {
       }
 
       const type = interaction.options.getString("النوع") || "coins"
-      const "global" = interaction.guild.id
+      const guildId = "global"
 
       await interaction.deferReply()
 
