@@ -262,11 +262,7 @@ function buildButtons(activePage) {
       .setStyle(ButtonStyle.Link)
       .setURL("https://rcif-dashboard.onrender.com")
       .setEmoji("🔗"),
-    new ButtonBuilder()
-      .setLabel("GitHub")
-      .setStyle(ButtonStyle.Link)
-      .setURL("https://github.com/RciF/rcif-bot-clean")
-      .setEmoji("📂")
+    
   )
 }
 
