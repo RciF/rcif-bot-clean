@@ -123,7 +123,16 @@ module.exports = {
         }
 
         if (CAR_CATEGORIES.includes(item.category)) {
-          const capCheck = checkCarCapacity(playerAssets)
+          // نحاكي إضافة الكمية المطلوبة عشان نتحقق من السعة
+          const simulatedAssets = playerAssets.map(a => ({ ...a }))
+          const existingCar = simulatedAssets.find(a => a.item_id === itemId)
+          if (existingCar) {
+            existingCar.quantity += quantity
+          } else {
+            simulatedAssets.push({ item_id: itemId, quantity })
+          }
+
+          const capCheck = checkCarCapacity(simulatedAssets)
           if (!capCheck.allowed) {
             await client.query("ROLLBACK")
             return interaction.editReply({
@@ -132,6 +141,10 @@ module.exports = {
                   .setColor(0xef4444)
                   .setTitle("🚗 ما فيه مكان للسيارة")
                   .setDescription(capCheck.message)
+                  .addFields(
+                    { name: "📦 طلبت", value: `${quantity} سيارة`, inline: true },
+                    { name: "🏠 السعة المتاحة", value: `${capCheck.capacity} سيارة`, inline: true }
+                  )
               ]
             })
           }
