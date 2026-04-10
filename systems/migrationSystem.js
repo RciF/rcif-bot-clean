@@ -162,6 +162,26 @@ async function runMigrations() {
             `)
         }
 
+        // LOG SETTINGS
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS log_settings (
+                guild_id TEXT PRIMARY KEY,
+                log_channel_id TEXT,
+                message_delete BOOLEAN DEFAULT true,
+                message_update BOOLEAN DEFAULT true,
+                member_join BOOLEAN DEFAULT true,
+                member_leave BOOLEAN DEFAULT true,
+                member_ban BOOLEAN DEFAULT true,
+                member_unban BOOLEAN DEFAULT true,
+                member_update BOOLEAN DEFAULT true,
+                channel_create BOOLEAN DEFAULT true,
+                channel_delete BOOLEAN DEFAULT true,
+                role_create BOOLEAN DEFAULT true,
+                role_delete BOOLEAN DEFAULT true,
+                enabled BOOLEAN DEFAULT false
+            );
+        `)
+
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 
     } catch (error) {
