@@ -22,7 +22,7 @@ module.exports = {
 
       const targetUser = interaction.options.getUser("العضو") || interaction.user
       const userId = targetUser.id
-      const guildId = interaction.guild.id
+      const "global" = interaction.guild.id
 
       // ✅ جلب أو إنشاء المستخدم
       await database.query(
@@ -44,7 +44,7 @@ module.exports = {
       // ✅ جلب الممتلكات
       const assetsResult = await database.query(
         "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND guild_id = $2",
-        [userId, guildId]
+        [userId, "global"]
       )
       const playerAssets = assetsResult.rows || []
 

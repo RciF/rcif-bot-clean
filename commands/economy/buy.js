@@ -3,10 +3,10 @@ const database = require("../../systems/databaseSystem")
 const { ALL_ITEMS, CAR_CATEGORIES, checkRequirement, checkCarCapacity, checkWorldDomination, formatPriceExact, formatPrice, getProgressStage, WORLD_CONTINENTS_REQUIRED } = require("../../config/economyConfig")
 
 // جلب ممتلكات اللاعب
-async function getPlayerAssets(userId, guildId, client) {
+async function getPlayerAssets(userId, "global", client) {
   const result = await (client || database).query(
     "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND guild_id = $2",
-    [userId, guildId]
+    [userId, "global"]
   )
   return result.rows || []
 }
@@ -67,7 +67,7 @@ module.exports = {
       }
 
       const userId = interaction.user.id
-      const guildId = interaction.guild.id
+      const "global" = interaction.guild.id
       const itemId = interaction.options.getString("العنصر")
       const quantity = interaction.options.getInteger("الكمية") || 1
 
@@ -123,7 +123,7 @@ module.exports = {
         }
 
         // ✅ جلب ممتلكات اللاعب
-        const playerAssets = await getPlayerAssets(userId, guildId, client)
+        const playerAssets = await getPlayerAssets(userId, "global", client)
 
         // ✅ تحقق: شروط الشراء
         const reqCheck = checkRequirement(item, playerAssets)
@@ -182,7 +182,7 @@ module.exports = {
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (user_id, guild_id, item_id)
            DO UPDATE SET quantity = inventory.quantity + $4`,
-          [userId, guildId, itemId, quantity]
+          [userId, "global", itemId, quantity]
         )
 
         await client.query("COMMIT")
@@ -191,7 +191,7 @@ module.exports = {
         const newBalance = user.coins - totalCost
 
         // ✅ جلب الممتلكات المحدثة
-        const updatedAssets = await getPlayerAssets(userId, guildId)
+        const updatedAssets = await getPlayerAssets(userId, "global")
         const stage = getProgressStage(updatedAssets)
 
         // ✅ Embed النجاح

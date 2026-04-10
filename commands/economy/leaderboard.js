@@ -26,7 +26,7 @@ module.exports = {
       }
 
       const type = interaction.options.getString("النوع") || "coins"
-      const guildId = interaction.guild.id
+      const "global" = interaction.guild.id
 
       await interaction.deferReply()
 
@@ -53,7 +53,7 @@ module.exports = {
       for (const user of users) {
         const assetsResult = await database.query(
           "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND guild_id = $2 AND quantity > 0",
-          [user.user_id, guildId]
+          [user.user_id, "global"]
         )
         const assets = assetsResult.rows || []
         const netWorth = calculateNetWorth(user.coins, assets)

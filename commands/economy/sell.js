@@ -46,7 +46,7 @@ module.exports = {
       }
 
       const userId = interaction.user.id
-      const guildId = interaction.guild.id
+      const "global" = interaction.guild.id
       const itemId = interaction.options.getString("العنصر")
       const quantity = interaction.options.getInteger("الكمية") || 1
 
@@ -59,7 +59,7 @@ module.exports = {
       // ✅ تحقق: يملك العنصر
       const assetResult = await database.query(
         "SELECT quantity FROM inventory WHERE user_id = $1 AND guild_id = $2 AND item_id = $3",
-        [userId, guildId, itemId]
+        [userId, "global", itemId]
       )
       const owned = assetResult.rows[0]?.quantity || 0
 
@@ -141,7 +141,7 @@ module.exports = {
           // تحقق مرة ثانية من الكمية (ممكن تتغير)
           const recheckResult = await client.query(
             "SELECT quantity FROM inventory WHERE user_id = $1 AND guild_id = $2 AND item_id = $3 FOR UPDATE",
-            [userId, guildId, itemId]
+            [userId, "global", itemId]
           )
           const currentQty = recheckResult.rows[0]?.quantity || 0
 
@@ -162,12 +162,12 @@ module.exports = {
           if (currentQty === quantity) {
             await client.query(
               "DELETE FROM inventory WHERE user_id = $1 AND guild_id = $2 AND item_id = $3",
-              [userId, guildId, itemId]
+              [userId, "global", itemId]
             )
           } else {
             await client.query(
               "UPDATE inventory SET quantity = quantity - $1 WHERE user_id = $2 AND guild_id = $3 AND item_id = $4",
-              [quantity, userId, guildId, itemId]
+              [quantity, userId, "global", itemId]
             )
           }
 
@@ -189,7 +189,7 @@ module.exports = {
           // جلب المرحلة
           const assetsResult = await database.query(
             "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND guild_id = $2 AND quantity > 0",
-            [userId, guildId]
+            [userId, "global"]
           )
           const stage = getProgressStage(assetsResult.rows || [])
 
