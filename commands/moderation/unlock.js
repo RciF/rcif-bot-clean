@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require("discord.js")
+const discordLog = require("../../systems/discordLogSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,15 +15,11 @@ module.exports = {
         .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum)
     )
     .addStringOption(option =>
-      option
-        .setName("السبب")
-        .setDescription("سبب فتح القناة (اختياري)")
-        .setRequired(false)
+      option.setName("السبب").setDescription("سبب فتح القناة (اختياري)").setRequired(false)
     ),
 
   async execute(interaction) {
     try {
-      // ✅ Check: inside a guild only
       if (!interaction.guild) {
         return interaction.reply({ content: "❌ هذا الأمر يُستخدم داخل السيرفر فقط.", ephemeral: true })
       }
@@ -30,58 +27,42 @@ module.exports = {
       const targetChannel = interaction.options.getChannel("القناة") || interaction.channel
       const reason        = interaction.options.getString("السبب") || "لم يتم تحديد سبب"
 
-      // ✅ Check: bot has ManageChannels permission
       const botPermissions = targetChannel.permissionsFor(interaction.guild.members.me)
       if (!botPermissions || !botPermissions.has(PermissionFlagsBits.ManageChannels)) {
         return interaction.reply({ content: "❌ البوت ما عنده صلاحية **إدارة القنوات** في هذي القناة.", ephemeral: true })
       }
 
-      // ✅ Get current @everyone permissions
-      const everyoneRole  = interaction.guild.roles.everyone
-      const currentPerms  = targetChannel.permissionOverwrites.cache.get(everyoneRole.id)
-      const isLocked      = currentPerms?.deny?.has(PermissionFlagsBits.SendMessages)
+      const everyoneRole = interaction.guild.roles.everyone
+      const currentPerms = targetChannel.permissionOverwrites.cache.get(everyoneRole.id)
+      const isLocked     = currentPerms?.deny?.has(PermissionFlagsBits.SendMessages)
 
-      // ✅ Check: channel is already unlocked
       if (!isLocked) {
         return interaction.reply({ content: "⚠️ هذي القناة مفتوحة أصلاً وليست مقفلة.", ephemeral: true })
       }
 
-      // ✅ Execute unlock
       await targetChannel.permissionOverwrites.edit(everyoneRole, {
-        SendMessages:         null,
-        AddReactions:         null,
-        CreatePublicThreads:  null,
-        CreatePrivateThreads: null
+        SendMessages: null
       }, { reason: `${reason} | بواسطة: ${interaction.user.username}` })
 
-      // ✅ Success embed
       const embed = new EmbedBuilder()
         .setColor(0x22c55e)
         .setTitle("🔓 تم فتح القناة")
         .addFields(
-          { name: "📍 القناة", value: `${targetChannel}`,                                             inline: true  },
-          { name: "📝 السبب", value: reason,                                                           inline: true  },
-          { name: "👮 بواسطة", value: `${interaction.user} (\`${interaction.user.username}\`)`,       inline: false }
+          { name: "📢 القناة",  value: `${targetChannel}`,                                             inline: true  },
+          { name: "📝 السبب",   value: reason,                                                          inline: false },
+          { name: "👮 بواسطة",  value: `${interaction.user} (\`${interaction.user.username}\`)`,        inline: true  }
         )
-        .setFooter({ text: "استخدم /قفل لقفل القناة مرة ثانية" })
+        .setFooter({ text: "استخدم /قفل لقفل القناة مجدداً" })
         .setTimestamp()
 
-      await interaction.reply({ embeds: [embed] })
+      // ✅ LOG
+      discordLog.logUnlock(interaction.guild, {
+        moderator: interaction.user,
+        channel:   targetChannel,
+        reason
+      }).catch(() => {})
 
-      // ✅ Send notification in the unlocked channel (if different)
-      if (targetChannel.id !== interaction.channel.id) {
-        try {
-          await targetChannel.send({
-            embeds: [
-              new EmbedBuilder()
-                .setColor(0x22c55e)
-                .setDescription(`🔓 **تم فتح القناة** بواسطة ${interaction.user}\n📝 السبب: ${reason}`)
-            ]
-          })
-        } catch {
-          // Cannot send — ignore
-        }
-      }
+      return interaction.reply({ embeds: [embed] })
 
     } catch (err) {
       console.error("[UNLOCK ERROR]", err)

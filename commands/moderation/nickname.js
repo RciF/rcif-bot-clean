@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require("discord.js")
+const discordLog = require("../../systems/discordLogSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,28 +8,17 @@ module.exports = {
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageNicknames)
     .addUserOption(option =>
-      option
-        .setName("العضو")
-        .setDescription("العضو المراد تغيير لقبه")
-        .setRequired(true)
+      option.setName("العضو").setDescription("العضو المراد تغيير لقبه").setRequired(true)
     )
     .addStringOption(option =>
-      option
-        .setName("اللقب")
-        .setDescription("اللقب الجديد (اتركه فاضي لإزالة اللقب)")
-        .setRequired(false)
-        .setMaxLength(32)
+      option.setName("اللقب").setDescription("اللقب الجديد (اتركه فاضي لإزالة اللقب)").setRequired(false).setMaxLength(32)
     )
     .addStringOption(option =>
-      option
-        .setName("السبب")
-        .setDescription("سبب تغيير اللقب (اختياري)")
-        .setRequired(false)
+      option.setName("السبب").setDescription("سبب تغيير اللقب (اختياري)").setRequired(false)
     ),
 
   async execute(interaction) {
     try {
-      // ✅ Check: inside a guild only
       if (!interaction.guild) {
         return interaction.reply({ content: "❌ هذا الأمر يُستخدم داخل السيرفر فقط.", ephemeral: true })
       }
@@ -37,43 +27,35 @@ module.exports = {
       const newNickname = interaction.options.getString("اللقب") || null
       const reason      = interaction.options.getString("السبب") || "لم يتم تحديد سبب"
 
-      // ✅ Fetch member
       const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null)
 
       if (!member) {
         return interaction.reply({ content: "❌ ما قدرت أجد هذا العضو.", ephemeral: true })
       }
 
-      // ✅ Check: cannot change server owner's nickname (unless you are the owner)
       if (member.id === interaction.guild.ownerId && interaction.user.id !== interaction.guild.ownerId) {
         return interaction.reply({ content: "❌ لا تقدر تغير لقب مالك السيرفر.", ephemeral: true })
       }
 
-      // ✅ Check: executor's role must be higher (unless changing own nickname)
       if (targetUser.id !== interaction.user.id) {
         if (interaction.member.roles.highest.position <= member.roles.highest.position) {
           return interaction.reply({ content: "❌ لا تقدر تغير لقب عضو رتبته أعلى منك أو مساوية لك.", ephemeral: true })
         }
       }
 
-      // ✅ Check: bot can manage this member
       if (!member.manageable) {
         return interaction.reply({ content: "❌ البوت ما يقدر يغير لقب هذا العضو. تأكد إن رتبة البوت أعلى منه.", ephemeral: true })
       }
 
-      // ✅ Save old nickname
       const oldNickname = member.nickname || member.user.username
       const isRemoving  = newNickname === null
 
-      // ✅ Check: same nickname
       if (!isRemoving && newNickname === member.nickname) {
         return interaction.reply({ content: "⚠️ هذا اللقب هو نفسه اللقب الحالي!", ephemeral: true })
       }
 
-      // ✅ Execute nickname change
       await member.setNickname(newNickname, `${reason} | بواسطة: ${interaction.user.username}`)
 
-      // ✅ Success embed
       const embed = new EmbedBuilder()
         .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 128 }))
         .setFooter({ text: `الآيدي: ${targetUser.id}` })
@@ -83,11 +65,11 @@ module.exports = {
         embed.setColor(0xf59e0b)
         embed.setTitle("📝 تم إزالة لقب العضو")
         embed.addFields(
-          { name: "👤 العضو",        value: `${targetUser} (\`${targetUser.username}\`)`,    inline: true  },
-          { name: "🏷️ اللقب القديم", value: `\`${oldNickname}\``,                            inline: true  },
-          { name: "🔄 الاسم الحالي", value: `\`${targetUser.username}\` (الاسم الأصلي)`,    inline: false },
-          { name: "📝 السبب",        value: reason,                                           inline: false },
-          { name: "👮 بواسطة",       value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true }
+          { name: "👤 العضو",        value: `${targetUser} (\`${targetUser.username}\`)`,             inline: true  },
+          { name: "🏷️ اللقب القديم", value: `\`${oldNickname}\``,                                    inline: true  },
+          { name: "🔄 الاسم الحالي", value: `\`${targetUser.username}\` (الاسم الأصلي)`,             inline: false },
+          { name: "📝 السبب",        value: reason,                                                   inline: false },
+          { name: "👮 بواسطة",       value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true  }
         )
       } else {
         embed.setColor(0x3b82f6)
@@ -100,6 +82,14 @@ module.exports = {
           { name: "👮 بواسطة",       value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: true  }
         )
       }
+
+      // ✅ LOG
+      discordLog.logNickname(interaction.guild, {
+        moderator: interaction.user,
+        target:    targetUser,
+        oldNick:   member.nickname || null,
+        newNick:   newNickname
+      }).catch(() => {})
 
       return interaction.reply({ embeds: [embed] })
 

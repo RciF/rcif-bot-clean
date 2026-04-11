@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require("discord.js")
 const warningSystem = require("../../systems/warningSystem")
+const discordLog = require("../../systems/discordLogSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -8,16 +9,10 @@ module.exports = {
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption(option =>
-      option
-        .setName("العضو")
-        .setDescription("العضو المراد تحذيره")
-        .setRequired(true)
+      option.setName("العضو").setDescription("العضو المراد تحذيره").setRequired(true)
     )
     .addStringOption(option =>
-      option
-        .setName("السبب")
-        .setDescription("سبب التحذير")
-        .setRequired(false)
+      option.setName("السبب").setDescription("سبب التحذير").setRequired(false)
     ),
 
   async execute(interaction) {
@@ -27,96 +22,80 @@ module.exports = {
       }
 
       const targetUser = interaction.options.getUser("العضو")
-      const reason = interaction.options.getString("السبب") || "لم يتم تحديد سبب"
+      const reason     = interaction.options.getString("السبب") || "لم يتم تحديد سبب"
 
-      // ✅ لا تحذر نفسك
       if (targetUser.id === interaction.user.id) {
         return interaction.reply({ content: "❌ لا تقدر تحذر نفسك!", ephemeral: true })
       }
 
-      // ✅ لا تحذر البوت
       if (targetUser.id === interaction.client.user.id) {
         return interaction.reply({ content: "❌ لا تقدر تحذر البوت.", ephemeral: true })
       }
 
-      // ✅ جلب العضو
       const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null)
 
       if (!member) {
         return interaction.reply({ content: "❌ ما قدرت ألقى هذا العضو.", ephemeral: true })
       }
 
-      // ✅ لا تحذر مالك السيرفر
       if (member.id === interaction.guild.ownerId) {
         return interaction.reply({ content: "❌ لا تقدر تحذر مالك السيرفر.", ephemeral: true })
       }
 
-      // ✅ رتبة المنفذ أعلى
       if (interaction.member.roles.highest.position <= member.roles.highest.position) {
         return interaction.reply({ content: "❌ لا تقدر تحذر عضو رتبته أعلى منك أو تساويك.", ephemeral: true })
       }
 
-      // ✅ تسجيل التحذير
-      await warningSystem.addWarning(
-        interaction.guild.id,
-        targetUser.id,
-        interaction.user.id,
-        reason
-      )
+      // ✅ إضافة التحذير
+      await warningSystem.addWarning(interaction.guild.id, targetUser.id, interaction.user.id, reason)
 
       // ✅ جلب عدد التحذيرات بعد الإضافة
-      const warnings = await warningSystem.getWarnings(interaction.guild.id, targetUser.id)
-      const totalWarnings = warnings?.length || 1
+      const allWarnings     = await warningSystem.getWarnings(interaction.guild.id, targetUser.id)
+      const totalWarnings   = allWarnings?.length || 1
+      const severityColor   = totalWarnings >= 5 ? 0xef4444 : totalWarnings >= 3 ? 0xf59e0b : 0x3b82f6
+      const severityLabel   = totalWarnings >= 5 ? "🔴 خطير" : totalWarnings >= 3 ? "🟡 متوسط" : "🟢 عادي"
 
-      // ✅ تحديد لون ومستوى الخطورة
-      let color, severity
-      if (totalWarnings >= 5) {
-        color = 0xef4444
-        severity = "🔴 خطير — يُنصح باتخاذ إجراء"
-      } else if (totalWarnings >= 3) {
-        color = 0xf59e0b
-        severity = "🟡 متوسط — العضو قارب الحد"
-      } else {
-        color = 0x3b82f6
-        severity = "🟢 عادي"
-      }
-
-      // ✅ محاولة إرسال رسالة خاصة
+      // ✅ DM للعضو
       let dmSent = false
       try {
         const dmEmbed = new EmbedBuilder()
-          .setColor(color)
-          .setTitle("⚠️ تم تحذيرك")
-          .setDescription(`تم تحذيرك في سيرفر **${interaction.guild.name}**`)
+          .setColor(severityColor)
+          .setTitle("⚠️ تلقيت تحذيراً")
+          .setDescription(`تلقيت تحذيراً في سيرفر **${interaction.guild.name}**`)
           .addFields(
-            { name: "📝 السبب", value: reason, inline: true },
-            { name: "📊 مجموع تحذيراتك", value: `**${totalWarnings}** تحذير`, inline: true }
+            { name: "📝 السبب",           value: reason,        inline: true },
+            { name: "📊 إجمالي تحذيراتك", value: `${totalWarnings}`, inline: true }
           )
           .setFooter({ text: interaction.guild.name, iconURL: interaction.guild.iconURL({ dynamic: true }) })
           .setTimestamp()
 
         await targetUser.send({ embeds: [dmEmbed] })
         dmSent = true
-      } catch {
-        // العضو مقفل الخاص
-      }
+      } catch {}
 
-      // ✅ Embed النجاح
       const embed = new EmbedBuilder()
-        .setColor(color)
+        .setColor(severityColor)
         .setTitle("⚠️ تم تحذير العضو")
         .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 128 }))
         .addFields(
-          { name: "👤 العضو", value: `${targetUser} (\`${targetUser.username}\`)`, inline: true },
-          { name: "🆔 ID", value: `\`${targetUser.id}\``, inline: true },
-          { name: "📝 السبب", value: reason, inline: false },
-          { name: "📊 مجموع التحذيرات", value: `**${totalWarnings}** تحذير`, inline: true },
-          { name: "⚡ مستوى الخطورة", value: severity, inline: true },
-          { name: "📩 إشعار خاص", value: dmSent ? "✅ تم إرسال إشعار" : "❌ ما تم الإرسال", inline: true },
-          { name: "👮 بواسطة", value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: false }
+          { name: "👤 العضو",              value: `${targetUser} (\`${targetUser.username}\`)`,       inline: true  },
+          { name: "🆔 ID",                 value: `\`${targetUser.id}\``,                              inline: true  },
+          { name: "⚡ مستوى الخطورة",     value: severityLabel,                                       inline: true  },
+          { name: "📝 السبب",              value: reason,                                              inline: false },
+          { name: "📊 إجمالي التحذيرات",  value: `${totalWarnings} تحذير`,                           inline: true  },
+          { name: "📩 إشعار خاص",         value: dmSent ? "✅ تم إرسال إشعار" : "❌ ما تم الإرسال",  inline: true  },
+          { name: "👮 بواسطة",            value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: false }
         )
         .setFooter({ text: `ID: ${targetUser.id}` })
         .setTimestamp()
+
+      // ✅ LOG
+      discordLog.logWarn(interaction.guild, {
+        moderator: interaction.user,
+        target: targetUser,
+        reason,
+        totalWarnings
+      }).catch(() => {})
 
       return interaction.reply({ embeds: [embed] })
 

@@ -20,19 +20,15 @@ async function runMigrations() {
         `)
 
         // GUILDS
-await databaseSystem.query(`
-    CREATE TABLE IF NOT EXISTS guilds (
-        id TEXT PRIMARY KEY,
-        ai_enabled BOOLEAN DEFAULT true,
-        xp_enabled BOOLEAN DEFAULT true,
-        economy_enabled BOOLEAN DEFAULT true
-    );
-`)
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS guilds (
+                id TEXT PRIMARY KEY,
+                ai_enabled BOOLEAN DEFAULT true,
+                xp_enabled BOOLEAN DEFAULT true,
+                economy_enabled BOOLEAN DEFAULT true
+            );
+        `)
 
-// Migration: إضافة log_channel_id إذا ما كان موجوداً
-await databaseSystem.query(`
-    ALTER TABLE guilds ADD COLUMN IF NOT EXISTS log_channel_id TEXT DEFAULT NULL;
-`)
         // XP SYSTEM
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS xp (
@@ -44,7 +40,6 @@ await databaseSystem.query(`
             );
         `)
 
-        // --- التعديل الجديد (النقطة 3): إضافة جدول إعدادات الـ XP ---
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS xp_settings (
                 guild_id TEXT PRIMARY KEY,
@@ -177,7 +172,7 @@ await databaseSystem.query(`
             `)
         }
 
-        // LOG SETTINGS — كل حدث له قناة مستقلة
+        // LOG SETTINGS
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS log_settings (
                 guild_id TEXT PRIMARY KEY,
@@ -196,8 +191,8 @@ await databaseSystem.query(`
             );
         `)
 
-        // Migration: لو الجدول القديم موجود، نضيف الأعمدة الجديدة
-        const newColumns = [
+        // Migration: أعمدة اللوق القديمة
+        const oldLogColumns = [
             "message_delete_channel", "message_update_channel",
             "member_join_channel", "member_leave_channel",
             "member_ban_channel", "member_unban_channel",
@@ -206,7 +201,7 @@ await databaseSystem.query(`
             "role_delete_channel"
         ]
 
-        for (const col of newColumns) {
+        for (const col of oldLogColumns) {
             try {
                 await databaseSystem.query(`ALTER TABLE log_settings ADD COLUMN IF NOT EXISTS ${col} TEXT;`)
             } catch (e) {
@@ -214,17 +209,73 @@ await databaseSystem.query(`
             }
         }
 
+        // TICKETS
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS ticket_settings (
+                guild_id TEXT PRIMARY KEY,
+                category_id TEXT,
+                log_channel_id TEXT,
+                support_role_id TEXT,
+                welcome_message TEXT,
+                max_open_tickets INTEGER DEFAULT 1,
+                auto_close_hours INTEGER DEFAULT 48,
+                transcript_enabled BOOLEAN DEFAULT true,
+                enabled BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+        `)
+
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS tickets (
+                id SERIAL PRIMARY KEY,
+                guild_id TEXT NOT NULL,
+                channel_id TEXT NOT NULL UNIQUE,
+                user_id TEXT NOT NULL,
+                category TEXT DEFAULT 'other',
+                status TEXT DEFAULT 'open',
+                priority TEXT DEFAULT 'normal',
+                claimed_by TEXT,
+                closed_by TEXT,
+                close_reason TEXT,
+                message_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                closed_at TIMESTAMP
+            );
+        `)
+
         // WELCOME SETTINGS
-await databaseSystem.query(`
-  CREATE TABLE IF NOT EXISTS welcome_settings (
-    guild_id TEXT PRIMARY KEY,
-    welcome_channel_id TEXT,
-    goodbye_channel_id TEXT,
-    welcome_message TEXT,
-    goodbye_message TEXT,
-    enabled BOOLEAN DEFAULT true
-  );
-`)
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS welcome_settings (
+                guild_id TEXT PRIMARY KEY,
+                welcome_channel_id TEXT,
+                goodbye_channel_id TEXT,
+                welcome_message TEXT,
+                goodbye_message TEXT,
+                enabled BOOLEAN DEFAULT true
+            );
+        `)
+
+        // Migration: أعمدة اللوق الجديدة
+        const newLogColumns = [
+            "message_delete_bulk_channel",
+            "channel_update_channel",
+            "role_update_channel",
+            "voice_channel",
+            "guild_update_channel",
+            "emoji_channel",
+            "invite_channel",
+        ]
+
+        for (const col of newLogColumns) {
+            try {
+                await databaseSystem.query(
+                    `ALTER TABLE log_settings ADD COLUMN IF NOT EXISTS ${col} TEXT;`
+                )
+            } catch (e) {
+                // column already exists — ignore
+            }
+        }
 
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 

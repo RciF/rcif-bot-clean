@@ -1,8 +1,8 @@
 const databaseSystem = require("../systems/databaseSystem");
 const logger = require("../systems/loggerSystem");
 
-// ✅ FIX: whitelist لمنع SQL injection
-const ALLOWED_FIELDS = ["ai_enabled", "xp_enabled", "economy_enabled"];
+// ✅ تم إضافة log_channel_id للقائمة المسموحة للتعديل
+const ALLOWED_FIELDS = ["ai_enabled", "xp_enabled", "economy_enabled", "log_channel_id"];
 
 async function getGuild(guildId) {
     try {
@@ -24,6 +24,7 @@ async function getGuild(guildId) {
 
 async function createGuild(guildId) {
     try {
+        // العمود الجديد log_channel_id مدعوم تلقائياً هنا لأنه NULL افتراضياً في قاعدة البيانات
         const result = await databaseSystem.query(
             "INSERT INTO guilds (id) VALUES ($1) ON CONFLICT (id) DO NOTHING RETURNING *",
             [guildId]
@@ -50,7 +51,7 @@ async function getOrCreateGuild(guildId) {
 
 async function updateGuildSetting(guildId, field, value) {
     try {
-        // ✅ FIX: SQL injection prevention
+        // ✅ منع الـ SQL injection والتأكد من أن الحقل الجديد ضمن القائمة
         if (!ALLOWED_FIELDS.includes(field)) {
             logger.warn("GUILD_UPDATE_INVALID_FIELD", { field });
             return null;
