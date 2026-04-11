@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require("discord.js")
 const databaseSystem = require("../../systems/databaseSystem")
-const logger = require("../systems/loggerSystem")
+const logger = require("../../systems/loggerSystem")
+
 
 async function getWelcomeSettings(guildId) {
   try {
