@@ -2,7 +2,8 @@ const { EmbedBuilder } = require("discord.js")
 const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas")
 const path = require("path")
 const databaseSystem = require("../../systems/databaseSystem")
-const logger = require("../systems/loggerSystem")
+const logger = require("../../systems/loggerSystem")
+
 
 async function generateWelcomeImage(member, guild) {
   const canvas = createCanvas(1000, 350)
