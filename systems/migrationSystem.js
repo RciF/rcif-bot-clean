@@ -20,15 +20,19 @@ async function runMigrations() {
         `)
 
         // GUILDS
-        await databaseSystem.query(`
-            CREATE TABLE IF NOT EXISTS guilds (
-                id TEXT PRIMARY KEY,
-                ai_enabled BOOLEAN DEFAULT true,
-                xp_enabled BOOLEAN DEFAULT true,
-                economy_enabled BOOLEAN DEFAULT true
-            );
-        `)
+await databaseSystem.query(`
+    CREATE TABLE IF NOT EXISTS guilds (
+        id TEXT PRIMARY KEY,
+        ai_enabled BOOLEAN DEFAULT true,
+        xp_enabled BOOLEAN DEFAULT true,
+        economy_enabled BOOLEAN DEFAULT true
+    );
+`)
 
+// Migration: إضافة log_channel_id إذا ما كان موجوداً
+await databaseSystem.query(`
+    ALTER TABLE guilds ADD COLUMN IF NOT EXISTS log_channel_id TEXT DEFAULT NULL;
+`)
         // XP SYSTEM
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS xp (

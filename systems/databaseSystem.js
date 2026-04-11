@@ -195,13 +195,8 @@ async function stats() {
   }
 }
 
+
+
 module.exports = {
-  query,
-  queryOne,
-  queryMany,
-  execute,
-  transaction,
-  batch,
-  ping,
-  stats
+  query, queryOne, queryMany, execute, transaction, batch, ping, stats
 };
