@@ -21,9 +21,10 @@ module.exports = {
           { name: "👤 الكاتب", value: `${newMessage.author} (${newMessage.author.tag})`, inline: true },
           { name: "📌 القناة", value: `${newMessage.channel}`, inline: true },
           { name: "📝 قبل التعديل", value: oldContent.length > 1024 ? oldContent.slice(0, 1021) + "..." : oldContent },
-          { name: "📝 بعد التعديل", value: newContent.length > 1024 ? newContent.slice(0, 1021) + "..." : newContent }
+          { name: "📝 بعد التعديل", value: newContent.length > 1024 ? newContent.slice(0, 1021) + "..." : newContent },
+          { name: "🔗 رابط الرسالة", value: `[اضغط هنا](${newMessage.url})` }
         ],
-        footer: `معرف الرسالة: ${newMessage.id} • اضغط للانتقال`
+        footer: `معرف الرسالة: ${newMessage.id}`
       })
     } catch (err) {
       logger.error("LOG_MESSAGE_UPDATE_FAILED", { error: err.message })

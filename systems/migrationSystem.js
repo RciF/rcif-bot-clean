@@ -105,7 +105,7 @@ async function runMigrations() {
             );
         `)
 
-        // ✅ NEW: SUBSCRIPTIONS
+        // SUBSCRIPTIONS
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS subscriptions (
                 id SERIAL PRIMARY KEY,
@@ -118,7 +118,7 @@ async function runMigrations() {
             );
         `)
 
-        // ✅ NEW: GUILD ↔ SUBSCRIPTION LINKING
+        // GUILD SUBSCRIPTIONS
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS guild_subscriptions (
                 guild_id TEXT PRIMARY KEY,
@@ -162,85 +162,43 @@ async function runMigrations() {
             `)
         }
 
-        // LOG SETTINGS
+        // LOG SETTINGS — كل حدث له قناة مستقلة
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS log_settings (
                 guild_id TEXT PRIMARY KEY,
-                log_channel_id TEXT,
-                message_delete BOOLEAN DEFAULT true,
-                message_update BOOLEAN DEFAULT true,
-                member_join BOOLEAN DEFAULT true,
-                member_leave BOOLEAN DEFAULT true,
-                member_ban BOOLEAN DEFAULT true,
-                member_unban BOOLEAN DEFAULT true,
-                member_update BOOLEAN DEFAULT true,
-                channel_create BOOLEAN DEFAULT true,
-                channel_delete BOOLEAN DEFAULT true,
-                role_create BOOLEAN DEFAULT true,
-                role_delete BOOLEAN DEFAULT true,
-                enabled BOOLEAN DEFAULT false
-            );
-        `)
-// ══════════════════════════════════════
-        //  TICKET SYSTEM
-        // ══════════════════════════════════════
-
-        // TICKET SETTINGS (per guild)
-        await databaseSystem.query(`
-            CREATE TABLE IF NOT EXISTS ticket_settings (
-                guild_id TEXT PRIMARY KEY,
-                category_id TEXT,
-                log_channel_id TEXT,
-                support_role_id TEXT,
-                welcome_message TEXT DEFAULT 'مرحباً! فريق الدعم سيكون معك قريباً.',
-                max_open_tickets INTEGER DEFAULT 1,
-                auto_close_hours INTEGER DEFAULT 48,
-                transcript_enabled BOOLEAN DEFAULT true,
-                enabled BOOLEAN DEFAULT true,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
+                enabled BOOLEAN DEFAULT false,
+                message_delete_channel TEXT,
+                message_update_channel TEXT,
+                member_join_channel TEXT,
+                member_leave_channel TEXT,
+                member_ban_channel TEXT,
+                member_unban_channel TEXT,
+                member_update_channel TEXT,
+                channel_create_channel TEXT,
+                channel_delete_channel TEXT,
+                role_create_channel TEXT,
+                role_delete_channel TEXT
             );
         `)
 
-        // TICKETS
-        await databaseSystem.query(`
-            CREATE TABLE IF NOT EXISTS tickets (
-                id SERIAL PRIMARY KEY,
-                guild_id TEXT NOT NULL,
-                channel_id TEXT UNIQUE,
-                user_id TEXT NOT NULL,
-                category TEXT DEFAULT 'other',
-                status TEXT DEFAULT 'open',
-                priority TEXT DEFAULT 'normal',
-                claimed_by TEXT,
-                close_reason TEXT,
-                closed_by TEXT,
-                message_count INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT NOW(),
-                closed_at TIMESTAMP
-            );
-        `)
+        // Migration: لو الجدول القديم موجود، نضيف الأعمدة الجديدة
+        const newColumns = [
+            "message_delete_channel", "message_update_channel",
+            "member_join_channel", "member_leave_channel",
+            "member_ban_channel", "member_unban_channel",
+            "member_update_channel", "channel_create_channel",
+            "channel_delete_channel", "role_create_channel",
+            "role_delete_channel"
+        ]
 
-        // INDEXES for fast lookups
-        await databaseSystem.query(`
-            CREATE INDEX IF NOT EXISTS idx_tickets_guild
-            ON tickets (guild_id);
-        `)
+        for (const col of newColumns) {
+            try {
+                await databaseSystem.query(`ALTER TABLE log_settings ADD COLUMN IF NOT EXISTS ${col} TEXT;`)
+            } catch (e) {
+                // column already exists — ignore
+            }
+        }
 
-        await databaseSystem.query(`
-            CREATE INDEX IF NOT EXISTS idx_tickets_user
-            ON tickets (user_id, guild_id);
-        `)
-
-        await databaseSystem.query(`
-            CREATE INDEX IF NOT EXISTS idx_tickets_status
-            ON tickets (status, guild_id);
-        `)
-
-        await databaseSystem.query(`
-            CREATE INDEX IF NOT EXISTS idx_tickets_channel
-            ON tickets (channel_id);
-        `)
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 
     } catch (error) {

@@ -18,7 +18,7 @@ module.exports = {
       ]
 
       if (isNew) {
-        fields.push({ name: "⚠️ تنبيه", value: `حساب جديد (${accountAge} يوم)` })
+        fields.push({ name: "⚠️ تنبيه", value: `حساب جديد (${accountAge} يوم فقط)` })
       }
 
       await sendLog(client, member.guild.id, "member_join", {

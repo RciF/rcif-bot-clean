@@ -7,8 +7,6 @@ module.exports = {
   async execute(role, client) {
     try {
       if (!role.guild) return
-
-      // تجاهل أدوار البوتات التلقائية
       if (role.managed) return
 
       await sendLog(client, role.guild.id, "role_create", {

@@ -8,22 +8,22 @@ module.exports = {
     try {
       if (!newMember.guild) return
 
-      // تغيير اللقب
+      // ═══ تغيير اللقب ═══
       if (oldMember.nickname !== newMember.nickname) {
         await sendLog(client, newMember.guild.id, "member_update", {
           title: "👤 تغيير لقب",
           color: LOG_COLORS.member,
           fields: [
             { name: "👤 العضو", value: `${newMember} (${newMember.user.tag})`, inline: true },
-            { name: "📝 اللقب القديم", value: oldMember.nickname || "بدون لقب", inline: true },
-            { name: "📝 اللقب الجديد", value: newMember.nickname || "بدون لقب", inline: true }
+            { name: "📝 القديم", value: oldMember.nickname || "بدون لقب", inline: true },
+            { name: "📝 الجديد", value: newMember.nickname || "بدون لقب", inline: true }
           ],
           thumbnail: newMember.user.displayAvatarURL({ size: 256 }),
           footer: `معرف العضو: ${newMember.id}`
         })
       }
 
-      // تغيير الأدوار
+      // ═══ تغيير الأدوار ═══
       const oldRoles = oldMember.roles.cache
       const newRoles = newMember.roles.cache
 
@@ -54,7 +54,7 @@ module.exports = {
         })
       }
 
-      // تغيير التايم أوت
+      // ═══ تغيير التايم أوت (كتم/فك كتم) ═══
       if (!oldMember.communicationDisabledUntilTimestamp && newMember.communicationDisabledUntilTimestamp) {
         await sendLog(client, newMember.guild.id, "member_update", {
           title: "🔇 تم كتم عضو",
