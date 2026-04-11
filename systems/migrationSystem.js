@@ -2,7 +2,7 @@ const databaseSystem = require("./databaseSystem")
 const logger = require("./loggerSystem")
 
 async function runMigrations() {
-
+    
     logger.info("RUNNING_DATABASE_MIGRATIONS")
 
     try {
@@ -37,6 +37,17 @@ async function runMigrations() {
                 xp INTEGER DEFAULT 0,
                 level INTEGER DEFAULT 0,
                 PRIMARY KEY (user_id, guild_id)
+            );
+        `)
+
+        // --- التعديل الجديد (النقطة 3): إضافة جدول إعدادات الـ XP ---
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS xp_settings (
+                guild_id TEXT PRIMARY KEY,
+                levelup_channel_id TEXT,
+                xp_multiplier NUMERIC DEFAULT 1,
+                disabled_channels JSONB DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT NOW()
             );
         `)
 

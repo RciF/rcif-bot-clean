@@ -41,17 +41,16 @@ module.exports = {
       }
 
       // 🔥 AI auto reply — هذا هو المسؤول الوحيد عن الرد
-      // ✅ FIX: شلنا aiHandler.askAI المنفصل — aiAutoReplySystem يستدعيه داخلياً
       const aiEnabled = await aiSystem.ensureAIEnabled(message)
 
       if (aiEnabled && !message._aiHandled) {
-    message._aiHandled = true
-    try {
-      await aiAutoReplySystem(message)
-    } catch (err) {
-      logger.error("AI_REPLY_FAILED", { error: err.message })
-    }
-  }
+        message._aiHandled = true
+        try {
+          await aiAutoReplySystem(message)
+        } catch (err) {
+          logger.error("AI_REPLY_FAILED", { error: err.message })
+        }
+      }
 
       // 🔥 XP system
       const xpEnabled = await xpSystem.ensureXPEnabled(message)
@@ -62,7 +61,8 @@ module.exports = {
         let result
 
         try {
-          result = await levelSystem.addXP(message.author.id, message.guild.id)
+          // ✅ التعديل (النقطة 4): تم تمرير الـ message كباراميتر ثالث
+          result = await levelSystem.addXP(message.author.id, message.guild.id, message)
         } catch (err) {
           logger.error("XP_ADD_FAILED", { error: err.message })
           return
@@ -76,6 +76,8 @@ module.exports = {
               .setColor(0x00ff00)
               .setThumbnail(message.author.displayAvatarURL())
 
+            // سيتم إرسال الرسالة هنا مؤقتاً، إلا إذا كان levelSystem الجديد 
+            // يتولى الإرسال في قناة الإعدادات الخاصة.
             await message.channel.send({ embeds: [embed] })
           } catch (err) {
             logger.error("LEVEL_UP_MESSAGE_FAILED", { error: err.message })

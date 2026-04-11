@@ -753,6 +753,46 @@ app.get("/api/admin/stats", requireAuth, requireOwnerAuth, async (req, res) => {
   }
 })
 
+app.get("/terms", (req, res) => {
+  res.send(`
+    <html><head><title>Terms of Service - Lyn AI</title>
+    <style>body{font-family:Arial;max-width:800px;margin:50px auto;padding:20px;background:#1a1a2e;color:#fff}</style>
+    </head><body>
+    <h1>Terms of Service</h1>
+    <p>Last updated: April 2026</p>
+    <h2>1. Usage</h2>
+    <p>By adding Lyn AI to your server, you agree to use it responsibly and in compliance with Discord's Terms of Service.</p>
+    <h2>2. Data Collection</h2>
+    <p>We collect server IDs, user IDs, and message interactions to provide bot functionality.</p>
+    <h2>3. Prohibited Use</h2>
+    <p>You may not use this bot for spam, harassment, or any illegal activities.</p>
+    <h2>4. Contact</h2>
+    <p>For support, visit: <a href="https://rcif-dashboard.onrender.com" style="color:#7289da">Dashboard</a></p>
+    </body></html>
+  `)
+})
+
+app.get("/privacy", (req, res) => {
+  res.send(`
+    <html><head><title>Privacy Policy - Lyn AI</title>
+    <style>body{font-family:Arial;max-width:800px;margin:50px auto;padding:20px;background:#1a1a2e;color:#fff}</style>
+    </head><body>
+    <h1>Privacy Policy</h1>
+    <p>Last updated: April 2026</p>
+    <h2>1. Data We Collect</h2>
+    <p>We collect: User IDs, Server IDs, message content for AI responses, economy data, and XP data.</p>
+    <h2>2. How We Use Data</h2>
+    <p>Data is used solely to provide bot features including AI responses, economy system, and moderation tools.</p>
+    <h2>3. Data Storage</h2>
+    <p>Data is stored securely in our database and is never sold to third parties.</p>
+    <h2>4. Data Deletion</h2>
+    <p>You can request data deletion by contacting us through the dashboard.</p>
+    <h2>5. Contact</h2>
+    <p>For privacy concerns, visit: <a href="https://rcif-dashboard.onrender.com" style="color:#7289da">Dashboard</a></p>
+    </body></html>
+  `)
+})
+
 // ══════════════════════════════════════
 //  PLANS
 // ══════════════════════════════════════
