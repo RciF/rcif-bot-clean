@@ -1,5 +1,17 @@
-const { sendLog, LOG_COLORS } = require("../../utils/logSender")
-const logger = require("../../systems/loggerSystem")
+const { EmbedBuilder } = require("discord.js")
+const databaseSystem = require("../systems/databaseSystem")
+const logger = require("../systems/loggerSystem")
+
+async function getWelcomeSettings(guildId) {
+  try {
+    return await databaseSystem.queryOne(
+      "SELECT * FROM welcome_settings WHERE guild_id = $1",
+      [guildId]
+    )
+  } catch {
+    return null
+  }
+}
 
 module.exports = {
   name: "guildMemberRemove",
@@ -8,29 +20,33 @@ module.exports = {
     try {
       if (!member.guild) return
 
-      const roles = member.roles?.cache
-        ?.filter(r => r.id !== member.guild.id)
-        ?.map(r => `${r}`)
-        ?.join(", ") || "بدون أدوار"
+      const settings = await getWelcomeSettings(member.guild.id)
+      if (!settings || !settings.enabled) return
+      if (!settings.goodbye_channel_id) return
 
-      const joinedAt = member.joinedTimestamp
-        ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`
-        : "غير معروف"
+      const channel = member.guild.channels.cache.get(settings.goodbye_channel_id)
+      if (!channel) return
 
-      await sendLog(client, member.guild.id, "member_leave", {
-        title: "📤 عضو غادر",
-        color: LOG_COLORS.leave,
-        fields: [
-          { name: "👤 العضو", value: `${member.user.tag}`, inline: true },
-          { name: "🔢 عدد الأعضاء", value: `${member.guild.memberCount}`, inline: true },
-          { name: "📅 انضم", value: joinedAt, inline: true },
-          { name: "🏷️ الأدوار", value: roles.length > 1024 ? roles.slice(0, 1021) + "..." : roles }
-        ],
-        thumbnail: member.user.displayAvatarURL({ size: 256 }),
-        footer: `معرف العضو: ${member.id}`
-      })
+      const embed = new EmbedBuilder()
+        .setColor(0xef4444)
+        .setTitle("👋 عضو غادر")
+        .setDescription(
+          settings.goodbye_message
+            ? settings.goodbye_message
+                .replace("{username}", member.user.username)
+                .replace("{server}", member.guild.name)
+            : `**${member.user.username}** غادر السيرفر`
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 128 }))
+        .addFields(
+          { name: "👥 عدد الأعضاء الآن", value: `${member.guild.memberCount}`, inline: true }
+        )
+        .setTimestamp()
+
+      await channel.send({ embeds: [embed] })
+
     } catch (err) {
-      logger.error("LOG_MEMBER_REMOVE_FAILED", { error: err.message })
+      logger.error("GOODBYE_FAILED", { error: err.message })
     }
   }
 }
