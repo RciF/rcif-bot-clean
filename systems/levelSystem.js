@@ -75,6 +75,19 @@ async function addXP(userId, guildId, message) {
   }
 }
 
+async function getUserXPData(userId, guildId) {
+  const data = await xpRepository.getOrCreateXP(userId, guildId)
+  if (!data) return null
+  const level = data.level || 1
+  return {
+    xp: data.xp || 0,
+    level,
+    requiredXP: level * 100,
+    progress: Math.floor(((data.xp || 0) / (level * 100)) * 100)
+  }
+}
+
 module.exports = {
-  addXP
+  addXP,
+  getUserXPData
 }
