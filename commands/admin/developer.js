@@ -332,7 +332,7 @@ module.exports = {
 
       collector.on("end", async () => {
         try {
-          await interaction.editReply({ components: [] })
+          await response.edit({ components: [] })
         } catch {}
       })
 
