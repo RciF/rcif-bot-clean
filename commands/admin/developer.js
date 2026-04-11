@@ -282,7 +282,11 @@ module.exports = {
         })
       }
 
-      await interaction.deferReply({ ephemeral: true })
+      try {
+  await interaction.deferReply({ ephemeral: true })
+} catch {
+  return
+}
 
       const client = interaction.client
       const mainEmbed = await buildMainEmbed(client, interaction)
