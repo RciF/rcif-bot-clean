@@ -1,4 +1,3 @@
-const { EmbedBuilder } = require("discord.js")
 const levelSystem = require("../systems/levelSystem")
 const aiAutoReplySystem = require("../systems/aiAutoReplySystem")
 const xpCooldownSystem = require("../systems/xpCooldownSystem")
@@ -35,12 +34,12 @@ module.exports = {
 
       // 🔥 social awareness
       try {
-          await aiSocialAwarenessSystem.trackInteraction(message)
+        await aiSocialAwarenessSystem.trackInteraction(message)
       } catch (err) {
         logger.error("AI_SOCIAL_AWARENESS_FAILED", { error: err.message })
       }
 
-      // 🔥 AI auto reply — هذا هو المسؤول الوحيد عن الرد
+      // 🔥 AI auto reply
       const aiEnabled = await aiSystem.ensureAIEnabled(message)
 
       if (aiEnabled && !message._aiHandled) {
@@ -57,33 +56,12 @@ module.exports = {
       if (!xpEnabled) return
 
       if (xpCooldownSystem.canGainXP(message.author.id)) {
-
-        let result
-
         try {
-          // ✅ التعديل (النقطة 4): تم تمرير الـ message كباراميتر ثالث
-          result = await levelSystem.addXP(message.author.id, message.guild.id, message)
+          // ✅ levelSystem يتولى الإرسال في القناة الصح تلقائياً
+          await levelSystem.addXP(message.author.id, message.guild.id, message)
         } catch (err) {
           logger.error("XP_ADD_FAILED", { error: err.message })
-          return
         }
-
-        if (result?.leveledUp) {
-          try {
-            const embed = new EmbedBuilder()
-              .setTitle("🎉 Level Up!")
-              .setDescription(`${message.author} وصل للمستوى **${result.level}**`)
-              .setColor(0x00ff00)
-              .setThumbnail(message.author.displayAvatarURL())
-
-            // سيتم إرسال الرسالة هنا مؤقتاً، إلا إذا كان levelSystem الجديد 
-            // يتولى الإرسال في قناة الإعدادات الخاصة.
-            await message.channel.send({ embeds: [embed] })
-          } catch (err) {
-            logger.error("LEVEL_UP_MESSAGE_FAILED", { error: err.message })
-          }
-        }
-
       }
 
     } catch (error) {
