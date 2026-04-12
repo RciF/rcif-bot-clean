@@ -3,24 +3,19 @@ const logger = require("../../systems/loggerSystem")
 
 module.exports = {
   name: "inviteCreate",
-
   async execute(invite, client) {
     try {
       if (!invite.guild) return
-
       await sendLog(client, invite.guild.id, "invite_create", {
         title: "🔗 دعوة جديدة",
         color: LOG_COLORS.create,
         fields: [
-          { name: "👤 المنشئ", value: invite.inviter ? `${invite.inviter.tag}` : "غير معروف", inline: true },
-          { name: "🔗 الكود", value: `\`${invite.code}\``, inline: true },
-          { name: "📌 القناة", value: invite.channel ? `${invite.channel}` : "غير معروف", inline: true },
-          { name: "⏰ تنتهي", value: invite.maxAge ? `بعد ${invite.maxAge / 3600} ساعة` : "لا تنتهي", inline: true },
-          { name: "🔢 الاستخدام الأقصى", value: invite.maxUses ? `${invite.maxUses}` : "غير محدود", inline: true },
+          { name: "👤 المنشئ", value: invite.inviter?.tag || "غير معروف", inline: true },
+          { name: "📌 القناة", value: invite.channel?.name || "غير معروف", inline: true },
+          { name: "🔗 الكود", value: invite.code, inline: true }
         ],
-        footer: `كود الدعوة: ${invite.code}`
+        footer: "تنتهي: " + (invite.expiresAt?.toLocaleString("ar-SA") || "لا تنتهي")
       })
-
     } catch (err) {
       logger.error("LOG_INVITE_CREATE_FAILED", { error: err.message })
     }

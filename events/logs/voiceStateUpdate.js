@@ -3,59 +3,31 @@ const logger = require("../../systems/loggerSystem")
 
 module.exports = {
   name: "voiceStateUpdate",
-
   async execute(oldState, newState, client) {
     try {
       if (!newState.guild) return
-
-      const member = newState.member
-      if (!member || member.user.bot) return
-
-      const oldChannel = oldState.channel
-      const newChannel = newState.channel
-
-      // دخل قناة صوت
-      if (!oldChannel && newChannel) {
-        await sendLog(client, newState.guild.id, "voice_join", {
-          title: "🔊 دخل قناة صوتية",
-          color: LOG_COLORS.join,
-          fields: [
-            { name: "👤 العضو", value: `${member} (${member.user.tag})`, inline: true },
-            { name: "🔊 القناة", value: `${newChannel.name}`, inline: true },
-          ],
-          footer: `معرف العضو: ${member.id}`
-        })
-        return
+      if (oldState.channelId === newState.channelId) return
+      let title, color
+      if (!oldState.channelId && newState.channelId) {
+        title = "🔊 انضم لقناة صوتية"
+        color = LOG_COLORS.join
+      } else if (oldState.channelId && !newState.channelId) {
+        title = "🔇 غادر قناة صوتية"
+        color = LOG_COLORS.leave
+      } else {
+        title = "🔊 نقل قناة صوتية"
+        color = LOG_COLORS.update
       }
-
-      // خرج من قناة صوت
-      if (oldChannel && !newChannel) {
-        await sendLog(client, newState.guild.id, "voice_leave", {
-          title: "🔇 غادر قناة صوتية",
-          color: LOG_COLORS.leave,
-          fields: [
-            { name: "👤 العضو", value: `${member} (${member.user.tag})`, inline: true },
-            { name: "🔊 القناة", value: `${oldChannel.name}`, inline: true },
-          ],
-          footer: `معرف العضو: ${member.id}`
-        })
-        return
-      }
-
-      // انتقل بين قنوات
-      if (oldChannel && newChannel && oldChannel.id !== newChannel.id) {
-        await sendLog(client, newState.guild.id, "voice_move", {
-          title: "↔️ انتقل بين قنوات صوتية",
-          color: LOG_COLORS.update,
-          fields: [
-            { name: "👤 العضو", value: `${member} (${member.user.tag})`, inline: true },
-            { name: "🔊 من", value: `${oldChannel.name}`, inline: true },
-            { name: "🔊 إلى", value: `${newChannel.name}`, inline: true },
-          ],
-          footer: `معرف العضو: ${member.id}`
-        })
-      }
-
+      await sendLog(client, newState.guild.id, "voice_update", {
+        title,
+        color,
+        fields: [
+          { name: "👤 العضو", value: newState.member?.user.tag || "غير معروف", inline: true },
+          { name: "📌 من", value: oldState.channel?.name || "خارج", inline: true },
+          { name: "📌 إلى", value: newState.channel?.name || "خارج", inline: true }
+        ],
+        footer: "معرف العضو: " + newState.id
+      })
     } catch (err) {
       logger.error("LOG_VOICE_STATE_UPDATE_FAILED", { error: err.message })
     }
