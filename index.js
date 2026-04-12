@@ -15,6 +15,7 @@ if (!DISCORD_TOKEN) {
 
 const client = new Client({
   intents: [
+    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
