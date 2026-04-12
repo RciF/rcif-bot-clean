@@ -7,7 +7,6 @@ const aiSystem = require("../systems/aiSystem")
 const xpSystem = require("../systems/xpSystem")
 const aiObservationSystem = require("../systems/aiObservationSystem")
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
-const protectionSystem = require("../systems/protectionSystem")
 const logger = require("../systems/loggerSystem")
 
 module.exports = {
@@ -25,13 +24,6 @@ module.exports = {
         await guildManager.getGuild(message.guild.id)
       } catch (err) {
         logger.error("GUILD_INIT_FAILED", { error: err.message })
-      }
-
-      // 🛡️ Anti-Spam — يشتغل قبل كل شيء
-      try {
-        await protectionSystem.checkSpam(message)
-      } catch (err) {
-        logger.error("ANTISPAM_FAILED", { error: err.message })
       }
 
       // 🔥 AI observation (non-blocking)
