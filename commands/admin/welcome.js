@@ -136,7 +136,7 @@ module.exports = {
         }
 
         // تشغيل الـ event يدوياً للاختبار
-        const memberAddEvent = require("../events/guildMemberAdd")
+        const memberAddEvent = require('../../events/logs/guildMemberAdd')
         await memberAddEvent.execute(interaction.member, interaction.client)
 
         return interaction.reply({ content: "✅ تم إرسال رسالة اختبار!", ephemeral: true })
