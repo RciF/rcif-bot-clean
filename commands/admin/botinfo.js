@@ -60,10 +60,17 @@ module.exports = {
       try {
         const guildId = interaction.guild.id
         const settingsResult = await database.query(
-          "SELECT ai, xp, economy FROM guild_settings WHERE guild_id = $1",
-          [guildId]
-        )
-        const settings = settingsResult.rows[0] || { ai: true, xp: true, economy: true }
+  "SELECT * FROM guild_settings WHERE guild_id = $1",
+  [guildId]
+)
+const row = settingsResult.rows[0]
+const settings = row
+  ? { 
+      ai: row.ai ?? row.ai_enabled ?? true, 
+      xp: row.xp ?? row.xp_enabled ?? true, 
+      economy: row.economy ?? row.economy_enabled ?? true 
+    }
+  : { ai: true, xp: true, economy: true }
 
         systemsText = [
           `${settings.ai ? "🟢" : "🔴"} الذكاء الاصطناعي — ${settings.ai ? "شغال" : "متوقف"}`,
