@@ -10,7 +10,7 @@ module.exports = {
       if (message.author?.bot) return
       if (message.partial) return
 
-      const content = message.content || "بدون محتوى نصي"
+      const content     = message.content || "بدون محتوى نصي"
       const attachments = message.attachments?.size || 0
 
       const fields = [

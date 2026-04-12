@@ -8,7 +8,6 @@ module.exports = {
     try {
       if (!newMember.guild) return
 
-      // ═══ تغيير اللقب ═══
       if (oldMember.nickname !== newMember.nickname) {
         await sendLog(client, newMember.guild.id, "member_update", {
           title: "👤 تغيير لقب",
@@ -23,11 +22,9 @@ module.exports = {
         })
       }
 
-      // ═══ تغيير الأدوار ═══
       const oldRoles = oldMember.roles.cache
       const newRoles = newMember.roles.cache
-
-      const addedRoles = newRoles.filter(r => !oldRoles.has(r.id))
+      const addedRoles   = newRoles.filter(r => !oldRoles.has(r.id))
       const removedRoles = oldRoles.filter(r => !newRoles.has(r.id))
 
       if (addedRoles.size > 0) {
@@ -54,7 +51,6 @@ module.exports = {
         })
       }
 
-      // ═══ تغيير التايم أوت (كتم/فك كتم) ═══
       if (!oldMember.communicationDisabledUntilTimestamp && newMember.communicationDisabledUntilTimestamp) {
         await sendLog(client, newMember.guild.id, "member_update", {
           title: "🔇 تم كتم عضو",
@@ -75,6 +71,7 @@ module.exports = {
           footer: `معرف العضو: ${newMember.id}`
         })
       }
+
     } catch (err) {
       logger.error("LOG_MEMBER_UPDATE_FAILED", { error: err.message })
     }
