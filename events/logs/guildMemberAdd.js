@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require("discord.js")
 const { createCanvas, loadImage } = require("@napi-rs/canvas")
 const databaseSystem = require("../../systems/databaseSystem")
+const protectionSystem = require("../../systems/protectionSystem")
 const logger = require("../../systems/loggerSystem")
 
 async function generateWelcomeImage(member, guild) {
@@ -79,6 +80,14 @@ module.exports = {
     try {
       if (!member.guild) return
 
+      // 🛡️ Anti-Raid — يشتغل فوراً عند دخول عضو
+      try {
+        await protectionSystem.checkRaid(member)
+      } catch (err) {
+        logger.error("ANTIRAID_FAILED", { error: err.message })
+      }
+
+      // 👋 نظام الترحيب
       const settings = await getWelcomeSettings(member.guild.id)
       if (!settings || !settings.enabled) return
 
@@ -107,7 +116,7 @@ module.exports = {
       })
 
     } catch (err) {
-      logger.error("WELCOME_FAILED", { error: err.message })
+      logger.error("GUILD_MEMBER_ADD_EVENT_FAILED", { error: err.message })
     }
   }
 }
