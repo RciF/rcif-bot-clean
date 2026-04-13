@@ -48,15 +48,24 @@ module.exports = {
           (roles.size > 10 ? `\n... و **${roles.size - 10}** رتبة أخرى` : "")
         : "لا توجد رتب"
 
-      // ✅ حالة الاتصال
+      // ✅ حالة الاتصال — فقط إذا كانت متاحة
       const statusMap = {
         online:  "🟢 متصل",
         idle:    "🌙 غائب",
         dnd:     "⛔ مشغول",
         offline: "⚫ غير متصل"
       }
-      const status     = member.presence?.status || "offline"
-      const statusText = statusMap[status] || "⚫ غير متصل"
+      const presenceStatus = member.presence?.status
+      const statusText = presenceStatus ? (statusMap[presenceStatus] || null) : null
+
+      // ✅ حالة الكتم
+      const muteText = member.isCommunicationDisabled()
+        ? `🔇 مكتوم حتى <t:${Math.floor(member.communicationDisabledUntil.getTime() / 1000)}:R>`
+        : null
+
+      // ✅ بناء نص الحالة — يظهر فقط إذا في بيانات
+      const statusParts = [statusText, muteText].filter(Boolean)
+      const statusValue = statusParts.length > 0 ? statusParts.join("\n") : null
 
       // ✅ بادجات ديسكورد
       const badgeMap = {
@@ -75,11 +84,6 @@ module.exports = {
       const flags     = targetUser.flags?.toArray() || []
       const badges    = flags.filter(f => badgeMap[f]).map(f => badgeMap[f])
       const badgeText = badges.length > 0 ? badges.join("\n") : null
-
-      // ✅ حالة الكتم
-      const muteText = member.isCommunicationDisabled()
-        ? `🔇 مكتوم حتى <t:${Math.floor(member.communicationDisabledUntil.getTime() / 1000)}:R>`
-        : null
 
       // ✅ لون الـ Embed من أعلى رتبة
       const embedColor = member.roles.highest?.color || 0x5865f2
@@ -105,30 +109,37 @@ module.exports = {
             name: "🆔 المعرّف",
             value: `\`${targetUser.id}\``,
             inline: true
-          },
-          {
-            name: "📡 الحالة",
-            value: [statusText, muteText].filter(Boolean).join("\n"),
-            inline: true
-          },
-          {
-            name: "📅 انضم إلى ديسكورد",
-            value: `<t:${createdTimestamp}:D>\n<t:${createdTimestamp}:R>`,
-            inline: true
-          },
-          {
-            name: "📅 انضم إلى السيرفر",
-            value: joinedTimestamp
-              ? `<t:${joinedTimestamp}:D>\n<t:${joinedTimestamp}:R>`
-              : "غير معروف",
-            inline: true
-          },
-          {
-            name: `🎭 الرتب (${roles.size})`,
-            value: rolesText,
-            inline: false
           }
         )
+
+      // ✅ نضيف الحالة فقط إذا كانت متاحة
+      if (statusValue) {
+        embed.addFields({
+          name: "📡 الحالة",
+          value: statusValue,
+          inline: true
+        })
+      }
+
+      embed.addFields(
+        {
+          name: "📅 انضم إلى ديسكورد",
+          value: `<t:${createdTimestamp}:D>\n<t:${createdTimestamp}:R>`,
+          inline: true
+        },
+        {
+          name: "📅 انضم إلى السيرفر",
+          value: joinedTimestamp
+            ? `<t:${joinedTimestamp}:D>\n<t:${joinedTimestamp}:R>`
+            : "غير معروف",
+          inline: true
+        },
+        {
+          name: `🎭 الرتب (${roles.size})`,
+          value: rolesText,
+          inline: false
+        }
+      )
 
       // ✅ بادجات — فقط لو عنده
       if (badgeText) {
