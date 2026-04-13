@@ -2,6 +2,12 @@ const { SlashCommandBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits } = 
 const databaseSystem = require("../../systems/databaseSystem")
 const commandGuardSystem = require("../../systems/commandGuardSystem")
 
+// ✅ تحويل \n النصي إلى سطر جديد حقيقي
+function parseMessage(str) {
+  if (!str) return null
+  return str.replace(/\\n/g, "\n")
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("ترحيب")
@@ -20,18 +26,18 @@ module.exports = {
         )
         .addChannelOption(o =>
           o.setName("قناة_الوداع")
-            .setDescription("القناة التي ترسل فيها رسائل الوداع (بروم مخفي مثلاً)")
+            .setDescription("القناة التي ترسل فيها رسائل الوداع")
             .addChannelTypes(ChannelType.GuildText)
             .setRequired(false)
         )
         .addStringOption(o =>
           o.setName("رسالة_الترحيب")
-            .setDescription("رسالة الترحيب — استخدم {user} {username} {server} {count}")
+            .setDescription("رسالة الترحيب — استخدم {user} {username} {server} {count} و \\n للسطر الجديد")
             .setRequired(false)
         )
         .addStringOption(o =>
           o.setName("رسالة_الوداع")
-            .setDescription("رسالة الوداع — استخدم {username} {server}")
+            .setDescription("رسالة الوداع — استخدم {username} {server} و \\n للسطر الجديد")
             .setRequired(false)
         )
     )
@@ -73,8 +79,9 @@ module.exports = {
       if (sub === "ضبط") {
         const welcomeChannel = interaction.options.getChannel("قناة_الترحيب")
         const goodbyeChannel = interaction.options.getChannel("قناة_الوداع")
-        const welcomeMsg = interaction.options.getString("رسالة_الترحيب")
-        const goodbyeMsg = interaction.options.getString("رسالة_الوداع")
+        // ✅ تحويل \n النصي لسطر جديد حقيقي
+        const welcomeMsg = parseMessage(interaction.options.getString("رسالة_الترحيب"))
+        const goodbyeMsg = parseMessage(interaction.options.getString("رسالة_الوداع"))
 
         await databaseSystem.query(`
           INSERT INTO welcome_settings 
@@ -100,10 +107,18 @@ module.exports = {
           .addFields(
             { name: "📥 قناة الترحيب", value: `${welcomeChannel}`, inline: true },
             { name: "📤 قناة الوداع", value: goodbyeChannel ? `${goodbyeChannel}` : "غير محددة", inline: true },
-            { name: "💬 رسالة الترحيب", value: welcomeMsg || "افتراضية", inline: false },
-            { name: "💬 رسالة الوداع", value: goodbyeMsg || "افتراضية", inline: false }
+            {
+              name: "💬 رسالة الترحيب",
+              value: welcomeMsg ? `\`\`\`${welcomeMsg.slice(0, 200)}\`\`\`` : "افتراضية",
+              inline: false
+            },
+            {
+              name: "💬 رسالة الوداع",
+              value: goodbyeMsg ? `\`\`\`${goodbyeMsg.slice(0, 200)}\`\`\`` : "افتراضية",
+              inline: false
+            }
           )
-          .setFooter({ text: "متغيرات متاحة: {user} {username} {server} {count}" })
+          .setFooter({ text: "متغيرات: {user} {username} {server} {count} — \\n للسطر الجديد" })
           .setTimestamp()
 
         return interaction.reply({ embeds: [embed] })
@@ -135,8 +150,7 @@ module.exports = {
           return interaction.reply({ content: "❌ اضبط الإعدادات أولاً بـ /ترحيب ضبط", ephemeral: true })
         }
 
-        // تشغيل الـ event يدوياً للاختبار
-        const memberAddEvent = require('../../events/logs/guildMemberAdd')
+        const memberAddEvent = require("../../events/logs/guildMemberAdd")
         await memberAddEvent.execute(interaction.member, interaction.client)
 
         return interaction.reply({ content: "✅ تم إرسال رسالة اختبار!", ephemeral: true })
@@ -167,9 +181,22 @@ module.exports = {
             { name: "📊 الحالة", value: settings.enabled ? "🟢 مفعّل" : "🔴 معطّل", inline: true },
             { name: "📥 قناة الترحيب", value: welcomeCh, inline: true },
             { name: "📤 قناة الوداع", value: goodbyeCh, inline: true },
-            { name: "💬 رسالة الترحيب", value: settings.welcome_message || "افتراضية", inline: false },
-            { name: "💬 رسالة الوداع", value: settings.goodbye_message || "افتراضية", inline: false }
+            {
+              name: "💬 رسالة الترحيب",
+              value: settings.welcome_message
+                ? `\`\`\`${settings.welcome_message.slice(0, 300)}\`\`\``
+                : "افتراضية",
+              inline: false
+            },
+            {
+              name: "💬 رسالة الوداع",
+              value: settings.goodbye_message
+                ? `\`\`\`${settings.goodbye_message.slice(0, 300)}\`\`\``
+                : "افتراضية",
+              inline: false
+            }
           )
+          .setFooter({ text: "استخدم \\n في الرسالة للسطر الجديد" })
           .setTimestamp()
 
         return interaction.reply({ embeds: [embed] })
