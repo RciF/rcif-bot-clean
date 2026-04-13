@@ -106,6 +106,6 @@ module.exports = {
     addWarning,
     getWarnings,
     getAllWarnings,
-    clearWarnings
-    deleteWarning 
+    clearWarnings,
+    deleteWarning
 };
