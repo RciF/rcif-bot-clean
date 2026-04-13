@@ -90,9 +90,22 @@ async function clearWarnings(guildId, userId) {
     }
 }
 
+async function deleteWarning(warningId) {
+    try {
+        await databaseSystem.query(
+            "DELETE FROM warnings WHERE id = $1",
+            [warningId]
+        );
+    } catch (error) {
+        logger.error("WARNING_DELETE_FAILED", { error: error.message });
+        throw error;
+    }
+}
+
 module.exports = {
     addWarning,
     getWarnings,
     getAllWarnings,
     clearWarnings
+    deleteWarning 
 };

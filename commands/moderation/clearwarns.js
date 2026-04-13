@@ -4,7 +4,7 @@ const warningSystem = require("../../systems/warningSystem")
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("مسح_التحذيرات")
-    .setDescription("مسح جميع تحذيرات عضو")
+    .setDescription("مسح تحذير محدد أو جميع تحذيرات عضو")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption(option =>
@@ -12,6 +12,13 @@ module.exports = {
         .setName("العضو")
         .setDescription("العضو المراد مسح تحذيراته")
         .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName("رقم_التحذير")
+        .setDescription("رقم التحذير المراد مسحه (اتركه فاضي لمسح الكل)")
+        .setRequired(false)
+        .setMinValue(1)
     )
     .addStringOption(option =>
       option
@@ -27,9 +34,10 @@ module.exports = {
       }
 
       const targetUser = interaction.options.getUser("العضو")
+      const warningNumber = interaction.options.getInteger("رقم_التحذير")
       const reason = interaction.options.getString("السبب") || "لم يتم تحديد سبب"
 
-      // ✅ جلب التحذيرات قبل المسح
+      // ✅ جلب التحذيرات الحالية
       const warnings = await warningSystem.getWarnings(interaction.guild.id, targetUser.id)
       const count = warnings?.length || 0
 
@@ -45,7 +53,51 @@ module.exports = {
         return interaction.reply({ embeds: [cleanEmbed], ephemeral: true })
       }
 
-      // ✅ تنفيذ المسح
+      // ✅ مسح تحذير واحد بالرقم
+      if (warningNumber !== null) {
+        if (warningNumber > count) {
+          return interaction.reply({
+            content: `❌ رقم التحذير غير صحيح. ${targetUser.username} عنده **${count}** تحذير فقط.`,
+            ephemeral: true
+          })
+        }
+
+        // التحذير المراد حذفه (الأحدث أولاً — index 0)
+        const warningToDelete = warnings[warningNumber - 1]
+
+        if (!warningToDelete?.id) {
+          return interaction.reply({
+            content: "❌ ما قدرت أحدد التحذير. حاول مرة ثانية.",
+            ephemeral: true
+          })
+        }
+
+        // ✅ حذف تحذير واحد من قاعدة البيانات
+        await warningSystem.deleteWarning(warningToDelete.id)
+
+        const date = warningToDelete.created_at
+          ? new Date(warningToDelete.created_at).toLocaleDateString("ar-SA")
+          : "غير معروف"
+
+        const embed = new EmbedBuilder()
+          .setColor(0x3b82f6)
+          .setTitle("🗑️ تم مسح التحذير")
+          .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 128 }))
+          .addFields(
+            { name: "👤 العضو", value: `${targetUser} (\`${targetUser.username}\`)`, inline: true },
+            { name: "🔢 رقم التحذير", value: `#${warningNumber} من ${count}`, inline: true },
+            { name: "📝 محتوى التحذير", value: warningToDelete.reason || "بدون سبب", inline: false },
+            { name: "📅 تاريخ التحذير", value: date, inline: true },
+            { name: "📊 التحذيرات المتبقية", value: `**${count - 1}** تحذير`, inline: true },
+            { name: "👮 بواسطة", value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: false }
+          )
+          .setFooter({ text: `استخدم /مسح_التحذيرات بدون رقم لمسح الكل` })
+          .setTimestamp()
+
+        return interaction.reply({ embeds: [embed] })
+      }
+
+      // ✅ مسح جميع التحذيرات (السلوك القديم)
       await warningSystem.clearWarnings(interaction.guild.id, targetUser.id)
 
       // ✅ محاولة إرسال رسالة خاصة
@@ -68,10 +120,9 @@ module.exports = {
         // العضو مقفل الخاص
       }
 
-      // ✅ Embed النجاح
       const embed = new EmbedBuilder()
         .setColor(0x22c55e)
-        .setTitle("🧹 تم مسح التحذيرات")
+        .setTitle("🧹 تم مسح جميع التحذيرات")
         .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 128 }))
         .addFields(
           { name: "👤 العضو", value: `${targetUser} (\`${targetUser.username}\`)`, inline: true },

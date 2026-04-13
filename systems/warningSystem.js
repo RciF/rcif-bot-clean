@@ -33,9 +33,14 @@ async function clearWarnings(guildId, userId) {
   )
 }
 
+async function deleteWarning(warningId) {
+  await warningRepository.deleteWarning(warningId)
+}
+
 module.exports = {
   addWarning,
   getWarnings,
   getAllWarnings,
   clearWarnings
+deleteWarning
 }
