@@ -9,6 +9,10 @@ const aiObservationSystem = require("../systems/aiObservationSystem")
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
 const logger = require("../systems/loggerSystem")
 
+// ✅ FIX: قفل عالمي لمنع معالجة نفس الرسالة مرتين
+const processedMessages = new Set()
+const PROCESSED_TTL = 10000 // 10 ثواني
+
 module.exports = {
   name: "messageCreate",
 
@@ -18,6 +22,11 @@ module.exports = {
 
       if (!message?.author || message.author.bot) return
       if (!message.guild) return
+
+      // ✅ FIX: تحقق من المعرف الفريد للرسالة — منع التكرار المطلق
+      if (processedMessages.has(message.id)) return
+      processedMessages.add(message.id)
+      setTimeout(() => processedMessages.delete(message.id), PROCESSED_TTL)
 
       // 🔥 ensure guild exists
       try {
@@ -43,8 +52,7 @@ module.exports = {
       // 🔥 AI auto reply
       const aiEnabled = await aiSystem.ensureAIEnabled(message)
 
-      if (aiEnabled && !message._aiHandled) {
-        message._aiHandled = true
+      if (aiEnabled) {
         try {
           await aiAutoReplySystem(message)
         } catch (err) {
@@ -80,6 +88,7 @@ module.exports = {
             logger.error("LEVEL_UP_MESSAGE_FAILED", { error: err.message })
           }
         }
+
       }
 
     } catch (error) {
@@ -88,5 +97,7 @@ module.exports = {
         stack: error.stack
       })
     }
+
   }
+
 }

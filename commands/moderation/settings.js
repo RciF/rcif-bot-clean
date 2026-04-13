@@ -31,11 +31,17 @@ module.exports = {
         })
       }
 
-      await interaction.deferReply()
+      // ✅ FIX: نستخدم try/catch منفصل للـ deferReply
+      try {
+        await interaction.deferReply()
+      } catch (deferErr) {
+        // الـ interaction انتهت مدتها — نخرج بهدوء
+        logger.error?.("SETTINGS_DEFER_FAILED", { error: deferErr.message })
+        return
+      }
 
       const guildId = interaction.guild.id
 
-      // ✅ جلب الإعدادات والخطة معاً
       const [settings, plan, limits, aiStats] = await Promise.all([
         settingsSystem.getSettings(guildId),
         planGateSystem.getGuildPlan(guildId),
@@ -46,7 +52,6 @@ module.exports = {
       const planColor = PLAN_COLORS[plan] || PLAN_COLORS.free
       const planName  = PLAN_NAMES[plan]  || PLAN_NAMES.free
 
-      // ✅ حالة كل نظام
       const systemStatus = (enabled, planAllowed) => {
         if (!planAllowed) return "🔒 يحتاج اشتراك"
         return enabled ? "🟢 مفعّل" : "🔴 معطّل"
@@ -56,7 +61,6 @@ module.exports = {
       const xpAllowed  = plan !== "free"
       const ecoAllowed = plan !== "free"
 
-      // ✅ حساب نسبة استخدام AI
       const aiUsed      = aiStats?.used || 0
       const aiLimit     = aiStats?.limit || 0
       const aiRemaining = aiStats?.remaining || 0
@@ -66,7 +70,6 @@ module.exports = {
         ? buildProgressBar(aiPercent)
         : "غير متاح"
 
-      // ✅ بناء الـ Embed
       const embed = new EmbedBuilder()
         .setColor(planColor)
         .setTitle("⚙️ إعدادات السيرفر")
@@ -104,7 +107,6 @@ module.exports = {
           }
         )
 
-      // ✅ إحصائيات AI اليومية — فقط لو الخطة تدعمها
       if (aiAllowed && aiLimit > 0) {
         embed.addFields({
           name: "📊 استخدام الذكاء الاصطناعي اليوم",
@@ -117,7 +119,6 @@ module.exports = {
         })
       }
 
-      // ✅ تلميح لو على الخطة المجانية
       if (plan === "free") {
         embed.addFields({
           name: "💡 ترقية الخطة",
@@ -138,18 +139,23 @@ module.exports = {
     } catch (error) {
       console.error("[SETTINGS ERROR]", error)
 
-      if (interaction.deferred) {
-        return interaction.editReply({ content: "❌ حصل خطأ في عرض الإعدادات" })
+      try {
+        if (interaction.deferred) {
+          return interaction.editReply({ content: "❌ حصل خطأ في عرض الإعدادات" })
+        }
+        if (!interaction.replied) {
+          return interaction.reply({
+            content: "❌ حصل خطأ في عرض الإعدادات",
+            ephemeral: true
+          })
+        }
+      } catch {
+        // الـ interaction انتهت — نتجاهل
       }
-      return interaction.reply({
-        content: "❌ حصل خطأ في عرض الإعدادات",
-        ephemeral: true
-      })
     }
   },
 }
 
-// ✅ شريط تقدم بسيط
 function buildProgressBar(percent) {
   const filled = Math.round(percent / 10)
   const empty  = 10 - filled
