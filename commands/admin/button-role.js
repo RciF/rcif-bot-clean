@@ -145,13 +145,13 @@ async function buildPanelMessage(panel, buttons) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("button-role")
+    .setName("لوحة-رتب")
     .setDescription("نظام الرتب بالأزرار")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
 
     .addSubcommand(sub => sub
-      .setName("create")
+      .setName("إنشاء")
       .setDescription("إنشاء لوحة رتب جديدة")
       .addStringOption(o => o.setName("العنوان").setDescription("عنوان اللوحة").setRequired(true))
       .addStringOption(o => o.setName("الوصف").setDescription("وصف اللوحة").setRequired(false))
@@ -173,7 +173,7 @@ module.exports = {
     )
 
     .addSubcommand(sub => sub
-      .setName("add")
+      .setName("إضافة")
       .setDescription("إضافة زر رتبة للوحة")
       .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
       .addRoleOption(o => o.setName("الرتبة").setDescription("الرتبة").setRequired(true))
@@ -193,14 +193,14 @@ module.exports = {
     )
 
     .addSubcommand(sub => sub
-      .setName("remove")
+      .setName("حذف")
       .setDescription("حذف زر رتبة من لوحة")
       .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
       .addRoleOption(o => o.setName("الرتبة").setDescription("الرتبة اللي تبي تحذفها").setRequired(true))
     )
 
     .addSubcommand(sub => sub
-      .setName("edit")
+      .setName("تعديل")
       .setDescription("تعديل لوحة موجودة")
       .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
       .addStringOption(o => o.setName("العنوان").setDescription("عنوان جديد").setRequired(false))
@@ -223,12 +223,12 @@ module.exports = {
     )
 
     .addSubcommand(sub => sub
-      .setName("list")
+      .setName("قائمة")
       .setDescription("عرض كل لوحات الرتب")
     )
 
     .addSubcommand(sub => sub
-      .setName("delete")
+      .setName("مسح")
       .setDescription("حذف لوحة رتب بالكامل")
       .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
     ),
@@ -252,12 +252,12 @@ module.exports = {
 
       const sub = interaction.options.getSubcommand()
 
-      if (sub === "create") return await handleCreate(interaction)
-      if (sub === "add")    return await handleAdd(interaction)
-      if (sub === "remove") return await handleRemove(interaction)
-      if (sub === "edit")   return await handleEdit(interaction)
-      if (sub === "list")   return await handleList(interaction)
-      if (sub === "delete") return await handleDelete(interaction)
+     if (sub === "إنشاء") return await handleCreate(interaction)
+if (sub === "إضافة") return await handleAdd(interaction)
+if (sub === "حذف")   return await handleRemove(interaction)
+if (sub === "تعديل") return await handleEdit(interaction)
+if (sub === "قائمة") return await handleList(interaction)
+if (sub === "مسح")   return await handleDelete(interaction)
 
     } catch (err) {
       console.error("[BUTTON-ROLE ERROR]", err)
