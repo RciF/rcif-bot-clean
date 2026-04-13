@@ -116,23 +116,14 @@ module.exports = {
 
       const subcommand = interaction.options.getSubcommand()
 
-      // ══════════════════════════════════════
-      //  /تذاكر إعداد
-      // ══════════════════════════════════════
       if (subcommand === "إعداد") {
         return await handleSetup(interaction)
       }
 
-      // ══════════════════════════════════════
-      //  /تذاكر إعدادات
-      // ══════════════════════════════════════
       if (subcommand === "إعدادات") {
         return await handleSettings(interaction)
       }
 
-      // ══════════════════════════════════════
-      //  /تذاكر معلومات
-      // ══════════════════════════════════════
       if (subcommand === "معلومات") {
         return await handleInfo(interaction)
       }
@@ -153,31 +144,26 @@ module.exports = {
 // ══════════════════════════════════════
 
 async function handleSetup(interaction) {
+  await interaction.deferReply({ ephemeral: true })
+
   const targetChannel = interaction.options.getChannel("القناة")
   const categoryChannel = interaction.options.getChannel("الكاتيقوري")
   const logChannel = interaction.options.getChannel("قناة_اللوق")
   const supportRole = interaction.options.getRole("رتبة_الدعم")
 
-  // ✅ تحقق: البوت يقدر يرسل في القناة
   const botPerms = targetChannel.permissionsFor(interaction.guild.members.me)
   if (!botPerms || !botPerms.has(PermissionFlagsBits.SendMessages) || !botPerms.has(PermissionFlagsBits.EmbedLinks)) {
-    return interaction.reply({
-      content: `❌ البوت ما يقدر يرسل رسائل في ${targetChannel}. تأكد من الصلاحيات.`,
-      ephemeral: true
+    return interaction.editReply({
+      content: `❌ البوت ما يقدر يرسل رسائل في ${targetChannel}. تأكد من الصلاحيات.`
     })
   }
 
-  // ✅ تحقق: البوت يقدر يدير القنوات
   if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.ManageChannels)) {
-    return interaction.reply({
-      content: "❌ البوت يحتاج صلاحية **إدارة القنوات** عشان ينشئ قنوات التذاكر.",
-      ephemeral: true
+    return interaction.editReply({
+      content: "❌ البوت يحتاج صلاحية **إدارة القنوات** عشان ينشئ قنوات التذاكر."
     })
   }
 
-  await interaction.deferReply({ ephemeral: true })
-
-  // حفظ الإعدادات
   const currentSettings = await ticketSystem.getSettings(interaction.guild.id)
 
   const settingsData = {
@@ -197,7 +183,6 @@ async function handleSetup(interaction) {
     return interaction.editReply({ content: "❌ فشل في حفظ إعدادات التذاكر." })
   }
 
-  // إرسال رسالة فتح التذاكر
   const setupEmbed = ticketSystem.buildSetupEmbed(interaction.guild)
   const openButton = ticketSystem.buildOpenButton()
 
@@ -206,7 +191,6 @@ async function handleSetup(interaction) {
     components: [openButton]
   })
 
-  // رسالة التأكيد
   const confirmEmbed = new EmbedBuilder()
     .setColor(0x22c55e)
     .setTitle("✅ تم إعداد نظام التذاكر")
@@ -233,7 +217,6 @@ async function handleSettings(interaction) {
   const transcriptOpt = interaction.options.getString("حفظ_المحادثة")
   const statusOpt = interaction.options.getString("الحالة")
 
-  // لو ما حدد أي خيار
   if (!maxTickets && !autoClose && !welcomeMsg && !transcriptOpt && !statusOpt) {
     return interaction.reply({
       content: "⚠️ حدد خيار واحد على الأقل لتعديله.\nاستخدم `/تذاكر معلومات` لعرض الإعدادات الحالية.",
@@ -251,7 +234,6 @@ async function handleSettings(interaction) {
     })
   }
 
-  // تطبيق التعديلات
   const updatedSettings = {
     category_id: currentSettings.category_id,
     log_channel_id: currentSettings.log_channel_id,
@@ -269,7 +251,6 @@ async function handleSettings(interaction) {
     return interaction.editReply({ content: "❌ فشل في حفظ الإعدادات." })
   }
 
-  // بناء رسالة التعديلات
   const changes = []
 
   if (maxTickets) changes.push(`🎫 حد التذاكر → **${maxTickets}**`)
