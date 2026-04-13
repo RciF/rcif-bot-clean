@@ -103,6 +103,11 @@ async function runMigrations() {
             );
         `)
 
+await databaseSystem.query(`
+    CREATE INDEX IF NOT EXISTS idx_economy_users_user_id
+    ON economy_users (user_id);
+`)
+
         // RELATIONSHIPS
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS relationships (
