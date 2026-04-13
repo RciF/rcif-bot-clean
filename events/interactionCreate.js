@@ -60,7 +60,7 @@ module.exports = {
     }
 
     // ══════════════════════════════════════
-    //  BUTTONS
+    //  BUTTONS (Ticket System + others)
     // ══════════════════════════════════════
     if (interaction.isButton()) {
 
@@ -68,6 +68,7 @@ module.exports = {
 
       try {
 
+        // ── Ticket System Buttons ──
         if (customId === "ticket_open") {
           return await ticketSystem.handleOpenButton(interaction)
         }
@@ -108,8 +109,9 @@ module.exports = {
           return await ticketSystem.handleReopenButton(interaction)
         }
 
-        if (customId.startsWith("ticket_priority_")) {
-          return await ticketSystem.handlePriorityButton(interaction)
+        // ── زر تغيير الأولوية (جديد) ──
+        if (customId === "ticket_change_priority") {
+          return await ticketSystem.handleChangePriorityButton(interaction)
         }
 
       } catch (error) {
@@ -126,7 +128,7 @@ module.exports = {
     }
 
     // ══════════════════════════════════════
-    //  SELECT MENUS
+    //  SELECT MENUS (Ticket Category + Priority + others)
     // ══════════════════════════════════════
     if (interaction.isStringSelectMenu()) {
 
@@ -134,8 +136,14 @@ module.exports = {
 
       try {
 
+        // ── Ticket Category Selection ──
         if (customId === "ticket_category_select") {
           return await ticketSystem.handleCategorySelect(interaction)
+        }
+
+        // ── Ticket Priority Selection (جديد) ──
+        if (customId === "ticket_priority_select") {
+          return await ticketSystem.handlePrioritySelect(interaction)
         }
 
       } catch (error) {
