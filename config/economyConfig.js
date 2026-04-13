@@ -432,7 +432,6 @@ function checkRequirement(item, playerAssets) {
 // ═══════════════════════════════════════════════════════════
 
 function checkCarCapacity(playerAssets) {
-  // عدد السيارات الحالية
   const totalCars = playerAssets
     .filter(a => {
       const def = ALL_ITEMS[a.item_id]
@@ -440,12 +439,10 @@ function checkCarCapacity(playerAssets) {
     })
     .reduce((sum, c) => sum + (c.quantity || 0), 0)
 
-  // السيارة الأولى مسموحة بدون بيت
-  if (totalCars === 0) return { allowed: true, message: null, capacity: 1 }
+  // ✅ السيارة الأولى مسموحة دائماً بدون بيت
+  if (totalCars <= 1) return { allowed: true, message: null, capacity: 1 }
 
-  // حساب السعة الإجمالية
   let totalCapacity = 0
-
   for (const asset of playerAssets) {
     const def = ALL_ITEMS[asset.item_id]
     if (def && def.carCapacity) {
@@ -453,8 +450,7 @@ function checkCarCapacity(playerAssets) {
     }
   }
 
-  // لو ما عنده بيت بس عنده سيارة وحدة — ما يقدر يشتري ثانية
-  if (totalCapacity === 0 && totalCars >= 1) {
+  if (totalCapacity === 0) {
     return {
       allowed: false,
       message: "❌ لازم تشتري **بيت** أولاً عشان تقدر تشتري سيارة ثانية\n🏠 كل بيت يتسع لـ 5 سيارات",
@@ -462,7 +458,7 @@ function checkCarCapacity(playerAssets) {
     }
   }
 
-  if (totalCars >= totalCapacity) {
+  if (totalCars > totalCapacity) {
     return {
       allowed: false,
       message: `❌ كل بيوتك ممتلئة بالسيارات! (${totalCars}/${totalCapacity})\n🏠 اشترِ بيت جديد عشان تقدر تضيف سيارات`,
