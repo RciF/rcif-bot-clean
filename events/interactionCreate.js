@@ -1,7 +1,6 @@
 const analyticsTracker = require("../systems/analyticsTracker")
 const errorSystem = require("../systems/errorSystem")
 const ticketSystem = require("../systems/ticketSystem")
-const { handleButtonRoleInteraction } = require("../commands/admin/button-role")
 
 module.exports = {
   name: "interactionCreate",
@@ -61,18 +60,14 @@ module.exports = {
     }
 
     // ══════════════════════════════════════
-    //  BUTTONS (Ticket System + others)
+    //  BUTTONS
     // ══════════════════════════════════════
     if (interaction.isButton()) {
 
-      if (customId.startsWith("brole_")) {
-  return await handleButtonRoleInteraction(interaction)
-}
       const customId = interaction.customId
 
       try {
 
-        // ── Ticket System Buttons ──
         if (customId === "ticket_open") {
           return await ticketSystem.handleOpenButton(interaction)
         }
@@ -113,6 +108,10 @@ module.exports = {
           return await ticketSystem.handleReopenButton(interaction)
         }
 
+        if (customId.startsWith("ticket_priority_")) {
+          return await ticketSystem.handlePriorityButton(interaction)
+        }
+
       } catch (error) {
 
         console.error("[BUTTON ERROR]", error.message)
@@ -127,7 +126,7 @@ module.exports = {
     }
 
     // ══════════════════════════════════════
-    //  SELECT MENUS (Ticket Category + others)
+    //  SELECT MENUS
     // ══════════════════════════════════════
     if (interaction.isStringSelectMenu()) {
 
@@ -135,7 +134,6 @@ module.exports = {
 
       try {
 
-        // ── Ticket Category Selection ──
         if (customId === "ticket_category_select") {
           return await ticketSystem.handleCategorySelect(interaction)
         }
