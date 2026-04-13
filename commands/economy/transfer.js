@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
+const databaseManager = require("../../utils/databaseManager")
 const { formatPriceExact } = require("../../config/economyConfig")
 
 module.exports = {
@@ -41,7 +42,8 @@ module.exports = {
         return interaction.reply({ content: "❌ ما تقدر تحول لبوت!", ephemeral: true })
       }
 
-      const client = await database.getClient()
+      const databaseManager = require("../../utils/databaseManager")
+const client = await databaseManager.getClient()
 
       try {
         await client.query("BEGIN")
