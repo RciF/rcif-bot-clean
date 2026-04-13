@@ -5,6 +5,7 @@ const aiBrainSystem = require("./aiBrainSystem")
 const aiMemorySystem = require("./aiMemorySystem")
 const logger = require("./loggerSystem")
 const devModeSystem = require("./devModeSystem")
+const planGateSystem = require("./planGateSystem")
 
 const OWNER_ID = "529320108032786433"
 
@@ -148,10 +149,18 @@ module.exports = async (message) => {
 
     cooldowns.set(userId, now)
 
-    const allowed = aiRateLimitSystem.canUseAI(userId)
+   const allowed = aiRateLimitSystem.canUseAI(userId)
 
     if (!allowed) {
       return message.reply("⚠️ استخدمت الذكاء الاصطناعي كثيراً.")
+    }
+
+    // ✅ NEW: تحقق من حد السيرفر اليومي
+    if (message.guild) {
+      const aiLimit = await planGateSystem.checkAILimit(message.guild.id)
+      if (!aiLimit.allowed) {
+        return message.reply(aiLimit.message)
+      }
     }
 
     let content = removeBotMention(message, message.content)
@@ -205,6 +214,10 @@ recentReplies.set(dedupeKey, now)
     await new Promise(r => setTimeout(r, randomDelay()))
 
     await message.reply(safeReply)
+    // ✅ NEW: سجّل الاستخدام بعد الرد الناجح
+    if (message.guild) {
+      planGateSystem.recordAIUsage(message.guild.id)
+    }
 
     // 🔥 behavior memory
     if (content.length > 5 && message.guild) {
