@@ -62,6 +62,7 @@ process.on("unhandledRejection", (error) => {
 process.on("uncaughtException", (error) => {
   logger.error("UNCAUGHT_EXCEPTION", {
     error: error?.message || error
+     stack: error?.stack
   })
 })
 
