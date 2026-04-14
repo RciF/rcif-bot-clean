@@ -326,6 +326,32 @@ await databaseSystem.query(`
   );
 `)
 
+// ✅ Protection Settings
+await databaseSystem.query(`
+  CREATE TABLE IF NOT EXISTS protection_settings (
+    guild_id TEXT PRIMARY KEY,
+    antispam_enabled BOOLEAN DEFAULT false,
+    antispam_max_messages INT DEFAULT 5,
+    antispam_interval_ms INT DEFAULT 3000,
+    antispam_action TEXT DEFAULT 'mute',
+    antispam_mute_duration INT DEFAULT 300000,
+    antiraid_enabled BOOLEAN DEFAULT false,
+    antiraid_join_threshold INT DEFAULT 10,
+    antiraid_join_interval_ms INT DEFAULT 10000,
+    antiraid_action TEXT DEFAULT 'lockdown',
+    antinuke_enabled BOOLEAN DEFAULT false,
+    antinuke_channel_delete_threshold INT DEFAULT 3,
+    antinuke_role_delete_threshold INT DEFAULT 3,
+    antinuke_ban_threshold INT DEFAULT 3,
+    antinuke_interval_ms INT DEFAULT 10000,
+    antinuke_action TEXT DEFAULT 'ban',
+    log_channel_id TEXT,
+    whitelist_roles JSONB DEFAULT '[]',
+    whitelist_users JSONB DEFAULT '[]',
+    updated_at TIMESTAMP DEFAULT NOW()
+  );
+`)
+
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 
     } catch (error) {

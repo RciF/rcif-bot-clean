@@ -8,6 +8,7 @@ const xpSystem = require("../systems/xpSystem")
 const aiObservationSystem = require("../systems/aiObservationSystem")
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
 const logger = require("../systems/loggerSystem")
+const protectionSystem = require("../systems/protectionSystem")
 
 // ✅ FIX: قفل عالمي لمنع معالجة نفس الرسالة مرتين
 const processedMessages = new Set()
@@ -34,6 +35,12 @@ module.exports = {
       } catch (err) {
         logger.error("GUILD_INIT_FAILED", { error: err.message })
       }
+
+      try {
+  await protectionSystem.checkSpam(message)
+} catch (err) {
+  logger.error("ANTISPAM_CHECK_FAILED", { error: err.message })
+}
 
       // 🔥 AI observation (non-blocking)
       try {
