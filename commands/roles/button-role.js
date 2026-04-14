@@ -111,7 +111,7 @@ async function buildPanelMessage(panel, buttons) {
   if (panel.thumbnail)   embed.setThumbnail(panel.thumbnail)
 
   if (buttons.length === 0) {
-    embed.setFooter({ text: "لا توجد أزرار بعد — استخدم /button-role add" })
+    embed.setFooter({ text: "لا توجد أزرار بعد — استخدم /لوحة-رتب إضافة" })
   } else {
     embed.setFooter({
       text: panel.exclusive
@@ -169,13 +169,13 @@ module.exports = {
       )
       .addStringOption(o => o.setName("صورة").setDescription("رابط صورة كبيرة").setRequired(false))
       .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط صورة صغيرة").setRequired(false))
-      .addBooleanOption(o => o.setName("exclusive").setDescription("رتبة واحدة فقط من اللوحة؟").setRequired(false))
+      .addBooleanOption(o => o.setName("حصري").setDescription("رتبة واحدة فقط من اللوحة؟").setRequired(false))
     )
 
     .addSubcommand(sub => sub
       .setName("إضافة")
       .setDescription("إضافة زر رتبة للوحة")
-      .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
+      .addStringOption(o => o.setName("معرف_الرسالة").setDescription("ID الرسالة").setRequired(true))
       .addRoleOption(o => o.setName("الرتبة").setDescription("الرتبة").setRequired(true))
       .addStringOption(o => o.setName("النص").setDescription("نص الزر").setRequired(true))
       .addStringOption(o => o.setName("الإيموجي").setDescription("إيموجي الزر").setRequired(false))
@@ -195,14 +195,14 @@ module.exports = {
     .addSubcommand(sub => sub
       .setName("حذف")
       .setDescription("حذف زر رتبة من لوحة")
-      .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
+      .addStringOption(o => o.setName("معرف_الرسالة").setDescription("ID الرسالة").setRequired(true))
       .addRoleOption(o => o.setName("الرتبة").setDescription("الرتبة اللي تبي تحذفها").setRequired(true))
     )
 
     .addSubcommand(sub => sub
       .setName("تعديل")
       .setDescription("تعديل لوحة موجودة")
-      .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
+      .addStringOption(o => o.setName("معرف_الرسالة").setDescription("ID الرسالة").setRequired(true))
       .addStringOption(o => o.setName("العنوان").setDescription("عنوان جديد").setRequired(false))
       .addStringOption(o => o.setName("الوصف").setDescription("وصف جديد").setRequired(false))
       .addStringOption(o => o
@@ -219,7 +219,7 @@ module.exports = {
       )
       .addStringOption(o => o.setName("صورة").setDescription("رابط صورة جديدة").setRequired(false))
       .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط ثمبنيل جديد").setRequired(false))
-      .addBooleanOption(o => o.setName("exclusive").setDescription("تغيير وضع exclusive").setRequired(false))
+      .addBooleanOption(o => o.setName("حصري").setDescription("تغيير وضع الحصري").setRequired(false))
     )
 
     .addSubcommand(sub => sub
@@ -230,7 +230,7 @@ module.exports = {
     .addSubcommand(sub => sub
       .setName("مسح")
       .setDescription("حذف لوحة رتب بالكامل")
-      .addStringOption(o => o.setName("message_id").setDescription("ID الرسالة").setRequired(true))
+      .addStringOption(o => o.setName("معرف_الرسالة").setDescription("ID الرسالة").setRequired(true))
     ),
 
   // ══════════════════════════════════════
@@ -252,12 +252,12 @@ module.exports = {
 
       const sub = interaction.options.getSubcommand()
 
-     if (sub === "إنشاء") return await handleCreate(interaction)
-if (sub === "إضافة") return await handleAdd(interaction)
-if (sub === "حذف")   return await handleRemove(interaction)
-if (sub === "تعديل") return await handleEdit(interaction)
-if (sub === "قائمة") return await handleList(interaction)
-if (sub === "مسح")   return await handleDelete(interaction)
+      if (sub === "إنشاء") return await handleCreate(interaction)
+      if (sub === "إضافة") return await handleAdd(interaction)
+      if (sub === "حذف")   return await handleRemove(interaction)
+      if (sub === "تعديل") return await handleEdit(interaction)
+      if (sub === "قائمة") return await handleList(interaction)
+      if (sub === "مسح")   return await handleDelete(interaction)
 
     } catch (err) {
       console.error("[BUTTON-ROLE ERROR]", err)
@@ -278,7 +278,7 @@ async function handleCreate(interaction) {
   const color     = interaction.options.getString("اللون") || "أزرق"
   const image     = interaction.options.getString("صورة")
   const thumbnail = interaction.options.getString("ثمبنيل")
-  const exclusive = interaction.options.getBoolean("exclusive") ?? false
+  const exclusive = interaction.options.getBoolean("حصري") ?? false
 
   await interaction.deferReply({ ephemeral: true })
 
@@ -302,8 +302,8 @@ async function handleCreate(interaction) {
         .setTitle("✅ تم إنشاء اللوحة")
         .addFields(
           { name: "📌 ID الرسالة", value: `\`${sent.id}\``, inline: true },
-          { name: "⚡ Exclusive",   value: exclusive ? "نعم — رتبة واحدة فقط" : "لا — أكثر من رتبة", inline: true },
-          { name: "➕ الخطوة التالية", value: `استخدم \`/button-role add\` وأدخل ID: \`${sent.id}\`` }
+          { name: "⚡ حصري", value: exclusive ? "نعم — رتبة واحدة فقط" : "لا — أكثر من رتبة", inline: true },
+          { name: "➕ الخطوة التالية", value: `استخدم \`/لوحة-رتب إضافة\` وأدخل ID: \`${sent.id}\`` }
         )
     ]
   })
@@ -314,7 +314,7 @@ async function handleCreate(interaction) {
 // ══════════════════════════════════════
 
 async function handleAdd(interaction) {
-  const messageId = interaction.options.getString("message_id").trim()
+  const messageId = interaction.options.getString("معرف_الرسالة").trim()
   const role      = interaction.options.getRole("الرتبة")
   const label     = interaction.options.getString("النص")
   const emoji     = interaction.options.getString("الإيموجي")
@@ -379,7 +379,7 @@ async function handleAdd(interaction) {
 // ══════════════════════════════════════
 
 async function handleRemove(interaction) {
-  const messageId = interaction.options.getString("message_id").trim()
+  const messageId = interaction.options.getString("معرف_الرسالة").trim()
   const role      = interaction.options.getRole("الرتبة")
 
   await interaction.deferReply({ ephemeral: true })
@@ -423,13 +423,13 @@ async function handleRemove(interaction) {
 // ══════════════════════════════════════
 
 async function handleEdit(interaction) {
-  const messageId = interaction.options.getString("message_id").trim()
+  const messageId = interaction.options.getString("معرف_الرسالة").trim()
   const title     = interaction.options.getString("العنوان")
   const desc      = interaction.options.getString("الوصف")
   const color     = interaction.options.getString("اللون")
   const image     = interaction.options.getString("صورة")
   const thumbnail = interaction.options.getString("ثمبنيل")
-  const exclusive = interaction.options.getBoolean("exclusive")
+  const exclusive = interaction.options.getBoolean("حصري")
 
   await interaction.deferReply({ ephemeral: true })
 
@@ -455,13 +455,6 @@ async function handleEdit(interaction) {
     `UPDATE button_role_panels SET ${sets} WHERE message_id = $1`,
     [messageId, ...Object.values(updates)]
   )
-
-  if (exclusive !== null) {
-    await databaseSystem.query(
-      "UPDATE button_roles SET color = color WHERE message_id = $1",
-      [messageId]
-    )
-  }
 
   const updatedPanel = await getPanel(messageId)
   const buttons = await getPanelButtons(messageId)
@@ -511,7 +504,7 @@ async function handleList(interaction) {
         `📌 ID: \`${p.message_id}\``,
         `📍 القناة: <#${p.channel_id}>`,
         `🔘 الأزرار: **${buttons.length}**`,
-        `⚡ Exclusive: ${p.exclusive ? "نعم" : "لا"}`
+        `⚡ حصري: ${p.exclusive ? "نعم" : "لا"}`
       ].join("\n")
     })
   }
@@ -524,7 +517,7 @@ async function handleList(interaction) {
 // ══════════════════════════════════════
 
 async function handleDelete(interaction) {
-  const messageId = interaction.options.getString("message_id").trim()
+  const messageId = interaction.options.getString("معرف_الرسالة").trim()
 
   await interaction.deferReply({ ephemeral: true })
 
@@ -556,6 +549,7 @@ async function handleDelete(interaction) {
 
 // ══════════════════════════════════════
 //  BUTTON INTERACTION HANDLER
+//  ⚠️ يجب استدعاؤه من interactionCreate.js
 // ══════════════════════════════════════
 
 module.exports.handleButtonRoleInteraction = async function(interaction) {
@@ -582,7 +576,7 @@ module.exports.handleButtonRoleInteraction = async function(interaction) {
 
     const botMember = guild.members.me
     if (role.position >= botMember.roles.highest.position) {
-      return interaction.reply({ content: "❌ البوت ما يقدر يعطي هذه الرتبة.", ephemeral: true })
+      return interaction.reply({ content: "❌ البوت ما يقدر يعطي هذه الرتبة — ارفع رتبة البوت.", ephemeral: true })
     }
 
     const hasRole = member.roles.cache.has(role.id)
