@@ -22,7 +22,8 @@ module.exports = {
 
       const targetUser = interaction.options.getUser("العضو") || interaction.user
       const userId = targetUser.id
-      const guildId = 
+      const guildId = interaction.guild.id
+ 
 
       // ✅ جلب أو إنشاء المستخدم
       await database.query(
