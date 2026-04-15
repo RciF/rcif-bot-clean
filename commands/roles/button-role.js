@@ -193,7 +193,7 @@ module.exports = {
     )
 
     .addSubcommand(sub => sub
-      .setName("حذف")
+      .setName("حذف-زر")
       .setDescription("حذف زر رتبة من لوحة")
       .addStringOption(o => o.setName("معرف_الرسالة").setDescription("ID الرسالة").setRequired(true))
       .addRoleOption(o => o.setName("الرتبة").setDescription("الرتبة اللي تبي تحذفها").setRequired(true))
@@ -252,12 +252,12 @@ module.exports = {
 
       const sub = interaction.options.getSubcommand()
 
-      if (sub === "إنشاء") return await handleCreate(interaction)
-      if (sub === "إضافة") return await handleAdd(interaction)
-      if (sub === "حذف")   return await handleRemove(interaction)
-      if (sub === "تعديل") return await handleEdit(interaction)
-      if (sub === "قائمة") return await handleList(interaction)
-      if (sub === "مسح")   return await handleDelete(interaction)
+      if (sub === "إنشاء")    return await handleCreate(interaction)
+      if (sub === "إضافة")    return await handleAdd(interaction)
+      if (sub === "حذف-زر")   return await handleRemove(interaction)
+      if (sub === "تعديل")    return await handleEdit(interaction)
+      if (sub === "قائمة")    return await handleList(interaction)
+      if (sub === "مسح")      return await handleDelete(interaction)
 
     } catch (err) {
       console.error("[BUTTON-ROLE ERROR]", err)
@@ -289,7 +289,7 @@ async function handleCreate(interaction) {
   await databaseSystem.query(`
     INSERT INTO button_role_panels
     (guild_id, channel_id, message_id, title, description, color, image_url, thumbnail, exclusive)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
   `, [
     interaction.guild.id, interaction.channel.id, sent.id,
     title, desc || null, color, image || null, thumbnail || null, exclusive
@@ -549,7 +549,6 @@ async function handleDelete(interaction) {
 
 // ══════════════════════════════════════
 //  BUTTON INTERACTION HANDLER
-//  ⚠️ يجب استدعاؤه من interactionCreate.js
 // ══════════════════════════════════════
 
 module.exports.handleButtonRoleInteraction = async function(interaction) {
@@ -581,7 +580,7 @@ module.exports.handleButtonRoleInteraction = async function(interaction) {
 
     const hasRole = member.roles.cache.has(role.id)
 
-    // ── Exclusive: احذف باقي رتب اللوحة ──
+    // ── Exclusive ──
     if (!hasRole) {
       const panel = await getPanel(btnData.message_id)
       if (panel?.exclusive) {
