@@ -352,6 +352,63 @@ await databaseSystem.query(`
   );
 `)
 
+// STATS CHANNELS
+await databaseSystem.query(`
+  CREATE TABLE IF NOT EXISTS stats_channels (
+    id         SERIAL PRIMARY KEY,
+    guild_id   TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    stat_type  TEXT NOT NULL,
+    position   INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (guild_id, stat_type)
+  );
+`)
+await databaseSystem.query(`
+  CREATE INDEX IF NOT EXISTS idx_stats_guild ON stats_channels (guild_id);
+`)
+
+// EVENTS SYSTEM
+await databaseSystem.query(`
+  CREATE TABLE IF NOT EXISTS guild_events (
+    id SERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    message_id TEXT,
+    creator_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    category TEXT DEFAULT 'other',
+    start_time BIGINT NOT NULL,
+    end_time BIGINT,
+    max_attendees INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'upcoming',
+    image_url TEXT,
+    location TEXT,
+    ping_role_id TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`)
+
+await databaseSystem.query(`
+  CREATE TABLE IF NOT EXISTS event_attendees (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
+    status TEXT DEFAULT 'going',
+    joined_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (event_id, user_id)
+  );
+`)
+
+await databaseSystem.query(`
+  CREATE INDEX IF NOT EXISTS idx_guild_events_guild ON guild_events (guild_id);
+`)
+
+await databaseSystem.query(`
+  CREATE INDEX IF NOT EXISTS idx_event_attendees_event ON event_attendees (event_id);
+`)
+
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 
     } catch (error) {

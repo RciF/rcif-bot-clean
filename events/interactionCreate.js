@@ -2,6 +2,8 @@ const analyticsTracker = require("../systems/analyticsTracker")
 const errorSystem = require("../systems/errorSystem")
 const ticketSystem = require("../systems/ticketSystem")
 const { handleButtonRoleInteraction } = require("../commands/roles/button-role")
+const { handleEventButton } = require("../commands/events/event")
+
 
 module.exports = {
   name: "interactionCreate",
@@ -67,10 +69,14 @@ module.exports = {
 
       const customId = interaction.customId
       
+      
 if (customId.startsWith("brole_")) {
   return await handleButtonRoleInteraction(interaction)
 }
       try {
+         if (customId.startsWith("event_")) {
+      return await handleEventButton(interaction)
+    }
 
         // ── Ticket System Buttons ──
         if (customId === "ticket_open") {
