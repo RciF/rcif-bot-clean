@@ -40,10 +40,22 @@ try {
 
 ;(async () => {
   try {
+    // ✅ نفتح البورت أول شيء عشان Render ما يـtimeout
+    startApiServer(client)
+
     await startupSystem()
     await client.login(DISCORD_TOKEN)
-    startApiServer(client)
     logger.success("DISCORD_CLIENT_CONNECTED")
+
+    // ─── تحديث إحصائيات السيرفر كل 5 دقائق ───
+    const { updateAllGuilds } = require("./systems/statsSystem")
+    setInterval(async () => {
+      try {
+        await updateAllGuilds(client)
+      } catch (err) {
+        logger.error("STATS_AUTO_UPDATE_FAILED", { error: err.message })
+      }
+    }, 5 * 60 * 1000)
   } catch (error) {
     logger.error("SYSTEM_STARTUP_FAILED", {
       error: error.message,

@@ -82,8 +82,9 @@ function startApiServer(client) {
 
   })
 
-  app.listen(PORT, () => {
+  app.listen(PORT, "0.0.0.0", () => {
     logger.success(`API_SERVER_RUNNING ${PORT}`)
+    console.log(`🚀 Server listening on 0.0.0.0:${PORT}`)
   })
 
 }
