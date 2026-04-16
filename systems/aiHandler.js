@@ -115,20 +115,16 @@ class AIHandler {
     }
   }
 
-  // ═══════════════════════════════════════
-  // بناء System Prompt الكامل
-  // يربط: الهوية + الشخصية + المشاعر + الذاكرة + السياق
-  // ═══════════════════════════════════════
   async buildSystemPrompt(userId, message, context = {}) {
     try {
       const user = context.user || {};
       const guild = context.guild || {};
       const channel = context.channel || {};
 
-      // 1) تحليل المشاعر
+      // ✅ FIX: الدالة الصحيحة هي analyze() وليس analyzeEmotion()
       let emotion = null;
       try {
-        emotion = aiEmotionSystem.analyzeEmotion?.(message);
+        emotion = await aiEmotionSystem.analyze(message, { userId });
       } catch (err) {
         logger.error("EMOTION_ANALYSIS_FAILED", { error: err.message });
       }
@@ -168,7 +164,7 @@ class AIHandler {
           trustLevel,
           emotion,
           action: decision?.needsResponse ? "answer" : "normal",
-          messageType: emotion?.type || "normal",
+          messageType: emotion?.primary || "normal",
         }) || "";
       } catch (err) {
         logger.error("PERSONALITY_BUILD_FAILED", { error: err.message });
@@ -188,9 +184,9 @@ class AIHandler {
       // 6) المعرفة
       let knowledgeContext = "";
       try {
-        const knowledge = await aiKnowledgeSystem.searchRelevantKnowledge?.(message);
+        const knowledge = await aiKnowledgeSystem.searchKnowledge?.(message, userId);
         if (knowledge && knowledge.length > 0) {
-          knowledgeContext = `\n[معرفة مكتسبة]\n${knowledge.slice(0, 3).join("\n")}\n`;
+          knowledgeContext = `\n[معرفة مكتسبة]\n${knowledge.slice(0, 3).map(k => k.content || k).join("\n")}\n`;
         }
       } catch (err) {
         logger.error("KNOWLEDGE_FETCH_FAILED", { error: err.message });
@@ -210,11 +206,10 @@ class AIHandler {
 
       // 8) سياق المشاعر
       let emotionContext = "";
-      if (emotion && emotion.type !== "neutral") {
-        emotionContext = `\n[مشاعر المستخدم: ${emotion.type} | الشدة: ${emotion.intensity} | القطبية: ${emotion.polarity}]\n`;
+      if (emotion && emotion.primary !== "neutral") {
+        emotionContext = `\n[مشاعر المستخدم: ${emotion.primary} | الشدة: ${emotion.intensity} | القطبية: ${emotion.polarity}]\n`;
       }
 
-      // تجميع البرومبت النهائي
       const systemPrompt = `
 ${identityPrompt}
 
@@ -238,7 +233,6 @@ ${knowledgeContext}
 
     } catch (error) {
       logger.error("SYSTEM_PROMPT_BUILD_FAILED", { error: error.message });
-      // fallback بسيط لو كل شيء فشل
       return "اسمك لين. تتكلم عربي. تتصرف كشخص حقيقي داخل سيرفر Discord. لا تقول أنك AI.";
     }
   }
@@ -253,16 +247,12 @@ ${knowledgeContext}
 
       requestKey = `${userId}:${cleanMessage}`;
 
-      // ✅ FIX: منع التعليق
       if (this.activeRequests.has(requestKey)) {
         return "⏳ انتظر لحظة...";
       }
 
       this.activeRequests.set(requestKey, true);
 
-      // ═══════════════════════════════════════
-      // بناء System Prompt الكامل بكل الأنظمة
-      // ═══════════════════════════════════════
       const systemPrompt = await this.buildSystemPrompt(userId, cleanMessage, context);
 
       let memory = memoryManager.getMemory(userId) || [];
@@ -278,7 +268,6 @@ ${knowledgeContext}
 
       let reply = await this.generateAIResponse(messages, cacheKey);
 
-      // ✅ FIX: إزالة القفل دائمًا
       this.activeRequests.delete(requestKey);
 
       if (!reply) {
@@ -291,7 +280,6 @@ ${knowledgeContext}
       memoryManager.addMessage(userId, "user", cleanMessage);
       memoryManager.addMessage(userId, "assistant", reply);
 
-      // ✅ حفظ ذاكرة تلقائية
       try {
         await aiMemorySystem.storeMemory?.({
           userId,

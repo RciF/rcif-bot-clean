@@ -32,17 +32,13 @@ module.exports = {
       const apiPing = Date.now() - startTime
       const gatewayPing = client.ws.ping
 
-      // ✅ إحصائيات
       const totalServers = client.guilds.cache.size
       const totalUsers = client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0)
       const totalChannels = client.channels.cache.size
       const uptime = formatUptime(process.uptime())
       const commandCount = client.commands?.size || 0
-
-      // ✅ الذاكرة
       const memMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1)
 
-      // ✅ حالة البينق
       let pingEmoji, pingColor
       if (gatewayPing < 100) {
         pingEmoji = "🟢"
@@ -55,28 +51,32 @@ module.exports = {
         pingColor = 0xef4444
       }
 
-      // ✅ حالة الأنظمة
+      // ✅ FIX: الجدول الصحيح هو guilds (وليس guild_settings)
+      // نستخدم guildSystem لجلب الإعدادات بدل query مباشر
       let systemsText = ""
       try {
         const guildId = interaction.guild.id
-        const settingsResult = await database.query(
-  "SELECT * FROM guild_settings WHERE guild_id = $1",
-  [guildId]
-)
-const row = settingsResult.rows[0]
-const settings = row
-  ? { 
-      ai: row.ai ?? row.ai_enabled ?? true, 
-      xp: row.xp ?? row.xp_enabled ?? true, 
-      economy: row.economy ?? row.economy_enabled ?? true 
-    }
-  : { ai: true, xp: true, economy: true }
+
+        const result = await database.query(
+          "SELECT ai_enabled, xp_enabled, economy_enabled FROM guilds WHERE id = $1",
+          [guildId]
+        )
+        const row = result.rows[0]
+
+        const settings = row
+          ? {
+              ai:      row.ai_enabled      !== false,
+              xp:      row.xp_enabled      !== false,
+              economy: row.economy_enabled !== false
+            }
+          : { ai: true, xp: true, economy: true }
 
         systemsText = [
-          `${settings.ai ? "🟢" : "🔴"} الذكاء الاصطناعي — ${settings.ai ? "شغال" : "متوقف"}`,
-          `${settings.xp ? "🟢" : "🔴"} نظام XP — ${settings.xp ? "شغال" : "متوقف"}`,
-          `${settings.economy ? "🟢" : "🔴"} نظام الاقتصاد — ${settings.economy ? "شغال" : "متوقف"}`
+          `${settings.ai      ? "🟢" : "🔴"} الذكاء الاصطناعي — ${settings.ai      ? "شغال" : "متوقف"}`,
+          `${settings.xp      ? "🟢" : "🔴"} نظام XP — ${settings.xp               ? "شغال" : "متوقف"}`,
+          `${settings.economy ? "🟢" : "🔴"} نظام الاقتصاد — ${settings.economy    ? "شغال" : "متوقف"}`
         ].join("\n")
+
       } catch {
         systemsText = "🟢 الذكاء الاصطناعي — شغال\n🟢 نظام XP — شغال\n🟢 نظام الاقتصاد — شغال"
       }
@@ -115,10 +115,8 @@ const settings = row
         dbStatus = "🔴 غير متصل"
       }
 
-      // ✅ تاريخ إنشاء البوت
       const createdTimestamp = Math.floor(client.user.createdAt.getTime() / 1000)
 
-      // ✅ Embed
       const embed = new EmbedBuilder()
         .setColor(pingColor)
         .setAuthor({ name: client.user.username, iconURL: client.user.displayAvatarURL({ dynamic: true }) })
@@ -148,7 +146,6 @@ const settings = row
           }
         )
 
-      // ✅ إضافة عداد الأوامر لو موجود
       if (totalCommandsUsed > 0) {
         let usageText = `📈 إجمالي الاستخدام: **${totalCommandsUsed.toLocaleString("ar-SA")}** أمر`
         if (topCommandsText) {
@@ -165,7 +162,6 @@ const settings = row
       embed.setFooter({ text: `طلب من: ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
       embed.setTimestamp()
 
-      // ✅ أزرار
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setLabel("دعوة البوت")

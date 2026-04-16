@@ -1,57 +1,49 @@
-const fs = require("fs")
-const path = require("path")
 const logger = require("./loggerSystem")
+const databaseManager = require("../utils/databaseManager")
+
+// ✅ FIX: النظام القديم كان يحاول عمل backup لملفات JSON
+// لكن كل البيانات في قاعدة البيانات (PostgreSQL)، فلا يوجد JSON files
+// الآن نستبدله بـ health check دوري لقاعدة البيانات يُسجَّل في الـ logs
 
 module.exports = () => {
 
-  const dataFolder = path.join(__dirname, "../data")
-  const backupFolder = path.join(__dirname, "../data/backups")
-
-  try {
-
-    if (!fs.existsSync(dataFolder)) {
-      fs.mkdirSync(dataFolder, { recursive: true })
-    }
-
-    if (!fs.existsSync(backupFolder)) {
-      fs.mkdirSync(backupFolder, { recursive: true })
-    }
-
-  } catch (error) {
-
-    logger.error("BACKUP_FOLDER_INIT_FAILED", {
-      error: error.message
-    })
-
-  }
-
-  setInterval(() => {
+  // ✅ health check كل 5 دقائق
+  setInterval(async () => {
 
     try {
 
-      const files = fs.readdirSync(dataFolder)
+      const stats = await databaseManager.stats()
 
-      for (const file of files) {
-
-        if (!file.endsWith(".json")) continue
-
-        const source = path.join(dataFolder, file)
-        const destination = path.join(backupFolder, file)
-
-        fs.copyFileSync(source, destination)
-
+      if (!stats.initialized) {
+        logger.warn("DATABASE_NOT_INITIALIZED_IN_HEALTH_CHECK")
+        return
       }
 
-      logger.info("DATA_BACKUP_COMPLETED")
+      // لوق تفاصيل الـ connection pool
+      if (stats.waitingCount > 5) {
+        logger.warn("DATABASE_POOL_HIGH_WAIT", {
+          waiting: stats.waitingCount,
+          idle:    stats.idleCount,
+          total:   stats.totalCount
+        })
+      }
+
+      logger.debug("DATABASE_HEALTH_OK", {
+        idle:    stats.idleCount,
+        total:   stats.totalCount,
+        waiting: stats.waitingCount
+      })
 
     } catch (error) {
 
-      logger.error("DATA_BACKUP_FAILED", {
+      logger.error("DATABASE_HEALTH_CHECK_FAILED", {
         error: error.message
       })
 
     }
 
-  }, 300000)
+  }, 5 * 60 * 1000)
+
+  logger.info("HEALTH_MONITOR_STARTED")
 
 }

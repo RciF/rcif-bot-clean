@@ -3,6 +3,7 @@ const userRepository = require("../repositories/userRepository")
 async function getUser(userId, guildId) {
   const user = await userRepository.getOrCreateUser(userId, guildId)
 
+  // ✅ FIX: formatUser ليست async، لا حاجة لـ await
   return formatUser(user)
 }
 
@@ -61,7 +62,8 @@ async function addXP(userId, guildId, amount) {
   }
 }
 
-async function formatUser(user) {
+// ✅ FIX: formatUser دالة عادية (sync) - لا تحتاج async/await
+function formatUser(user) {
   return {
     id: user.id,
     coins: user.coins ?? 0,

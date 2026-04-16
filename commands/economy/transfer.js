@@ -42,8 +42,8 @@ module.exports = {
         return interaction.reply({ content: "❌ ما تقدر تحول لبوت!", ephemeral: true })
       }
 
-      const databaseManager = require("../../utils/databaseManager")
-const client = await databaseManager.getClient()
+      // ✅ FIX: إزالة التعريف المكرر لـ databaseManager (كان يُعرَّف مرتين في نفس الدالة)
+      const client = await databaseManager.getClient()
 
       try {
         await client.query("BEGIN")

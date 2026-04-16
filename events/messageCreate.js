@@ -10,9 +10,20 @@ const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
 const logger = require("../systems/loggerSystem")
 const protectionSystem = require("../systems/protectionSystem")
 
-// ✅ FIX: قفل عالمي لمنع معالجة نفس الرسالة مرتين
-const processedMessages = new Set()
+// ✅ FIX: استخدام Map بدل Set عشان نخزن timestamp مع كل message
+// هذا يسمح لنا بتنظيف القديم بشكل صحيح
+const processedMessages = new Map()
 const PROCESSED_TTL = 10000 // 10 ثواني
+
+// ✅ FIX: تنظيف دوري للـ Map كل دقيقة لمنع تراكم الذاكرة
+setInterval(() => {
+  const now = Date.now()
+  for (const [id, timestamp] of processedMessages.entries()) {
+    if (now - timestamp > PROCESSED_TTL) {
+      processedMessages.delete(id)
+    }
+  }
+}, 60 * 1000)
 
 module.exports = {
   name: "messageCreate",
@@ -24,9 +35,12 @@ module.exports = {
       if (!message?.author || message.author.bot) return
       if (!message.guild) return
 
-      // ✅ FIX: تحقق من المعرف الفريد للرسالة — منع التكرار المطلق
+      // ✅ FIX: تحقق بالـ Map مع timestamp
+      const now = Date.now()
       if (processedMessages.has(message.id)) return
-      processedMessages.add(message.id)
+      processedMessages.set(message.id, now)
+
+      // تنظيف فوري للرسالة بعد TTL
       setTimeout(() => processedMessages.delete(message.id), PROCESSED_TTL)
 
       // 🔥 ensure guild exists
@@ -37,10 +51,10 @@ module.exports = {
       }
 
       try {
-  await protectionSystem.checkSpam(message)
-} catch (err) {
-  logger.error("ANTISPAM_CHECK_FAILED", { error: err.message })
-}
+        await protectionSystem.checkSpam(message)
+      } catch (err) {
+        logger.error("ANTISPAM_CHECK_FAILED", { error: err.message })
+      }
 
       // 🔥 AI observation (non-blocking)
       try {
@@ -84,13 +98,20 @@ module.exports = {
 
         if (result?.leveledUp) {
           try {
+            // ✅ جلب إعدادات قناة الصعود
+            let targetChannel = message.channel
+            if (result.settings?.levelup_channel_id) {
+              const levelupChannel = message.guild.channels.cache.get(result.settings.levelup_channel_id)
+              if (levelupChannel) targetChannel = levelupChannel
+            }
+
             const embed = new EmbedBuilder()
               .setTitle("🎉 Level Up!")
               .setDescription(`${message.author} وصل للمستوى **${result.level}**`)
               .setColor(0x00ff00)
               .setThumbnail(message.author.displayAvatarURL())
 
-            await message.channel.send({ embeds: [embed] })
+            await targetChannel.send({ embeds: [embed] })
           } catch (err) {
             logger.error("LEVEL_UP_MESSAGE_FAILED", { error: err.message })
           }

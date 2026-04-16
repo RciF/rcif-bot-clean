@@ -21,8 +21,9 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
+    // ✅ FIX: إضافة GuildPresences عشان online_members في statsSystem يشتغل صح
+    GatewayIntentBits.GuildPresences,
   ],
-  
 })
 
 client.commands = new Collection()
@@ -40,22 +41,23 @@ try {
 
 ;(async () => {
   try {
-    // ✅ نفتح البورت أول شيء عشان Render ما يـtimeout
     startApiServer(client)
 
     await startupSystem()
     await client.login(DISCORD_TOKEN)
     logger.success("DISCORD_CLIENT_CONNECTED")
 
-    // ─── تحديث إحصائيات السيرفر كل 5 دقائق ───
     const { updateAllGuilds } = require("./systems/statsSystem")
+    // ✅ FIX: Discord يسمح بتغيير اسم القناة مرتين كل 10 دقائق
+    // نستخدم 10 دقائق بدل 5 عشان نتجنب rate limit
     setInterval(async () => {
       try {
         await updateAllGuilds(client)
       } catch (err) {
         logger.error("STATS_AUTO_UPDATE_FAILED", { error: err.message })
       }
-    }, 5 * 60 * 1000)
+    }, 10 * 60 * 1000) // ✅ FIX: من 5 دقائق إلى 10 دقائق
+
   } catch (error) {
     logger.error("SYSTEM_STARTUP_FAILED", {
       error: error.message,

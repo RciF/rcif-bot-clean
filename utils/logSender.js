@@ -32,6 +32,9 @@ function clearCache(guildId) {
   }
 }
 
+// ✅ FIX: صحح mapping الـ voice events
+// المشكلة: الـ keys كانت voice_join/leave/move لكن EVENT_CHANNEL_MAP ما يعرفها
+// الحل: توحيد الـ key لـ voice_join/voice_leave/voice_move مع نفس column
 const EVENT_CHANNEL_MAP = {
   message_delete:       "message_delete_channel",
   message_update:       "message_update_channel",
@@ -47,9 +50,12 @@ const EVENT_CHANNEL_MAP = {
   role_create:          "role_create_channel",
   role_delete:          "role_delete_channel",
   role_update:          "role_update_channel",
+  // ✅ FIX: كل voice events تستخدم نفس الـ column
   voice_join:           "voice_channel",
   voice_leave:          "voice_channel",
   voice_move:           "voice_channel",
+  // ✅ FIX: voice_update كان يُستدعى من الـ event لكن ما كان في الـ map
+  voice_update:         "voice_channel",
   guild_update:         "guild_update_channel",
   emoji_create:         "emoji_channel",
   emoji_delete:         "emoji_channel",
@@ -72,6 +78,7 @@ const EVENT_TYPES = [
   { key: "role_create",         column: "role_create_channel",         label: "إنشاء الأدوار",    emoji: "🏷️" },
   { key: "role_delete",         column: "role_delete_channel",         label: "حذف الأدوار",      emoji: "🗑️" },
   { key: "role_update",         column: "role_update_channel",         label: "تعديل الأدوار",    emoji: "✏️" },
+  // ✅ FIX: توحيد voice تحت key واحد في الـ UI
   { key: "voice_join",          column: "voice_channel",               label: "قنوات الصوت",      emoji: "🔊" },
   { key: "guild_update",        column: "guild_update_channel",        label: "تعديل السيرفر",    emoji: "⚙️" },
   { key: "emoji_create",        column: "emoji_channel",               label: "الإيموجي",         emoji: "😀" },
