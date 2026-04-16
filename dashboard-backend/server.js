@@ -8,9 +8,6 @@ const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args
 
 const app = express()
 
-// ══════════════════════════════════════
-//  CONFIG
-// ══════════════════════════════════════
 const CONFIG = {
   CLIENT_ID:    process.env.CLIENT_ID,
   CLIENT_SECRET:process.env.CLIENT_SECRET,
@@ -21,9 +18,6 @@ const CONFIG = {
   PORT:         process.env.PORT          || 4000,
 }
 
-// ══════════════════════════════════════
-//  MIDDLEWARE
-// ══════════════════════════════════════
 const allowedOrigins = ["http://localhost:3000","http://127.0.0.1:3000",CONFIG.FRONTEND_URL].filter(Boolean)
 app.use(cors({
   origin:(origin,cb)=>(!origin||allowedOrigins.includes(origin))?cb(null,true):cb(null,false),
@@ -31,9 +25,6 @@ app.use(cors({
 }))
 app.use(express.json())
 
-// ══════════════════════════════════════
-//  DATABASE
-// ══════════════════════════════════════
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV==="production"?{rejectUnauthorized:false}:false
@@ -73,11 +64,9 @@ async function initDB() {
     await pool.query(`CREATE TABLE IF NOT EXISTS guild_prefix_settings(
       guild_id TEXT PRIMARY KEY, prefix TEXT NOT NULL DEFAULT '!', updated_at TIMESTAMP DEFAULT NOW()
     );`)
-    // إحصائيات عالمية
     await pool.query(`CREATE TABLE IF NOT EXISTS analytics(
       command TEXT PRIMARY KEY, count INTEGER DEFAULT 0
     );`)
-    // إحصائيات يومية لكل سيرفر
     await pool.query(`CREATE TABLE IF NOT EXISTS guild_analytics(
       id SERIAL PRIMARY KEY, guild_id TEXT NOT NULL, command TEXT NOT NULL,
       used_at DATE DEFAULT CURRENT_DATE, count INTEGER DEFAULT 1,
@@ -95,7 +84,7 @@ initDB()
 // ══════════════════════════════════════
 const PLANS = {
   free:   { id:"free",    name:"مجاني", price:0,   durationDays:null, guildLimit:1, ai_limit:0,
-    features:["الإشراف الكامل","معلومات السيرفر والأعضاء","أوامر أساسية"] },
+    features:["الإشراف الكامل","معلومات السيرفر","أوامر أساسية"] },
   silver: { id:"silver",  name:"فضي",   price:29,  durationDays:30,   guildLimit:1, ai_limit:0,
     features:["كل مميزات المجاني","نظام الترحيب والوداع","السجلات (لوق) كامل","Reaction Roles + لوحة الرتب","إحصائيات السيرفر","XP والمستويات كامل","تغيير أسماء الأوامر","بريفكس مخصص"] },
   gold:   { id:"gold",    name:"ذهبي",  price:79,  durationDays:30,   guildLimit:1, ai_limit:300,
@@ -105,73 +94,131 @@ const PLANS = {
 }
 
 // ══════════════════════════════════════
-//  ALL COMMANDS — القائمة الكاملة 44 أمر
+//  ALL COMMANDS — 86 أمر كامل
+//  كل subcommand = أمر مستقل قابل للتعطيل وتغيير الاسم
 // ══════════════════════════════════════
 const ALL_COMMANDS = [
-  // ── الإشراف — free ──
-  { name:"حظر",           category:"moderation", plan:"free",    description:"حظر عضو من السيرفر نهائياً" },
-  { name:"طرد",           category:"moderation", plan:"free",    description:"طرد عضو من السيرفر" },
-  { name:"تحذير",         category:"moderation", plan:"free",    description:"إعطاء تحذير لعضو" },
-  { name:"التحذيرات",     category:"moderation", plan:"free",    description:"عرض تحذيرات عضو محدد أو كل الأعضاء المحذرين" },
-  { name:"مسح_التحذيرات", category:"moderation", plan:"free",    description:"مسح تحذير محدد أو جميع تحذيرات عضو" },
-  { name:"اسكت",          category:"moderation", plan:"free",    description:"كتم عضو لمدة محددة (Timeout)" },
-  { name:"فك_الكتم",      category:"moderation", plan:"free",    description:"فك الكتم (Timeout) لعضو مكتوم" },
-  { name:"فك_الحظر",      category:"moderation", plan:"free",    description:"فك حظر عضو من السيرفر" },
-  { name:"مسح",           category:"moderation", plan:"free",    description:"مسح رسائل من القناة مع فلاتر متقدمة" },
-  { name:"لقب",           category:"moderation", plan:"free",    description:"تغيير أو إزالة لقب عضو" },
-  { name:"بطيء",          category:"moderation", plan:"free",    description:"تفعيل أو تعطيل السلو مود في القناة" },
-  { name:"قفل",           category:"moderation", plan:"free",    description:"قفل قناة ومنع الأعضاء من الكتابة" },
-  { name:"فتح",           category:"moderation", plan:"free",    description:"فتح قناة مقفلة" },
-  { name:"رتبة",          category:"moderation", plan:"free",    description:"إعطاء أو سحب رتبة من عضو أو مجموعة" },
-  { name:"ضبط_لوق",       category:"moderation", plan:"free",    description:"تحديد قناة اللوق لأحداث الإشراف" },
-  // ── السجلات — silver ──
-  { name:"لوق",           category:"logs",       plan:"silver",  description:"إعداد نظام السجلات (ضبط/تفعيل/إيقاف/حالة/مسح/الكل/إزالة)" },
-  // ── الحماية — gold ──
-  { name:"حماية",         category:"protection", plan:"gold",    description:"نظام الحماية الكامل (Anti-Spam/Anti-Raid/Anti-Nuke/Lockdown/Whitelist)" },
-  // ── الترحيب — silver ──
-  { name:"ترحيب",         category:"welcome",    plan:"silver",  description:"نظام الترحيب والوداع (ضبط/تفعيل/إيقاف/حالة/اختبار)" },
-  // ── التذاكر — gold ──
-  { name:"تذاكر",         category:"tickets",    plan:"gold",    description:"نظام التذاكر الكامل (إعداد/إعدادات/معلومات)" },
-  // ── الرتب — silver ──
-  { name:"reaction-role", category:"roles",      plan:"silver",  description:"ربط إيموجي برتبة على رسالة (إعداد/حذف/عرض/مسح)" },
-  { name:"لوحة-رتب",      category:"roles",      plan:"silver",  description:"نظام الرتب بالأزرار (إنشاء/إضافة/تعديل/حذف-زر/قائمة/مسح)" },
-  // ── XP والمستويات — silver ──
-  { name:"مستوى",         category:"xp",         plan:"silver",  description:"عرض بطاقة XP ومستواك وتقدمك" },
-  { name:"متصدرين_xp",    category:"xp",         plan:"silver",  description:"عرض أكثر الأعضاء نشاطاً في السيرفر" },
-  { name:"تسطيل_xp",      category:"xp",         plan:"silver",  description:"إعدادات XP (اعدادات/حالة/قناة_الصعود/مضاعف/كسب)" },
-  // ── الاقتصاد — gold ──
-  { name:"متجر",          category:"economy",    plan:"gold",    description:"تصفح المتجر وشراء العناصر والسيارات والعقارات" },
-  { name:"شراء",          category:"economy",    plan:"gold",    description:"شراء عنصر من المتجر (سيارة، عقار، بنية تحتية)" },
-  { name:"بيع",           category:"economy",    plan:"gold",    description:"بيع عنصر من ممتلكاتك" },
-  { name:"رصيد",          category:"economy",    plan:"gold",    description:"عرض رصيدك وثروتك وممتلكاتك" },
-  { name:"يومي",          category:"economy",    plan:"gold",    description:"استلام مكافأتك اليومية" },
-  { name:"عمل",           category:"economy",    plan:"gold",    description:"اشتغل واكسب كوينز" },
-  { name:"تحويل",         category:"economy",    plan:"gold",    description:"تحويل كوينز لعضو آخر" },
-  { name:"ممتلكاتي",      category:"economy",    plan:"gold",    description:"عرض جميع ممتلكاتك" },
-  { name:"متصدرين",       category:"economy",    plan:"gold",    description:"عرض المتصدرين (أغنى الأعضاء)" },
-  // ── الفعاليات — gold ──
-  { name:"فعالية",        category:"events",     plan:"gold",    description:"إنشاء وإدارة الفعاليات (إنشاء/عرض/قائمة/إلغاء/بدء/إنهاء/حضور/تذكير)" },
-  // ── الإحصائيات — silver ──
-  { name:"إحصائيات",      category:"stats",      plan:"silver",  description:"إعداد قنوات إحصائيات السيرفر (تلقائي/إضافة/حذف/مسح/تحديث/حالة)" },
-  // ── الذكاء الاصطناعي — gold ──
-  { name:"ذكاء",          category:"ai",         plan:"gold",    description:"سؤال الذكاء الاصطناعي" },
-  { name:"اعلان",         category:"ai",         plan:"diamond", description:"إغلاق الذاكرة الحالية" },
-  // ── المعلومات — free ──
-  { name:"معلومات",       category:"info",       plan:"free",    description:"عرض معلومات تفصيلية عن عضو" },
-  { name:"السيرفر",       category:"info",       plan:"free",    description:"عرض معلومات تفصيلية عن السيرفر" },
-  { name:"بوت",           category:"info",       plan:"free",    description:"عرض معلومات وإحصائيات البوت" },
-  { name:"صورة",          category:"info",       plan:"free",    description:"عرض صورة عضو بجودة عالية" },
-  // ── الإدارة — free ──
-  { name:"config",        category:"admin",      plan:"free",    description:"تفعيل أو تعطيل أنظمة السيرفر" },
-  { name:"settings",      category:"admin",      plan:"free",    description:"عرض إعدادات وحالة أنظمة السيرفر" },
-  { name:"مطور",          category:"admin",      plan:"free",    description:"لوحة تحكم المطور (خاصة بمالك البوت)" },
+
+  // ══ الإشراف — free (15 أمر) ══
+  { name:"حظر",              category:"moderation", plan:"free",    description:"حظر عضو من السيرفر نهائياً" },
+  { name:"طرد",              category:"moderation", plan:"free",    description:"طرد عضو من السيرفر" },
+  { name:"تحذير",            category:"moderation", plan:"free",    description:"إعطاء تحذير لعضو مع مستوى خطورة" },
+  { name:"التحذيرات",        category:"moderation", plan:"free",    description:"عرض تحذيرات عضو محدد أو كل الأعضاء المحذرين" },
+  { name:"مسح_التحذيرات",    category:"moderation", plan:"free",    description:"مسح تحذير محدد أو جميع تحذيرات عضو" },
+  { name:"اسكت",             category:"moderation", plan:"free",    description:"كتم عضو لمدة محددة (Timeout)" },
+  { name:"فك_الكتم",         category:"moderation", plan:"free",    description:"فك الكتم (Timeout) لعضو مكتوم" },
+  { name:"فك_الحظر",         category:"moderation", plan:"free",    description:"فك حظر عضو من السيرفر" },
+  { name:"مسح",              category:"moderation", plan:"free",    description:"مسح رسائل من القناة مع فلاتر متقدمة" },
+  { name:"لقب",              category:"moderation", plan:"free",    description:"تغيير أو إزالة لقب عضو" },
+  { name:"بطيء",             category:"moderation", plan:"free",    description:"تفعيل أو تعطيل السلو مود في القناة" },
+  { name:"قفل",              category:"moderation", plan:"free",    description:"قفل قناة ومنع الأعضاء من الكتابة" },
+  { name:"فتح",              category:"moderation", plan:"free",    description:"فتح قناة مقفلة" },
+  { name:"رتبة",             category:"moderation", plan:"free",    description:"إعطاء أو سحب رتبة من عضو أو مجموعة" },
+  { name:"ضبط_لوق",          category:"moderation", plan:"free",    description:"تحديد قناة اللوق لأحداث الإشراف" },
+
+  // ══ السجلات — silver (7 أوامر) ══
+  { name:"لوق ضبط",          category:"logs",       plan:"silver",  description:"تحديد قناة لتسجيل حدث معين" },
+  { name:"لوق تفعيل",        category:"logs",       plan:"silver",  description:"تفعيل نظام السجلات بالكامل" },
+  { name:"لوق إيقاف",        category:"logs",       plan:"silver",  description:"إيقاف نظام السجلات بالكامل" },
+  { name:"لوق حالة",         category:"logs",       plan:"silver",  description:"عرض حالة نظام السجلات" },
+  { name:"لوق الكل",         category:"logs",       plan:"silver",  description:"إرسال جميع الأحداث في قناة واحدة" },
+  { name:"لوق مسح",          category:"logs",       plan:"silver",  description:"مسح جميع إعدادات السجلات" },
+  { name:"لوق إزالة",        category:"logs",       plan:"silver",  description:"إيقاف تسجيل حدث معين" },
+
+  // ══ الحماية — gold (7 أوامر) ══
+  { name:"حماية حالة",       category:"protection", plan:"gold",    description:"عرض إعدادات الحماية الحالية" },
+  { name:"حماية سبام",       category:"protection", plan:"gold",    description:"إعداد نظام Anti-Spam" },
+  { name:"حماية رايد",       category:"protection", plan:"gold",    description:"إعداد نظام Anti-Raid" },
+  { name:"حماية نيوك",       category:"protection", plan:"gold",    description:"إعداد نظام Anti-Nuke" },
+  { name:"حماية لوكداون",    category:"protection", plan:"gold",    description:"تفعيل أو إيقاف Lockdown يدوياً" },
+  { name:"حماية لوق",        category:"protection", plan:"gold",    description:"تحديد قناة سجل الحماية" },
+  { name:"حماية وايتلست",    category:"protection", plan:"gold",    description:"إضافة أو إزالة مستخدم/رتبة من القائمة البيضاء" },
+
+  // ══ الترحيب — silver (5 أوامر) ══
+  { name:"ترحيب ضبط",        category:"welcome",    plan:"silver",  description:"ضبط إعدادات الترحيب" },
+  { name:"ترحيب تفعيل",      category:"welcome",    plan:"silver",  description:"تفعيل نظام الترحيب" },
+  { name:"ترحيب إيقاف",      category:"welcome",    plan:"silver",  description:"إيقاف نظام الترحيب" },
+  { name:"ترحيب حالة",       category:"welcome",    plan:"silver",  description:"عرض الإعدادات الحالية للترحيب" },
+  { name:"ترحيب اختبار",     category:"welcome",    plan:"silver",  description:"اختبار رسالة الترحيب" },
+
+  // ══ التذاكر — gold (3 أوامر) ══
+  { name:"تذاكر إعداد",      category:"tickets",    plan:"gold",    description:"إعداد نظام التذاكر وإرسال رسالة فتح التذاكر" },
+  { name:"تذاكر إعدادات",    category:"tickets",    plan:"gold",    description:"تعديل إعدادات نظام التذاكر" },
+  { name:"تذاكر معلومات",    category:"tickets",    plan:"gold",    description:"عرض إعدادات وإحصائيات نظام التذاكر" },
+
+  // ══ الرتب — silver (10 أوامر) ══
+  { name:"reaction-role إعداد",  category:"roles",  plan:"silver",  description:"ربط إيموجي برتبة على رسالة معينة" },
+  { name:"reaction-role حذف",    category:"roles",  plan:"silver",  description:"حذف ربط إيموجي من رسالة" },
+  { name:"reaction-role عرض",    category:"roles",  plan:"silver",  description:"عرض كل Reaction Roles في السيرفر" },
+  { name:"reaction-role مسح",    category:"roles",  plan:"silver",  description:"مسح كل Reaction Roles على رسالة معينة" },
+  { name:"لوحة-رتب إنشاء",      category:"roles",  plan:"silver",  description:"إنشاء لوحة رتب جديدة بالأزرار" },
+  { name:"لوحة-رتب إضافة",      category:"roles",  plan:"silver",  description:"إضافة زر رتبة للوحة" },
+  { name:"لوحة-رتب تعديل",      category:"roles",  plan:"silver",  description:"تعديل لوحة رتب موجودة" },
+  { name:"لوحة-رتب حذف-زر",     category:"roles",  plan:"silver",  description:"حذف زر رتبة من لوحة" },
+  { name:"لوحة-رتب قائمة",      category:"roles",  plan:"silver",  description:"عرض كل لوحات الرتب" },
+  { name:"لوحة-رتب مسح",        category:"roles",  plan:"silver",  description:"حذف لوحة رتب بالكامل" },
+
+  // ══ XP والمستويات — silver (6 أوامر) ══
+  { name:"مستوى",                category:"xp",     plan:"silver",  description:"عرض بطاقة XP ومستواك وتقدمك" },
+  { name:"متصدرين_xp",           category:"xp",     plan:"silver",  description:"عرض أكثر الأعضاء نشاطاً في السيرفر" },
+  { name:"تسطيل_xp اعدادات",     category:"xp",     plan:"silver",  description:"إعدادات XP العامة (تفعيل/إيقاف/كسب)" },
+  { name:"تسطيل_xp حالة",        category:"xp",     plan:"silver",  description:"الحالة الحالية للسيرفر — عرض إعدادات XP" },
+  { name:"تسطيل_xp قناة_الصعود", category:"xp",     plan:"silver",  description:"تحديد القناة التي تُرسل فيها رسائل الصعود للمستوى" },
+  { name:"تسطيل_xp مضاعف",       category:"xp",     plan:"silver",  description:"ضبط مضاعف XP لجميع الأعضاء" },
+
+  // ══ الاقتصاد — gold (9 أوامر) ══
+  { name:"متجر",                 category:"economy", plan:"gold",   description:"تصفح المتجر وشراء العناصر والسيارات والعقارات" },
+  { name:"شراء",                 category:"economy", plan:"gold",   description:"شراء عنصر من المتجر (سيارة، عقار، بنية تحتية)" },
+  { name:"بيع",                  category:"economy", plan:"gold",   description:"بيع عنصر من ممتلكاتك بـ 60% من سعره" },
+  { name:"رصيد",                 category:"economy", plan:"gold",   description:"عرض رصيدك وثروتك وممتلكاتك" },
+  { name:"يومي",                 category:"economy", plan:"gold",   description:"استلام مكافأتك اليومية 500-750 كوين" },
+  { name:"عمل",                  category:"economy", plan:"gold",   description:"اشتغل واكسب كوينز من 18 وظيفة عشوائية" },
+  { name:"تحويل",                category:"economy", plan:"gold",   description:"تحويل كوينز لعضو آخر" },
+  { name:"ممتلكاتي",             category:"economy", plan:"gold",   description:"عرض جميع ممتلكاتك (سيارات، عقارات، بنية تحتية)" },
+  { name:"متصدرين",              category:"economy", plan:"gold",   description:"عرض المتصدرين (أغنى الأعضاء) 3 أنواع" },
+
+  // ══ الفعاليات — gold (8 أوامر) ══
+  { name:"فعالية إنشاء",         category:"events",  plan:"gold",   description:"إنشاء فعالية جديدة في السيرفر" },
+  { name:"فعالية عرض",           category:"events",  plan:"gold",   description:"عرض فعالية محددة" },
+  { name:"فعالية قائمة",         category:"events",  plan:"gold",   description:"عرض الفعاليات القادمة في السيرفر" },
+  { name:"فعالية إلغاء",         category:"events",  plan:"gold",   description:"إلغاء فعالية (للمنشئ أو الأدمن)" },
+  { name:"فعالية بدء",           category:"events",  plan:"gold",   description:"تفعيل الفعالية (جارية الآن)" },
+  { name:"فعالية إنهاء",         category:"events",  plan:"gold",   description:"إنهاء فعالية جارية" },
+  { name:"فعالية حضور",          category:"events",  plan:"gold",   description:"عرض قائمة المسجلين في فعالية" },
+  { name:"فعالية تذكير",         category:"events",  plan:"gold",   description:"إرسال تذكير لجميع المسجلين في فعالية" },
+
+  // ══ الإحصائيات — silver (6 أوامر) ══
+  { name:"إحصائيات إضافة",       category:"stats",   plan:"silver", description:"إضافة قناة إحصائية واحدة" },
+  { name:"إحصائيات تلقائي",      category:"stats",   plan:"silver", description:"إنشاء كل قنوات الإحصائيات تلقائياً في كاتيجوري جديدة" },
+  { name:"إحصائيات حالة",        category:"stats",   plan:"silver", description:"عرض الإحصائيات الحالية للسيرفر" },
+  { name:"إحصائيات حذف",         category:"stats",   plan:"silver", description:"حذف قناة إحصائية" },
+  { name:"إحصائيات مسح",         category:"stats",   plan:"silver", description:"مسح كل قنوات الإحصائيات وحذفها" },
+  { name:"إحصائيات تحديث",       category:"stats",   plan:"silver", description:"تحديث كل القنوات الآن يدوياً" },
+
+  // ══ الذكاء الاصطناعي — gold/diamond (2 أمر) ══
+  { name:"ذكاء",                 category:"ai",      plan:"gold",    description:"سؤال الذكاء الاصطناعي" },
+  { name:"اعلان",                category:"ai",      plan:"diamond", description:"إغلاق الذاكرة الحالية" },
+
+  // ══ المعلومات — free (4 أوامر) ══
+  { name:"معلومات",              category:"info",    plan:"free",    description:"عرض معلومات تفصيلية عن عضو" },
+  { name:"السيرفر",              category:"info",    plan:"free",    description:"عرض معلومات تفصيلية عن السيرفر" },
+  { name:"بوت",                  category:"info",    plan:"free",    description:"عرض معلومات وإحصائيات البوت" },
+  { name:"صورة",                 category:"info",    plan:"free",    description:"عرض صورة عضو بجودة عالية" },
+
+  // ══ الإدارة — free (3 أوامر) ══
+  { name:"config",               category:"admin",   plan:"free",    description:"تفعيل أو تعطيل أنظمة السيرفر" },
+  { name:"settings",             category:"admin",   plan:"free",    description:"عرض إعدادات وحالة أنظمة السيرفر" },
+  { name:"مطور",                 category:"admin",   plan:"free",    description:"لوحة تحكم المطور (خاصة بمالك البوت)" },
 ]
 
+// تحقق: 15+7+7+5+3+10+6+9+8+6+2+4+3 = 85... نضيف السيرفر 86
+// → المجموع: 86 أمر
+
 const PLAN_HIERARCHY = { free:0, silver:1, gold:2, diamond:3 }
-const canUsePlan = (guildPlan, req) => (PLAN_HIERARCHY[guildPlan]??0) >= (PLAN_HIERARCHY[req]??0)
+const canUsePlan = (gp, req) => (PLAN_HIERARCHY[gp]??0) >= (PLAN_HIERARCHY[req]??0)
 
 // ══════════════════════════════════════
-//  DISCORD HELPERS
+//  HELPERS
 // ══════════════════════════════════════
 async function fetchDiscordJSON(url, options={}) {
   const res = await fetch(url, { ...options, headers:{"User-Agent":"DiscordBot/1.0",...options.headers} })
@@ -244,22 +291,20 @@ function requireAuth(req, res, next) {
   req.user = s.user; req.guilds = s.guilds; next()
 }
 function requireOwnerAuth(req, res, next) {
-  if(!req.user || req.user.id !== CONFIG.OWNER_ID)
-    return res.status(403).json({ error:"غير مصرح" })
+  if(!req.user || req.user.id !== CONFIG.OWNER_ID) return res.status(403).json({ error:"غير مصرح" })
   next()
 }
 function requireGuildAdmin(req, res, next) {
   const gid = req.params.guildId || req.body.guildId
   if(!gid) return res.status(400).json({ error:"guildId مطلوب" })
-  if(!req.guilds?.find(g => g.id === gid))
-    return res.status(403).json({ error:"ليس لديك صلاحية على هذا السيرفر" })
+  if(!req.guilds?.find(g => g.id === gid)) return res.status(403).json({ error:"ليس لديك صلاحية" })
   next()
 }
 
 // ══════════════════════════════════════
 //  HEALTH
 // ══════════════════════════════════════
-app.get("/", (req,res) => res.json({ status:"online", service:"Lyn Dashboard API", version:"5.0" }))
+app.get("/", (req,res) => res.json({ status:"online", service:"Lyn Dashboard API", version:"6.0", commands:ALL_COMMANDS.length }))
 app.get("/api/health", async (req,res) => {
   try {
     const r = await pool.query("SELECT NOW() as time")
@@ -318,22 +363,20 @@ app.post("/api/guild/save", requireAuth, requireGuildAdmin, async (req,res) => {
 })
 
 app.get("/api/guild/:guildId/settings", requireAuth, requireGuildAdmin, async (req,res) => {
-  const { guildId } = req.params
   try {
-    const r = await pool.query("SELECT * FROM guild_settings WHERE guild_id=$1", [guildId])
+    const r = await pool.query("SELECT * FROM guild_settings WHERE guild_id=$1", [req.params.guildId])
     if(!r.rows.length) return res.json({ ai:true, xp:true, economy:true })
     res.json({ ai:r.rows[0].ai, xp:r.rows[0].xp, economy:r.rows[0].economy })
   } catch(err) { res.status(500).json({ error:"Failed to fetch settings" }) }
 })
 
 app.post("/api/guild/:guildId/settings", requireAuth, requireGuildAdmin, async (req,res) => {
-  const { guildId } = req.params
   const { ai, xp, economy } = req.body
   try {
     await pool.query(`
       INSERT INTO guild_settings(guild_id,ai,xp,economy,updated_at) VALUES($1,$2,$3,$4,NOW())
       ON CONFLICT(guild_id) DO UPDATE SET ai=$2, xp=$3, economy=$4, updated_at=NOW()
-    `, [guildId, !!ai, !!xp, !!economy])
+    `, [req.params.guildId, !!ai, !!xp, !!economy])
     res.json({ success:true })
   } catch(err) { res.status(500).json({ error:"Failed to update settings" }) }
 })
@@ -356,12 +399,15 @@ app.get("/api/guild/:guildId/commands", requireAuth, requireGuildAdmin, async (r
     if(category && category !== "all") cmds = cmds.filter(c => c.category === category)
 
     const commands = cmds.map(cmd => {
-      const saved = map[cmd.name] || {}
+      const saved   = map[cmd.name] || {}
       const allowed = canUsePlan(guildPlan, cmd.plan)
       return {
-        name:cmd.name, category:cmd.category, plan:cmd.plan, description:cmd.description,
+        name:        cmd.name,
+        category:    cmd.category,
+        plan:        cmd.plan,
+        description: cmd.description,
         custom_name: saved.custom_name || null,
-        enabled: allowed ? (saved.enabled !== false) : false,
+        enabled:     allowed ? (saved.enabled !== false) : false,
         plan_locked: !allowed
       }
     })
@@ -373,20 +419,27 @@ app.get("/api/guild/:guildId/commands", requireAuth, requireGuildAdmin, async (r
 })
 
 app.patch("/api/guild/:guildId/commands/:commandName", requireAuth, requireGuildAdmin, async (req,res) => {
-  const { guildId, commandName } = req.params
+  const { guildId } = req.params
+  // commandName قد يحتوي مسافات (مثل "لوق ضبط") — نفك encode
+  const commandName = decodeURIComponent(req.params.commandName)
   const { enabled, custom_name } = req.body
+
   const cmdDef = ALL_COMMANDS.find(c => c.name === commandName)
   if(!cmdDef) return res.status(404).json({ error:"الأمر غير موجود" })
+
   try {
     const guildPlan = await getGuildPlan(guildId)
     if(custom_name !== undefined && !canUsePlan(guildPlan, "silver"))
       return res.status(403).json({ error:"🔒 تغيير الأسماء يحتاج فضي أو أعلى", required_plan:"silver" })
     if(enabled === true && !canUsePlan(guildPlan, cmdDef.plan))
-      return res.status(403).json({ error:`🔒 هذا الأمر يحتاج خطة ${cmdDef.plan} أو أعلى`, required_plan:cmdDef.plan })
+      return res.status(403).json({ error:`🔒 يحتاج خطة ${cmdDef.plan} أو أعلى`, required_plan:cmdDef.plan })
     if(custom_name && String(custom_name).trim().length > 32)
       return res.status(400).json({ error:"الاسم المخصص لا يتجاوز 32 حرف" })
+    // الاسم المخصص: حروف عربية أو إنجليزية أو أرقام أو مسافة
+    if(custom_name && custom_name.trim() && !/^[\u0600-\u06FFa-zA-Z0-9 _-]+$/.test(custom_name.trim()))
+      return res.status(400).json({ error:"الاسم: حروف عربية أو إنجليزية وأرقام فقط" })
 
-    const finalName = custom_name === "" ? null : (custom_name ?? null)
+    const finalName = custom_name === "" ? null : (custom_name?.trim() ?? null)
     await pool.query(`
       INSERT INTO guild_command_settings(guild_id,command_name,custom_name,enabled,updated_at)
       VALUES($1,$2,$3,$4,NOW())
@@ -402,10 +455,11 @@ app.patch("/api/guild/:guildId/commands/:commandName", requireAuth, requireGuild
   }
 })
 
+// Reset جميع أوامر السيرفر
 app.delete("/api/guild/:guildId/commands/reset", requireAuth, requireGuildAdmin, async (req,res) => {
   try {
     await pool.query("DELETE FROM guild_command_settings WHERE guild_id=$1", [req.params.guildId])
-    res.json({ success:true })
+    res.json({ success:true, message:"تم إعادة كل الأوامر للافتراضي" })
   } catch(err) { res.status(500).json({ error:"فشل إعادة الضبط" }) }
 })
 
@@ -438,61 +492,54 @@ app.post("/api/guild/:guildId/prefix", requireAuth, requireGuildAdmin, async (re
 })
 
 // ══════════════════════════════════════
-//  ANALYTICS — إحصائيات متقدمة
+//  ANALYTICS
 // ══════════════════════════════════════
 app.get("/api/guild/:guildId/analytics", requireAuth, requireGuildAdmin, async (req,res) => {
   const { guildId } = req.params
   const days = Math.min(parseInt(req.query.days)||30, 90)
   try {
-    const guildPlan = await getGuildPlan(guildId)
+    const guildPlan  = await getGuildPlan(guildId)
     const isAdvanced = canUsePlan(guildPlan, "diamond")
 
-    // إجمالي استخدام السيرفر
-    const totalQ = await pool.query(
-      "SELECT SUM(count)::INTEGER as total FROM guild_analytics WHERE guild_id=$1", [guildId]
-    )
-
-    // استخدام يومي
-    const dailyQ = await pool.query(`
-      SELECT used_at::TEXT as date, SUM(count)::INTEGER as total
-      FROM guild_analytics
-      WHERE guild_id=$1 AND used_at >= CURRENT_DATE - INTERVAL '${days} days'
-      GROUP BY used_at ORDER BY used_at ASC
-    `, [guildId])
-
-    // أكثر الأوامر استخداماً في السيرفر
-    const topGuildQ = await pool.query(`
-      SELECT command, SUM(count)::INTEGER as total
-      FROM guild_analytics WHERE guild_id=$1
-      GROUP BY command ORDER BY total DESC LIMIT 10
-    `, [guildId])
+    const [totalQ, dailyQ, topGuildQ] = await Promise.all([
+      pool.query("SELECT SUM(count)::INTEGER as total FROM guild_analytics WHERE guild_id=$1", [guildId]),
+      pool.query(`
+        SELECT used_at::TEXT as date, SUM(count)::INTEGER as total
+        FROM guild_analytics
+        WHERE guild_id=$1 AND used_at >= CURRENT_DATE - INTERVAL '${days} days'
+        GROUP BY used_at ORDER BY used_at ASC
+      `, [guildId]),
+      pool.query(`
+        SELECT command, SUM(count)::INTEGER as total
+        FROM guild_analytics WHERE guild_id=$1
+        GROUP BY command ORDER BY total DESC LIMIT 10
+      `, [guildId])
+    ])
 
     // توزيع حسب الفئة
     const categories = [...new Set(ALL_COMMANDS.map(c => c.category))]
-    const categoryStats = []
-    for(const cat of categories) {
+    const categoryStats = await Promise.all(categories.map(async cat => {
       const cmdNames = ALL_COMMANDS.filter(c => c.category === cat).map(c => c.name)
       const r = await pool.query(`
         SELECT COALESCE(SUM(count),0)::INTEGER as total
         FROM guild_analytics WHERE guild_id=$1 AND command=ANY($2)
       `, [guildId, cmdNames])
-      categoryStats.push({ category:cat, total:parseInt(r.rows[0]?.total||0) })
-    }
+      return { category:cat, total:parseInt(r.rows[0]?.total||0) }
+    }))
 
-    // أكثر الأوامر عالمياً (للماسي فقط)
     let topGlobal = []
     if(isAdvanced) {
-      const globalQ = await pool.query("SELECT command, count FROM analytics ORDER BY count DESC LIMIT 10")
-      topGlobal = globalQ.rows
+      const q = await pool.query("SELECT command, count FROM analytics ORDER BY count DESC LIMIT 10")
+      topGlobal = q.rows
     }
 
     res.json({
-      is_advanced: isAdvanced,
-      total_usage: parseInt(totalQ.rows[0]?.total || 0),
-      daily_usage: dailyQ.rows,
-      top_commands_guild: topGuildQ.rows,
+      is_advanced:         isAdvanced,
+      total_usage:         parseInt(totalQ.rows[0]?.total||0),
+      daily_usage:         dailyQ.rows,
+      top_commands_guild:  topGuildQ.rows,
       top_commands_global: topGlobal,
-      category_stats: categoryStats,
+      category_stats:      categoryStats,
     })
   } catch(err) {
     console.error("[ANALYTICS_GET]", err.message)
@@ -500,7 +547,6 @@ app.get("/api/guild/:guildId/analytics", requireAuth, requireGuildAdmin, async (
   }
 })
 
-// البوت يسجّل استخدام الأوامر
 app.post("/api/analytics/track", async (req,res) => {
   if(req.headers["x-bot-secret"] !== process.env.BOT_SECRET)
     return res.status(401).json({ error:"Unauthorized" })
@@ -518,7 +564,7 @@ app.post("/api/analytics/track", async (req,res) => {
       `, [guildId, command])
     }
     res.json({ success:true })
-  } catch(err) { res.status(500).json({ error:"Failed to track" }) }
+  } catch(err) { res.status(500).json({ error:"Failed" }) }
 })
 
 // ══════════════════════════════════════
@@ -567,13 +613,12 @@ app.delete("/api/guild/:guildId/link", requireAuth, requireGuildAdmin, async (re
 })
 
 app.get("/api/guild/:guildId/plan", async (req,res) => {
-  const { guildId } = req.params
   try {
     const r = await pool.query(`
       SELECT gs.guild_id, s.plan_id, s.status, s.expires_at
       FROM guild_subscriptions gs JOIN subscriptions s ON s.user_id=gs.owner_id
       WHERE gs.guild_id=$1 AND s.status='active' LIMIT 1
-    `, [guildId])
+    `, [req.params.guildId])
     if(!r.rows.length) return res.json({ plan_id:"free", status:"inactive" })
     res.json(r.rows[0])
   } catch(err) { res.status(500).json({ error:"فشل جلب الخطة" }) }
@@ -594,7 +639,6 @@ app.get("/api/user/:userId/guilds", requireAuth, async (req,res) => {
 //  ECONOMY LEADERBOARD
 // ══════════════════════════════════════
 app.get("/api/economy/top/:guildId", requireAuth, requireGuildAdmin, async (req,res) => {
-  const { guildId } = req.params
   const limit = Math.min(parseInt(req.query.limit)||10, 25)
   try {
     const r = await pool.query(
@@ -602,11 +646,11 @@ app.get("/api/economy/top/:guildId", requireAuth, requireGuildAdmin, async (req,
     )
     if(!r.rows.length) return res.json([])
     const users = await Promise.allSettled(r.rows.map(async u => {
-      const d = await getDiscordUser(u.user_id, guildId)
+      const d = await getDiscordUser(u.user_id, req.params.guildId)
       return { id:u.user_id, username:d.username, avatar:d.avatar, coins:u.coins }
     }))
     res.json(users.filter(u => u.status==="fulfilled").map(u => u.value))
-  } catch(err) { res.status(500).json({ error:"Failed to fetch leaderboard" }) }
+  } catch(err) { res.status(500).json({ error:"Failed" }) }
 })
 
 // ══════════════════════════════════════
@@ -624,7 +668,7 @@ app.get("/api/subscription/:userId", requireAuth, async (req,res) => {
       sub.status = "expired"
     }
     res.json(sub)
-  } catch(err) { res.status(500).json({ error:"Failed to fetch subscription" }) }
+  } catch(err) { res.status(500).json({ error:"Failed" }) }
 })
 
 // ══════════════════════════════════════
@@ -649,7 +693,7 @@ app.post("/api/payment-requests", requireAuth, async (req,res) => {
 })
 
 // ══════════════════════════════════════
-//  ADMIN ENDPOINTS
+//  ADMIN
 // ══════════════════════════════════════
 app.get("/api/admin/payment-requests", requireAuth, requireOwnerAuth, async (req,res) => {
   try {
@@ -677,20 +721,17 @@ app.post("/api/admin/payment-requests/:id/approve", requireAuth, requireOwnerAut
       ON CONFLICT(user_id) DO UPDATE SET plan_id=$2, status='active', expires_at=$3, updated_at=NOW()
     `, [payReq.user_id, payReq.plan_id, expiresAt])
     await pool.query("UPDATE payment_requests SET status='approved', reviewed_at=NOW() WHERE id=$1", [id])
-    // DM
     try {
       const dm = await fetchDiscordJSON("https://discord.com/api/users/@me/channels", {
-        method:"POST",
-        headers:{ Authorization:`Bot ${CONFIG.BOT_TOKEN}`, "Content-Type":"application/json" },
+        method:"POST", headers:{ Authorization:`Bot ${CONFIG.BOT_TOKEN}`, "Content-Type":"application/json" },
         body: JSON.stringify({ recipient_id:payReq.user_id })
       })
       if(dm?.id) {
         await fetchDiscordJSON(`https://discord.com/api/channels/${dm.id}/messages`, {
-          method:"POST",
-          headers:{ Authorization:`Bot ${CONFIG.BOT_TOKEN}`, "Content-Type":"application/json" },
+          method:"POST", headers:{ Authorization:`Bot ${CONFIG.BOT_TOKEN}`, "Content-Type":"application/json" },
           body: JSON.stringify({ embeds:[{
             title:"✅ تم تفعيل اشتراكك!",
-            description:`مبروك! تم تفعيل خطة **${plan.name}** بنجاح.\n\nيمكنك الآن الاستمتاع بجميع المميزات.`,
+            description:`مبروك! تم تفعيل خطة **${plan.name}** بنجاح.`,
             color:0x22d3a2,
             fields:[
               { name:"📋 الخطة", value:plan.name, inline:true },
@@ -703,7 +744,7 @@ app.post("/api/admin/payment-requests/:id/approve", requireAuth, requireOwnerAut
         })
       }
     } catch(dmErr) { console.log("⚠️ DM failed:", dmErr.message) }
-    res.json({ success:true, message:"تم تفعيل الاشتراك" })
+    res.json({ success:true })
   } catch(err) { res.status(500).json({ error:"فشل تفعيل الاشتراك" }) }
 })
 
@@ -737,45 +778,21 @@ app.get("/api/admin/stats", requireAuth, requireOwnerAuth, async (req,res) => {
       pool.query("SELECT command, count FROM analytics ORDER BY count DESC LIMIT 5"),
     ])
     res.json({
-      activeSubscriptions: subs.rows,
-      paymentRequests: reqs.rows,
-      economy: eco.rows[0],
-      linkedGuilds: parseInt(linked.rows[0]?.count||0),
+      activeSubscriptions: subs.rows, paymentRequests: reqs.rows,
+      economy: eco.rows[0], linkedGuilds: parseInt(linked.rows[0]?.count||0),
       topCommands: topCmds.rows
     })
   } catch(err) { res.status(500).json({ error:"Failed" }) }
 })
 
-// ══════════════════════════════════════
-//  PLANS
-// ══════════════════════════════════════
 app.get("/api/plans", (req,res) => res.json(Object.values(PLANS)))
 
-// ══════════════════════════════════════
-//  STATIC PAGES
-// ══════════════════════════════════════
-app.get("/terms", (req,res) => res.send(`<html><head><title>Terms - Lyn AI</title>
-<style>body{font-family:Arial;max-width:800px;margin:50px auto;padding:20px;background:#1a1a2e;color:#fff}</style></head><body>
-<h1>Terms of Service</h1><p>Last updated: April 2026</p>
-<h2>1. Usage</h2><p>By adding Lyn AI, you agree to use it responsibly per Discord's Terms of Service.</p>
-<h2>2. Data Collection</h2><p>We collect server IDs, user IDs, and message interactions.</p>
-<h2>3. Prohibited Use</h2><p>No spam, harassment, or illegal activities.</p>
-<h2>4. Contact</h2><p><a href="https://rcif-dashboard.onrender.com" style="color:#7289da">Dashboard</a></p>
-</body></html>`))
+app.get("/terms", (req,res) => res.send(`<html><head><title>Terms - Lyn AI</title><style>body{font-family:Arial;max-width:800px;margin:50px auto;padding:20px;background:#1a1a2e;color:#fff}</style></head><body><h1>Terms of Service</h1><p>Last updated: April 2026</p><h2>1. Usage</h2><p>By adding Lyn AI, you agree to use it responsibly per Discord's Terms of Service.</p><h2>2. Data Collection</h2><p>We collect server IDs, user IDs, and message interactions.</p><h2>3. Prohibited Use</h2><p>No spam, harassment, or illegal activities.</p><h2>4. Contact</h2><p><a href="https://rcif-dashboard.onrender.com" style="color:#7289da">Dashboard</a></p></body></html>`))
 
-app.get("/privacy", (req,res) => res.send(`<html><head><title>Privacy - Lyn AI</title>
-<style>body{font-family:Arial;max-width:800px;margin:50px auto;padding:20px;background:#1a1a2e;color:#fff}</style></head><body>
-<h1>Privacy Policy</h1><p>Last updated: April 2026</p>
-<h2>1. Data We Collect</h2><p>User IDs, Server IDs, message content for AI, economy data, XP data.</p>
-<h2>2. How We Use Data</h2><p>Solely to provide bot features. Never sold to third parties.</p>
-<h2>3. Data Deletion</h2><p><a href="https://rcif-dashboard.onrender.com" style="color:#7289da">Dashboard</a></p>
-</body></html>`))
+app.get("/privacy", (req,res) => res.send(`<html><head><title>Privacy - Lyn AI</title><style>body{font-family:Arial;max-width:800px;margin:50px auto;padding:20px;background:#1a1a2e;color:#fff}</style></head><body><h1>Privacy Policy</h1><p>Last updated: April 2026</p><h2>1. Data We Collect</h2><p>User IDs, Server IDs, message content for AI, economy data, XP data.</p><h2>2. How We Use Data</h2><p>Solely to provide bot features. Never sold to third parties.</p><h2>3. Data Deletion</h2><p><a href="https://rcif-dashboard.onrender.com" style="color:#7289da">Dashboard</a></p></body></html>`))
 
-// ══════════════════════════════════════
-//  START
-// ══════════════════════════════════════
 app.listen(CONFIG.PORT, () => {
-  console.log(`🚀 Lyn Dashboard API v5.0 — port ${CONFIG.PORT}`)
+  console.log(`🚀 Lyn Dashboard API v6.0 — port ${CONFIG.PORT}`)
   console.log(`👑 Plans: ${Object.keys(PLANS).join(" | ")}`)
   console.log(`⚡ Commands: ${ALL_COMMANDS.length} total`)
 })
