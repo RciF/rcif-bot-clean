@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 
-// خريطة مستوى التحقق
 const VERIFICATION_LEVELS = {
   0: "❌ لا يوجد",
   1: "📧 إيميل مؤكد",
@@ -9,7 +8,6 @@ const VERIFICATION_LEVELS = {
   4: "📱 هاتف مؤكد"
 }
 
-// خريطة مستوى البوست
 const BOOST_LEVELS = {
   0: "لا يوجد",
   1: "المستوى 1",
@@ -17,7 +15,6 @@ const BOOST_LEVELS = {
   3: "المستوى 3"
 }
 
-// خريطة فلتر المحتوى
 const CONTENT_FILTER = {
   0: "❌ معطّل",
   1: "🔍 الأعضاء بدون رتب",
@@ -41,21 +38,13 @@ module.exports = {
 
       await interaction.deferReply()
 
-      // ✅ جلب السيرفر بكل التفاصيل
       const guild = await interaction.guild.fetch()
-
-      // ✅ جلب الأعضاء
       await guild.members.fetch()
 
-      // ✅ إحصائيات الأعضاء
       const totalMembers  = guild.memberCount
       const humans        = guild.members.cache.filter(m => !m.user.bot).size
       const bots          = guild.members.cache.filter(m => m.user.bot).size
-      const online        = guild.members.cache.filter(m => m.presence?.status === "online").size
-      const idle          = guild.members.cache.filter(m => m.presence?.status === "idle").size
-      const dnd           = guild.members.cache.filter(m => m.presence?.status === "dnd").size
 
-      // ✅ إحصائيات القنوات
       const { ChannelType } = require("discord.js")
       const channels      = guild.channels.cache
       const textChannels  = channels.filter(c => c.type === ChannelType.GuildText).size
@@ -63,50 +52,42 @@ module.exports = {
       const categories    = channels.filter(c => c.type === ChannelType.GuildCategory).size
       const forums        = channels.filter(c => c.type === ChannelType.GuildForum).size
 
-      // ✅ تواريخ
       const createdTimestamp = Math.floor(guild.createdAt.getTime() / 1000)
 
-      // ✅ صاحب السيرفر
       const owner = await guild.fetchOwner().catch(() => null)
       const ownerText = owner ? `${owner.user} (\`${owner.user.username}\`)` : "غير معروف"
 
-      // ✅ بوست
       const boostCount = guild.premiumSubscriptionCount || 0
       const boostLevel = guild.premiumTier
       const boostEmoji = boostCount >= 14 ? "💜" : boostCount >= 7 ? "💙" : boostCount >= 2 ? "💚" : "🩶"
 
-      // ✅ رتب
       const rolesCount = guild.roles.cache.filter(r => r.id !== guild.id).size
 
-      // ✅ إيموجي
       const emojisCount   = guild.emojis.cache.size
       const animatedEmoji = guild.emojis.cache.filter(e => e.animated).size
       const staticEmoji   = emojisCount - animatedEmoji
 
-      // ✅ ميزات السيرفر
       const featureEmojis = {
-        COMMUNITY:            "🌐 مجتمع",
-        PARTNERED:            "🤝 بارتنر",
-        VERIFIED:             "✅ موثّق",
-        DISCOVERABLE:         "🔍 قابل للاكتشاف",
-        VANITY_URL:           "🔗 رابط مخصص",
-        ANIMATED_ICON:        "🖼️ أيقونة متحركة",
-        ANIMATED_BANNER:      "🎨 بانر متحرك",
-        BANNER:               "🎨 بانر",
+        COMMUNITY:              "🌐 مجتمع",
+        PARTNERED:              "🤝 بارتنر",
+        VERIFIED:               "✅ موثّق",
+        DISCOVERABLE:           "🔍 قابل للاكتشاف",
+        VANITY_URL:             "🔗 رابط مخصص",
+        ANIMATED_ICON:          "🖼️ أيقونة متحركة",
+        ANIMATED_BANNER:        "🎨 بانر متحرك",
+        BANNER:                 "🎨 بانر",
         WELCOME_SCREEN_ENABLED: "👋 شاشة ترحيب",
-        MONETIZATION_ENABLED: "💰 ربح مالي",
+        MONETIZATION_ENABLED:   "💰 ربح مالي",
       }
       const features = guild.features
         .filter(f => featureEmojis[f])
         .map(f => featureEmojis[f])
 
-      // ✅ لون الـ Embed
       const embedColor = guild.roles.cache
         .filter(r => r.color && r.id !== guild.id)
         .sort((a, b) => b.position - a.position)
         .first()?.color || 0x5865f2
 
-      // ✅ بناء الـ Embed
       const embed = new EmbedBuilder()
         .setColor(embedColor)
         .setTitle(`🏠 ${guild.name}`)
@@ -129,7 +110,7 @@ module.exports = {
           },
           {
             name: `👥 الأعضاء (${totalMembers})`,
-            value: `👤 بشر: **${humans}**\n🤖 بوتات: **${bots}**\n🟢 متصل: **${online}** | 🌙 غائب: **${idle}** | ⛔ مشغول: **${dnd}**`,
+            value: `👤 بشر: **${humans}**\n🤖 بوتات: **${bots}**`,
             inline: false
           },
           {
@@ -164,7 +145,6 @@ module.exports = {
           }
         )
 
-      // ✅ ميزات السيرفر إذا وجدت
       if (features.length > 0) {
         embed.addFields({
           name: "⭐ ميزات السيرفر",
@@ -173,7 +153,6 @@ module.exports = {
         })
       }
 
-      // ✅ صورة البانر إذا وجدت
       const bannerURL = guild.bannerURL({ size: 1024 })
       if (bannerURL) embed.setImage(bannerURL)
 
