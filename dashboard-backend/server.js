@@ -114,6 +114,36 @@ async function initDB() {
       ON guild_subscriptions (owner_id);
     `)
 
+    // ══════════════════════════════════════
+    //  NEW: إعدادات الأوامر لكل سيرفر
+    // ══════════════════════════════════════
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS guild_command_settings (
+        guild_id     TEXT NOT NULL,
+        command_name TEXT NOT NULL,
+        custom_name  TEXT,
+        enabled      BOOLEAN DEFAULT true,
+        updated_at   TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (guild_id, command_name)
+      );
+    `)
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_cmd_settings_guild
+      ON guild_command_settings (guild_id);
+    `)
+
+    // ══════════════════════════════════════
+    //  NEW: البريفكس المخصص لكل سيرفر
+    // ══════════════════════════════════════
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS guild_prefix_settings (
+        guild_id   TEXT PRIMARY KEY,
+        prefix     TEXT NOT NULL DEFAULT '!',
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `)
+
     console.log("✅ Database tables ready")
   } catch (err) {
     console.error("❌ DB init error:", err.message)
@@ -127,9 +157,53 @@ initDB()
 // ══════════════════════════════════════
 const PLANS = {
   free:    { id: "free",    name: "مجاني", price: 0,   durationDays: null, guildLimit: 1 },
-silver:  { id: "silver",  name: "فضي",    price: 29,  durationDays: 30,   guildLimit: 1 },
-gold:    { id: "gold",    name: "ذهبي",   price: 79,  durationDays: 30,   guildLimit: 1 },
-diamond: { id: "diamond", name: "ماسي",   price: 149, durationDays: 30,   guildLimit: 1 },
+  silver:  { id: "silver",  name: "فضي",    price: 29,  durationDays: 30,   guildLimit: 1 },
+  gold:    { id: "gold",    name: "ذهبي",   price: 79,  durationDays: 30,   guildLimit: 1 },
+  diamond: { id: "diamond", name: "ماسي",   price: 149, durationDays: 30,   guildLimit: 1 },
+}
+
+// ══════════════════════════════════════
+//  قائمة جميع الأوامر مع metadata
+//  plan = الخطة الأدنى المطلوبة
+// ══════════════════════════════════════
+const ALL_COMMANDS = [
+  // ── الإشراف — مجاني بالكامل ──
+  { name: "حظر",            file: "ban.js",         category: "moderation", plan: "free",   description: "حظر عضو من السيرفر مع خيار حذف الرسائل" },
+  { name: "طرد",            file: "kick.js",        category: "moderation", plan: "free",   description: "طرد عضو من السيرفر" },
+  { name: "تحذير",          file: "warn.js",        category: "moderation", plan: "free",   description: "تحذير عضو مع مستوى خطورة تلقائي" },
+  { name: "التحذيرات",      file: "warnings.js",    category: "moderation", plan: "free",   description: "عرض تحذيرات عضو بالتفاصيل" },
+  { name: "مسح_التحذيرات",  file: "clearwarns.js",  category: "moderation", plan: "free",   description: "مسح تحذيرات عضو" },
+  { name: "اسكت",           file: "mute.js",        category: "moderation", plan: "free",   description: "كتم عضو لمدة محددة" },
+  { name: "فك_الكتم",      file: "unmute.js",      category: "moderation", plan: "free",   description: "فك كتم عضو مكتوم" },
+  { name: "مسح",            file: "clear.js",       category: "moderation", plan: "free",   description: "مسح رسائل مع 6 فلاتر متقدمة" },
+  { name: "لقب",            file: "nickname.js",    category: "moderation", plan: "free",   description: "تغيير أو إزالة لقب عضو" },
+  { name: "بطيء",           file: "slowmode.js",    category: "moderation", plan: "free",   description: "تفعيل/إيقاف السلو مود" },
+  { name: "قفل",            file: "lock.js",        category: "moderation", plan: "free",   description: "قفل قناة" },
+  { name: "فتح",            file: "unlock.js",      category: "moderation", plan: "free",   description: "فتح قناة مقفلة" },
+  { name: "رتبة",           file: "role.js",        category: "moderation", plan: "free",   description: "إعطاء/سحب رتبة فردي أو جماعي" },
+  // ── الاقتصاد — ذهبي فأعلى ──
+  { name: "متجر",           file: "shop.js",        category: "economy",    plan: "gold",   description: "تصفح العناصر بقائمة تفاعلية" },
+  { name: "شراء",           file: "buy.js",         category: "economy",    plan: "gold",   description: "شراء عنصر من المتجر" },
+  { name: "بيع",            file: "sell.js",        category: "economy",    plan: "gold",   description: "بيع عنصر بـ 60% من سعره" },
+  { name: "رصيد",           file: "balance.js",     category: "economy",    plan: "gold",   description: "عرض الرصيد والثروة والمرحلة" },
+  { name: "يومي",           file: "daily.js",       category: "economy",    plan: "gold",   description: "مكافأة يومية 500-750 كوين" },
+  { name: "عمل",            file: "work.js",        category: "economy",    plan: "gold",   description: "18 وظيفة عشوائية لكسب الكوينز" },
+  { name: "تحويل",          file: "transfer.js",    category: "economy",    plan: "gold",   description: "تحويل كوينز بين اللاعبين" },
+  { name: "ممتلكاتي",       file: "inventory.js",   category: "economy",    plan: "gold",   description: "عرض كل الممتلكات مصنفة" },
+  { name: "متصدرين",        file: "leaderboard.js", category: "economy",    plan: "gold",   description: "ليدربورد الاقتصاد 3 أنواع" },
+  // ── الذكاء الاصطناعي — ذهبي فأعلى ──
+  { name: "ذكاء",           file: "chat.js",        category: "ai",         plan: "gold",   description: "سؤال الذكاء الاصطناعي" },
+  // ── المعلومات — مجاني ──
+  { name: "معلومات",        file: "userinfo.js",    category: "info",       plan: "free",   description: "معلومات عضو" },
+  { name: "السيرفر",        file: "serverinfo.js",  category: "info",       plan: "free",   description: "معلومات السيرفر" },
+  { name: "بوت",            file: "botinfo.js",     category: "info",       plan: "free",   description: "معلومات البوت وحالة الأنظمة" },
+]
+
+// خريطة أولويات الخطط
+const PLAN_HIERARCHY = { free: 0, silver: 1, gold: 2, diamond: 3 }
+
+function canUsePlan(guildPlan, requiredPlan) {
+  return (PLAN_HIERARCHY[guildPlan] ?? 0) >= (PLAN_HIERARCHY[requiredPlan] ?? 0)
 }
 
 async function fetchDiscordJSON(url, options = {}) {
@@ -149,7 +223,6 @@ async function fetchDiscordJSON(url, options = {}) {
   return data
 }
 
-// ✅ FIX: safe default avatar — BigInt بدل parseInt
 function getDefaultAvatar(userId) {
   try {
     const index = Number(BigInt(userId) % 5n)
@@ -160,9 +233,7 @@ function getDefaultAvatar(userId) {
 }
 
 function getUserAvatar(user) {
-  if (user.avatar) {
-    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
-  }
+  if (user.avatar) return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
   return getDefaultAvatar(user.id)
 }
 
@@ -173,28 +244,43 @@ async function getDiscordUser(userId, guildId) {
       { headers: { Authorization: `Bot ${CONFIG.BOT_TOKEN}` } }
     )
     return {
-      id: data.user.id,
+      id:       data.user.id,
       username: data.user.global_name || data.user.username,
-      avatar: getUserAvatar(data.user)
+      avatar:   getUserAvatar(data.user)
     }
   } catch {
     return { id: userId, username: `User#${userId.slice(-4)}`, avatar: null }
   }
 }
 
+// جلب خطة السيرفر من DB
+async function getGuildPlan(guildId) {
+  try {
+    const result = await pool.query(`
+      SELECT s.plan_id, s.expires_at
+      FROM guild_subscriptions gs
+      JOIN subscriptions s ON s.user_id = gs.owner_id
+      WHERE gs.guild_id = $1 AND s.status = 'active'
+      LIMIT 1
+    `, [guildId])
+    if (!result.rows.length) return "free"
+    const row = result.rows[0]
+    if (row.expires_at && new Date(row.expires_at) < new Date()) return "free"
+    return row.plan_id || "free"
+  } catch {
+    return "free"
+  }
+}
+
 // ══════════════════════════════════════
-//  🔒 SESSION AUTH SYSTEM (SECURE)
+//  SESSION AUTH SYSTEM
 // ══════════════════════════════════════
 const sessions = new Map()
 const SESSION_TTL = 24 * 60 * 60 * 1000
 
 function createSession(user, guilds) {
   const token = crypto.randomBytes(48).toString("hex")
-  sessions.set(token, {
-    user,
-    guilds,
-    createdAt: Date.now()
-  })
+  sessions.set(token, { user, guilds, createdAt: Date.now() })
   return token
 }
 
@@ -209,17 +295,13 @@ function getSession(token) {
   return session
 }
 
-// تنظيف دوري
 setInterval(() => {
   const now = Date.now()
   for (const [token, session] of sessions.entries()) {
-    if (now - session.createdAt > SESSION_TTL) {
-      sessions.delete(token)
-    }
+    if (now - session.createdAt > SESSION_TTL) sessions.delete(token)
   }
 }, 60 * 60 * 1000)
 
-// ✅ middleware: تحقق من session token
 function requireAuth(req, res, next) {
   const authHeader = req.headers["authorization"]
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -227,15 +309,12 @@ function requireAuth(req, res, next) {
   }
   const token = authHeader.replace("Bearer ", "")
   const session = getSession(token)
-  if (!session) {
-    return res.status(401).json({ error: "الجلسة منتهية — سجل دخول مرة ثانية" })
-  }
+  if (!session) return res.status(401).json({ error: "الجلسة منتهية — سجل دخول مرة ثانية" })
   req.user = session.user
   req.guilds = session.guilds
   next()
 }
 
-// ✅ middleware: تحقق إن المستخدم owner
 function requireOwnerAuth(req, res, next) {
   if (!req.user || req.user.id !== CONFIG.OWNER_ID) {
     return res.status(403).json({ error: "غير مصرح — ليس لديك صلاحية" })
@@ -243,14 +322,11 @@ function requireOwnerAuth(req, res, next) {
   next()
 }
 
-// ✅ middleware: تحقق إن المستخدم admin بالسيرفر
 function requireGuildAdmin(req, res, next) {
   const guildId = req.params.guildId || req.body.guildId
   if (!guildId) return res.status(400).json({ error: "guildId مطلوب" })
   const guild = req.guilds?.find(g => g.id === guildId)
-  if (!guild) {
-    return res.status(403).json({ error: "ليس لديك صلاحية على هذا السيرفر" })
-  }
+  if (!guild) return res.status(403).json({ error: "ليس لديك صلاحية على هذا السيرفر" })
   next()
 }
 
@@ -258,7 +334,7 @@ function requireGuildAdmin(req, res, next) {
 //  HEALTH
 // ══════════════════════════════════════
 app.get("/", (req, res) => {
-  res.json({ status: "online", service: "Discord Bot Dashboard API", version: "3.0" })
+  res.json({ status: "online", service: "Discord Bot Dashboard API", version: "4.0" })
 })
 
 app.get("/api/health", async (req, res) => {
@@ -271,7 +347,7 @@ app.get("/api/health", async (req, res) => {
 })
 
 // ══════════════════════════════════════
-//  AUTH — يرجع session token آمن
+//  AUTH
 // ══════════════════════════════════════
 app.get("/api/auth/callback", async (req, res) => {
   const { code } = req.query
@@ -311,20 +387,14 @@ app.get("/api/auth/callback", async (req, res) => {
     }
 
     const guildsData = adminGuilds.map(g => ({
-      id:   g.id,
-      name: g.name,
-      icon: g.icon,
+      id:          g.id,
+      name:        g.name,
+      icon:        g.icon,
       permissions: g.permissions.toString()
     }))
 
-    // ✅ NEW: إنشاء session token آمن
     const sessionToken = createSession(userData, guildsData)
-
-    res.json({
-      token: sessionToken,
-      user: userData,
-      guilds: guildsData
-    })
+    res.json({ token: sessionToken, user: userData, guilds: guildsData })
   } catch (err) {
     console.error("AUTH ERROR:", err.payload || err.message)
     res.status(500).json({ error: "Authentication failed" })
@@ -332,7 +402,7 @@ app.get("/api/auth/callback", async (req, res) => {
 })
 
 // ══════════════════════════════════════
-//  GUILD SETTINGS — 🔒 محمية بالـ auth
+//  GUILD SETTINGS
 // ══════════════════════════════════════
 app.post("/api/guild/save", requireAuth, requireGuildAdmin, async (req, res) => {
   const { guildId } = req.body
@@ -344,7 +414,6 @@ app.post("/api/guild/save", requireAuth, requireGuildAdmin, async (req, res) => 
       VALUES ($1) ON CONFLICT (guild_id) DO NOTHING
     `, [guildId])
 
-    // ✅ ربط تلقائي: لو عنده اشتراك نشط وما ربط سيرفر بعد
     const userId = req.user.id
     const subResult = await pool.query(
       "SELECT plan_id, status FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1",
@@ -356,14 +425,12 @@ app.post("/api/guild/save", requireAuth, requireGuildAdmin, async (req, res) => 
         "SELECT guild_id FROM guild_subscriptions WHERE owner_id = $1",
         [userId]
       )
-
       if (existingLink.rows.length === 0) {
         await pool.query(`
           INSERT INTO guild_subscriptions (guild_id, owner_id, added_at)
           VALUES ($1, $2, NOW())
           ON CONFLICT (guild_id) DO UPDATE SET owner_id = $2, added_at = NOW()
         `, [guildId, userId])
-
         console.log(`🔗 ربط تلقائي: سيرفر ${guildId} ← مستخدم ${userId}`)
       }
     }
@@ -404,7 +471,255 @@ app.post("/api/guild/:guildId/settings", requireAuth, requireGuildAdmin, async (
 })
 
 // ══════════════════════════════════════
-//  GUILD ↔ SUBSCRIPTION LINKING — 🔒 محمية
+//  COMMANDS API — إعدادات الأوامر
+// ══════════════════════════════════════
+
+// GET — جلب كل الأوامر مع إعداداتها + خطة السيرفر
+app.get("/api/guild/:guildId/commands", requireAuth, requireGuildAdmin, async (req, res) => {
+  const { guildId } = req.params
+  try {
+    const guildPlan = await getGuildPlan(guildId)
+
+    const result = await pool.query(
+      "SELECT command_name, custom_name, enabled FROM guild_command_settings WHERE guild_id = $1",
+      [guildId]
+    )
+
+    const settingsMap = {}
+    for (const row of result.rows) {
+      settingsMap[row.command_name] = { custom_name: row.custom_name, enabled: row.enabled }
+    }
+
+    const commands = ALL_COMMANDS.map(cmd => {
+      const saved = settingsMap[cmd.name] || {}
+      const planAllowed = canUsePlan(guildPlan, cmd.plan)
+      return {
+        name:        cmd.name,
+        file:        cmd.file,
+        category:    cmd.category,
+        plan:        cmd.plan,
+        description: cmd.description,
+        custom_name: saved.custom_name || null,
+        enabled:     planAllowed ? (saved.enabled !== false) : false,
+        plan_locked: !planAllowed,
+      }
+    })
+
+    res.json({ commands, guild_plan: guildPlan })
+  } catch (err) {
+    console.error("[COMMANDS_GET_ERROR]", err.message)
+    res.status(500).json({ error: "فشل جلب الأوامر" })
+  }
+})
+
+// PATCH — تعديل أمر واحد
+app.patch("/api/guild/:guildId/commands/:commandName", requireAuth, requireGuildAdmin, async (req, res) => {
+  const { guildId, commandName } = req.params
+  const { enabled, custom_name } = req.body
+
+  const cmdDef = ALL_COMMANDS.find(c => c.name === commandName)
+  if (!cmdDef) return res.status(404).json({ error: "الأمر غير موجود" })
+
+  try {
+    const guildPlan = await getGuildPlan(guildId)
+
+    // تغيير الاسم: فضي فأعلى
+    if (custom_name !== undefined && !canUsePlan(guildPlan, "silver")) {
+      return res.status(403).json({
+        error: "🔒 تغيير أسماء الأوامر يحتاج خطة فضي أو أعلى",
+        required_plan: "silver"
+      })
+    }
+
+    // تفعيل أمر مقفول بالخطة
+    if (enabled === true && !canUsePlan(guildPlan, cmdDef.plan)) {
+      return res.status(403).json({
+        error: `🔒 هذا الأمر يحتاج خطة ${cmdDef.plan} أو أعلى`,
+        required_plan: cmdDef.plan
+      })
+    }
+
+    // التحقق من الاسم المخصص
+    if (custom_name !== undefined && custom_name !== null && custom_name !== "") {
+      const trimmed = String(custom_name).trim()
+      if (trimmed.length > 32) return res.status(400).json({ error: "الاسم المخصص لا يتجاوز 32 حرف" })
+      if (!/^[\u0600-\u06FFa-zA-Z0-9_-]+$/.test(trimmed)) {
+        return res.status(400).json({ error: "الاسم: حروف عربية أو إنجليزية وأرقام فقط" })
+      }
+    }
+
+    const finalCustomName = custom_name === "" ? null : (custom_name ?? null)
+
+    await pool.query(`
+      INSERT INTO guild_command_settings (guild_id, command_name, custom_name, enabled, updated_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (guild_id, command_name) DO UPDATE SET
+        custom_name = CASE WHEN $3::TEXT IS NOT NULL THEN $3 ELSE guild_command_settings.custom_name END,
+        enabled     = CASE WHEN $4::BOOLEAN IS NOT NULL THEN $4 ELSE guild_command_settings.enabled END,
+        updated_at  = NOW()
+    `, [guildId, commandName, finalCustomName, enabled !== undefined ? Boolean(enabled) : null])
+
+    console.log(`[CMD_UPDATE] guild=${guildId} cmd=${commandName} enabled=${enabled} custom=${finalCustomName}`)
+    res.json({ success: true })
+  } catch (err) {
+    console.error("[COMMAND_PATCH_ERROR]", err.message)
+    res.status(500).json({ error: "فشل تحديث الأمر" })
+  }
+})
+
+// POST bulk — تحديث عدة أوامر دفعة واحدة
+app.post("/api/guild/:guildId/commands/bulk", requireAuth, requireGuildAdmin, async (req, res) => {
+  const { guildId } = req.params
+  const { commands } = req.body
+
+  if (!Array.isArray(commands)) return res.status(400).json({ error: "commands يجب أن يكون array" })
+
+  try {
+    const guildPlan = await getGuildPlan(guildId)
+    const errors = []
+
+    for (const cmd of commands) {
+      const cmdDef = ALL_COMMANDS.find(c => c.name === cmd.name)
+      if (!cmdDef) continue
+
+      if (cmd.custom_name !== undefined && !canUsePlan(guildPlan, "silver")) {
+        errors.push(`${cmd.name}: تغيير الاسم يحتاج فضي فأعلى`)
+        continue
+      }
+      if (cmd.enabled === true && !canUsePlan(guildPlan, cmdDef.plan)) {
+        errors.push(`${cmd.name}: يحتاج خطة ${cmdDef.plan}`)
+        continue
+      }
+
+      const finalCustomName = cmd.custom_name === "" ? null : (cmd.custom_name ?? null)
+
+      await pool.query(`
+        INSERT INTO guild_command_settings (guild_id, command_name, custom_name, enabled, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (guild_id, command_name) DO UPDATE SET
+          custom_name = CASE WHEN $3::TEXT IS NOT NULL THEN $3 ELSE guild_command_settings.custom_name END,
+          enabled     = CASE WHEN $4::BOOLEAN IS NOT NULL THEN $4 ELSE guild_command_settings.enabled END,
+          updated_at  = NOW()
+      `, [guildId, cmd.name, finalCustomName, cmd.enabled !== undefined ? Boolean(cmd.enabled) : null])
+    }
+
+    res.json({ success: true, errors: errors.length ? errors : undefined })
+  } catch (err) {
+    console.error("[COMMANDS_BULK_ERROR]", err.message)
+    res.status(500).json({ error: "فشل التحديث الجماعي" })
+  }
+})
+
+// DELETE reset — إعادة كل الأوامر للافتراضي
+app.delete("/api/guild/:guildId/commands/reset", requireAuth, requireGuildAdmin, async (req, res) => {
+  const { guildId } = req.params
+  try {
+    await pool.query("DELETE FROM guild_command_settings WHERE guild_id = $1", [guildId])
+    res.json({ success: true, message: "تم إعادة كل الأوامر للإعدادات الافتراضية" })
+  } catch (err) {
+    res.status(500).json({ error: "فشل إعادة الضبط" })
+  }
+})
+
+// ══════════════════════════════════════
+//  PREFIX API — البريفكس المخصص
+// ══════════════════════════════════════
+
+// GET — جلب البريفكس
+app.get("/api/guild/:guildId/prefix", requireAuth, requireGuildAdmin, async (req, res) => {
+  const { guildId } = req.params
+  try {
+    const result = await pool.query(
+      "SELECT prefix FROM guild_prefix_settings WHERE guild_id = $1",
+      [guildId]
+    )
+    res.json({ prefix: result.rows[0]?.prefix || "!" })
+  } catch (err) {
+    res.status(500).json({ error: "فشل جلب البريفكس" })
+  }
+})
+
+// POST — تغيير البريفكس
+app.post("/api/guild/:guildId/prefix", requireAuth, requireGuildAdmin, async (req, res) => {
+  const { guildId } = req.params
+  const { prefix } = req.body
+
+  if (!prefix || typeof prefix !== "string") return res.status(400).json({ error: "البريفكس مطلوب" })
+
+  const trimmed = prefix.trim()
+  if (trimmed.length === 0 || trimmed.length > 5) {
+    return res.status(400).json({ error: "البريفكس يجب أن يكون بين 1 و 5 أحرف" })
+  }
+
+  try {
+    // البريفكس المخصص: فضي فأعلى
+    const guildPlan = await getGuildPlan(guildId)
+    if (!canUsePlan(guildPlan, "silver")) {
+      return res.status(403).json({
+        error: "🔒 البريفكس المخصص يحتاج خطة فضي أو أعلى",
+        required_plan: "silver"
+      })
+    }
+
+    await pool.query(`
+      INSERT INTO guild_prefix_settings (guild_id, prefix, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (guild_id) DO UPDATE SET prefix = $2, updated_at = NOW()
+    `, [guildId, trimmed])
+
+    console.log(`[PREFIX_UPDATE] guild=${guildId} prefix=${trimmed}`)
+    res.json({ success: true, prefix: trimmed })
+  } catch (err) {
+    console.error("[PREFIX_POST_ERROR]", err.message)
+    res.status(500).json({ error: "فشل تحديث البريفكس" })
+  }
+})
+
+// ══════════════════════════════════════
+//  BOT INTERNAL API
+//  البوت يستخدمه لجلب إعدادات السيرفر
+// ══════════════════════════════════════
+app.get("/api/bot/guild/:guildId/command-settings", async (req, res) => {
+  const { guildId } = req.params
+  const botSecret = req.headers["x-bot-secret"]
+
+  if (botSecret !== process.env.BOT_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+
+  try {
+    const [cmdResult, prefixResult] = await Promise.all([
+      pool.query(
+        "SELECT command_name, custom_name, enabled FROM guild_command_settings WHERE guild_id = $1",
+        [guildId]
+      ),
+      pool.query(
+        "SELECT prefix FROM guild_prefix_settings WHERE guild_id = $1",
+        [guildId]
+      )
+    ])
+
+    const commandSettings = {}
+    for (const row of cmdResult.rows) {
+      commandSettings[row.command_name] = {
+        custom_name: row.custom_name,
+        enabled:     row.enabled
+      }
+    }
+
+    res.json({
+      prefix:   prefixResult.rows[0]?.prefix || "!",
+      commands: commandSettings
+    })
+  } catch (err) {
+    console.error("[BOT_CMD_SETTINGS_ERROR]", err.message)
+    res.status(500).json({ error: "Failed to fetch bot settings" })
+  }
+})
+
+// ══════════════════════════════════════
+//  GUILD ↔ SUBSCRIPTION LINKING
+//  ⚠️ اشتراك واحد = سيرفر واحد فقط
 // ══════════════════════════════════════
 app.post("/api/guild/:guildId/link", requireAuth, requireGuildAdmin, async (req, res) => {
   const { guildId } = req.params
@@ -420,7 +735,6 @@ app.post("/api/guild/:guildId/link", requireAuth, requireGuildAdmin, async (req,
       return res.status(400).json({ error: "لا يوجد اشتراك نشط. اشترك أولاً." })
     }
 
-    // ⚠️ القاعدة: اشتراك واحد = سيرفر واحد فقط
     const existingLink = await pool.query(
       "SELECT guild_id FROM guild_subscriptions WHERE owner_id = $1",
       [userId]
@@ -457,10 +771,7 @@ app.delete("/api/guild/:guildId/link", requireAuth, requireGuildAdmin, async (re
 
 app.get("/api/user/:userId/guilds", requireAuth, async (req, res) => {
   const { userId } = req.params
-  // ✅ FIX: المستخدم يشوف بس سيرفراته هو
-  if (req.user.id !== userId) {
-    return res.status(403).json({ error: "غير مصرح" })
-  }
+  if (req.user.id !== userId) return res.status(403).json({ error: "غير مصرح" })
   try {
     const result = await pool.query(
       "SELECT guild_id, added_at FROM guild_subscriptions WHERE owner_id = $1 ORDER BY added_at DESC",
@@ -482,11 +793,7 @@ app.get("/api/guild/:guildId/plan", async (req, res) => {
       WHERE gs.guild_id = $1 AND s.status = 'active'
       LIMIT 1
     `, [guildId])
-
-    if (!result.rows.length) {
-      return res.json({ plan_id: "free", status: "inactive" })
-    }
-
+    if (!result.rows.length) return res.json({ plan_id: "free", status: "inactive" })
     res.json(result.rows[0])
   } catch (err) {
     res.status(500).json({ error: "فشل جلب الخطة" })
@@ -494,18 +801,16 @@ app.get("/api/guild/:guildId/plan", async (req, res) => {
 })
 
 // ══════════════════════════════════════
-//  ECONOMY LEADERBOARD — 🔒 محمية + فلترة بالسيرفر
+//  ECONOMY LEADERBOARD
 // ══════════════════════════════════════
 app.get("/api/economy/top/:guildId", requireAuth, requireGuildAdmin, async (req, res) => {
   const { guildId } = req.params
   const limit = Math.min(parseInt(req.query.limit) || 10, 25)
   try {
-    // ✅ FIX: الآن يجيب بيانات المستخدمين من السيرفر المحدد
-    const result = await pool.query(`
-      SELECT user_id, coins FROM economy_users
-      WHERE coins > 0 ORDER BY coins DESC LIMIT $1
-    `, [limit])
-
+    const result = await pool.query(
+      "SELECT user_id, coins FROM economy_users WHERE coins > 0 ORDER BY coins DESC LIMIT $1",
+      [limit]
+    )
     if (!result.rows.length) return res.json([])
 
     const users = await Promise.allSettled(
@@ -514,7 +819,6 @@ app.get("/api/economy/top/:guildId", requireAuth, requireGuildAdmin, async (req,
         return { id: u.user_id, username: discordUser.username, avatar: discordUser.avatar, coins: u.coins }
       })
     )
-
     res.json(users.filter(r => r.status === "fulfilled").map(r => r.value))
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch leaderboard" })
@@ -522,19 +826,13 @@ app.get("/api/economy/top/:guildId", requireAuth, requireGuildAdmin, async (req,
 })
 
 // ══════════════════════════════════════
-//  SUBSCRIPTIONS — 🔒 محمية
+//  SUBSCRIPTIONS
 // ══════════════════════════════════════
 app.get("/api/subscription/:userId", requireAuth, async (req, res) => {
   const { userId } = req.params
-  // ✅ FIX: المستخدم يشوف بس اشتراكه هو
-  if (req.user.id !== userId) {
-    return res.status(403).json({ error: "غير مصرح" })
-  }
+  if (req.user.id !== userId) return res.status(403).json({ error: "غير مصرح" })
   try {
-    const result = await pool.query(
-      "SELECT * FROM subscriptions WHERE user_id = $1 LIMIT 1",
-      [userId]
-    )
+    const result = await pool.query("SELECT * FROM subscriptions WHERE user_id = $1 LIMIT 1", [userId])
     if (!result.rows.length) {
       return res.json({ user_id: userId, plan_id: "free", status: "inactive", expires_at: null })
     }
@@ -554,31 +852,25 @@ app.get("/api/subscription/:userId", requireAuth, async (req, res) => {
 })
 
 // ══════════════════════════════════════
-//  PAYMENT REQUESTS — 🔒 محمية
+//  PAYMENT REQUESTS
 // ══════════════════════════════════════
 app.post("/api/payment-requests", requireAuth, async (req, res) => {
   const { planId, refNumber } = req.body
   const userId = req.user.id
 
-  if (!planId || !refNumber) {
-    return res.status(400).json({ error: "planId و refNumber مطلوبة" })
-  }
+  if (!planId || !refNumber) return res.status(400).json({ error: "planId و refNumber مطلوبة" })
   if (!PLANS[planId]) return res.status(400).json({ error: "خطة غير صالحة" })
   if (planId === "free") return res.status(400).json({ error: "الخطة المجانية لا تحتاج دفعاً" })
 
   const cleanRef = String(refNumber).trim()
-  if (cleanRef.length < 4 || cleanRef.length > 100) {
-    return res.status(400).json({ error: "رقم العملية غير صالح" })
-  }
+  if (cleanRef.length < 4 || cleanRef.length > 100) return res.status(400).json({ error: "رقم العملية غير صالح" })
 
   try {
     const existing = await pool.query(
       "SELECT id FROM payment_requests WHERE user_id = $1 AND status = 'pending' LIMIT 1",
       [userId]
     )
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: "يوجد طلب دفع معلق بالفعل" })
-    }
+    if (existing.rows.length > 0) return res.status(400).json({ error: "يوجد طلب دفع معلق بالفعل" })
 
     await pool.query(
       "INSERT INTO payment_requests (user_id, plan_id, ref_number, status) VALUES ($1, $2, $3, 'pending')",
@@ -594,7 +886,7 @@ app.post("/api/payment-requests", requireAuth, async (req, res) => {
 })
 
 // ══════════════════════════════════════
-//  🔒 ADMIN ENDPOINTS — محمية بـ auth + owner
+//  ADMIN ENDPOINTS
 // ══════════════════════════════════════
 app.get("/api/admin/payment-requests", requireAuth, requireOwnerAuth, async (req, res) => {
   try {
@@ -613,9 +905,7 @@ app.get("/api/admin/payment-requests", requireAuth, requireOwnerAuth, async (req
 app.post("/api/admin/payment-requests/:id/approve", requireAuth, requireOwnerAuth, async (req, res) => {
   const { id } = req.params
   try {
-    const reqResult = await pool.query(
-      "SELECT * FROM payment_requests WHERE id = $1 LIMIT 1", [id]
-    )
+    const reqResult = await pool.query("SELECT * FROM payment_requests WHERE id = $1 LIMIT 1", [id])
     if (!reqResult.rows.length) return res.status(404).json({ error: "الطلب غير موجود" })
 
     const payReq = reqResult.rows[0]
@@ -636,60 +926,42 @@ app.post("/api/admin/payment-requests/:id/approve", requireAuth, requireOwnerAut
       ON CONFLICT (user_id) DO UPDATE SET plan_id = $2, status = 'active', expires_at = $3, updated_at = NOW()
     `, [payReq.user_id, payReq.plan_id, expiresAt])
 
-    await pool.query(`
-      UPDATE payment_requests SET status = 'approved', reviewed_at = NOW() WHERE id = $1
-    `, [id])
-
+    await pool.query("UPDATE payment_requests SET status = 'approved', reviewed_at = NOW() WHERE id = $1", [id])
     console.log(`✅ تم تفعيل اشتراك: userId=${payReq.user_id} plan=${payReq.plan_id}`)
 
-    // ✅ إرسال DM للمشترك عبر البوت
     try {
-      const dmChannel = await fetchDiscordJSON(
-        `https://discord.com/api/users/@me/channels`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bot ${CONFIG.BOT_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ recipient_id: payReq.user_id }),
-        }
-      )
-
+      const dmChannel = await fetchDiscordJSON(`https://discord.com/api/users/@me/channels`, {
+        method: "POST",
+        headers: { Authorization: `Bot ${CONFIG.BOT_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient_id: payReq.user_id }),
+      })
       if (dmChannel?.id) {
-        await fetchDiscordJSON(
-          `https://discord.com/api/channels/${dmChannel.id}/messages`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bot ${CONFIG.BOT_TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              embeds: [{
-                title: "✅ تم تفعيل اشتراكك!",
-                description: `مبروك! تم تفعيل خطة **${plan.name}** بنجاح.\n\nيمكنك الآن إضافة البوت لسيرفرك والاستمتاع بجميع المميزات.`,
-                color: 0x22d3a2,
-                fields: [
-                  { name: "📋 الخطة", value: plan.name, inline: true },
-                  { name: "💰 السعر", value: `${plan.price} ريال/شهر`, inline: true },
-                  { name: "⏰ المدة", value: `${plan.durationDays} يوم`, inline: true },
-                ],
-                footer: { text: "Lyn AI — شكراً لدعمك!" },
-                timestamp: new Date().toISOString(),
-              }],
+        await fetchDiscordJSON(`https://discord.com/api/channels/${dmChannel.id}/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bot ${CONFIG.BOT_TOKEN}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            embeds: [{
+              title: "✅ تم تفعيل اشتراكك!",
+              description: `مبروك! تم تفعيل خطة **${plan.name}** بنجاح.\n\nيمكنك الآن إضافة البوت لسيرفرك والاستمتاع بجميع المميزات.`,
+              color: 0x22d3a2,
+              fields: [
+                { name: "📋 الخطة", value: plan.name, inline: true },
+                { name: "💰 السعر", value: `${plan.price} ريال/شهر`, inline: true },
+                { name: "⏰ المدة", value: `${plan.durationDays} يوم`, inline: true },
+              ],
+              footer: { text: "Lyn AI — شكراً لدعمك!" },
+              timestamp: new Date().toISOString(),
+            }],
+            components: [{
+              type: 1,
               components: [{
-                type: 1,
-                components: [{
-                  type: 2,
-                  style: 5,
-                  label: "🤖 أضف البوت لسيرفرك",
-                  url: `https://discord.com/oauth2/authorize?client_id=${CONFIG.CLIENT_ID}&permissions=8&scope=bot%20applications.commands`,
-                }],
+                type: 2, style: 5,
+                label: "🤖 أضف البوت لسيرفرك",
+                url: `https://discord.com/oauth2/authorize?client_id=${CONFIG.CLIENT_ID}&permissions=8&scope=bot%20applications.commands`,
               }],
-            }),
-          }
-        )
+            }],
+          }),
+        })
         console.log(`📩 تم إرسال DM للمستخدم: ${payReq.user_id}`)
       }
     } catch (dmErr) {
@@ -723,10 +995,7 @@ app.post("/api/admin/payment-requests/:id/reject", requireAuth, requireOwnerAuth
 app.post("/api/admin/subscription/:userId/cancel", requireAuth, requireOwnerAuth, async (req, res) => {
   const { userId } = req.params
   try {
-    await pool.query(
-      "UPDATE subscriptions SET status = 'cancelled', updated_at = NOW() WHERE user_id = $1",
-      [userId]
-    )
+    await pool.query("UPDATE subscriptions SET status = 'cancelled', updated_at = NOW() WHERE user_id = $1", [userId])
     await pool.query("DELETE FROM guild_subscriptions WHERE owner_id = $1", [userId])
     res.json({ success: true })
   } catch (err) {
@@ -744,15 +1013,18 @@ app.get("/api/admin/stats", requireAuth, requireOwnerAuth, async (req, res) => {
     ])
     res.json({
       activeSubscriptions: subs.rows,
-      paymentRequests: requests.rows,
-      economy: economy.rows[0],
-      linkedGuilds: parseInt(linkedGuilds.rows[0]?.count || 0),
+      paymentRequests:     requests.rows,
+      economy:             economy.rows[0],
+      linkedGuilds:        parseInt(linkedGuilds.rows[0]?.count || 0),
     })
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch stats" })
   }
 })
 
+// ══════════════════════════════════════
+//  STATIC PAGES
+// ══════════════════════════════════════
 app.get("/terms", (req, res) => {
   res.send(`
     <html><head><title>Terms of Service - Lyn AI</title>
