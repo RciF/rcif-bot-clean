@@ -90,6 +90,11 @@ function startApiServer(client) {
   //  — بدون كشف القيم الحساسة —
   // ═══════════════════════════════════════════════════
   app.get("/diagnostics/env", async (req, res) => {
+    
+     // ✅ منع الـ caching لهذا endpoint
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate")
+    res.set("Pragma", "no-cache")
+    res.set("Expires", "0")
 
     // ── المتغيرات المطلوبة
     const requiredVars = [
