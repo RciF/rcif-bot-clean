@@ -8,7 +8,6 @@ const { checkDatabaseHealth } = require("./databaseHealthSystem")
 const { getDatabaseStats } = require("./databaseStatsSystem")
 const { checkRepositories } = require("./repositoryHealthSystem")
 
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args))
 
 function startApiServer(client) {
 
