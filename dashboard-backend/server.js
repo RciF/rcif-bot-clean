@@ -4,7 +4,6 @@ const cors    = require("cors")
 const crypto  = require("crypto")
 const { Pool }= require("pg")
 require("dotenv").config()
-const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args))
 
 const app = express()
 

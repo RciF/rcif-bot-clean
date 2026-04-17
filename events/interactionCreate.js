@@ -3,7 +3,6 @@ const errorSystem      = require("../systems/errorSystem")
 const ticketSystem     = require("../systems/ticketSystem")
 const { handleButtonRoleInteraction } = require("../commands/roles/button-role")
 const { handleEventButton }           = require("../commands/events/event")
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args))
 
 // ══════════════════════════════════════
 //  DASHBOARD SETTINGS CACHE
