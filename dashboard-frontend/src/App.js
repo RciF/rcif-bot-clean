@@ -5,7 +5,7 @@ const API          = process.env.REACT_APP_API_URL      || "http://localhost:400
 const CLIENT_ID    = process.env.REACT_APP_CLIENT_ID    || "1480292734353805373"
 const REDIRECT_URI = process.env.REACT_APP_REDIRECT_URI || "http://localhost:3000/callback"
 const OWNER_ID     = process.env.REACT_APP_OWNER_ID     || "529320108032786433"
-
+const BOT_INVITE_URL = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&permissions=8&scope=bot%20applications.commands`
 // ══════════════════════════════════════
 //  CONSTANTS
 // ══════════════════════════════════════
@@ -1457,6 +1457,82 @@ function Callback() {
 }
 
 // ══════════════════════════════════════
+//  BOT NOT IN GUILD — شاشة إضافة البوت
+// ══════════════════════════════════════
+function BotNotInGuild({guild, inviteUrl}) {
+  const fullInvite = `${inviteUrl}&guild_id=${guild.id}&disable_guild_select=true`
+  return (
+    <div className="fade-in" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"75vh",textAlign:"center",gap:22,padding:"30px 20px"}}>
+
+      {/* Server icon with warning badge */}
+      <div style={{position:"relative"}}>
+        {guild.icon ? (
+          <img src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128`}
+            alt="" width={100} height={100}
+            style={{borderRadius:24,border:"3px solid rgba(251,191,36,.4)",boxShadow:"0 0 32px rgba(251,191,36,.22)"}}/>
+        ) : (
+          <div style={{width:100,height:100,borderRadius:24,background:"var(--bg3)",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,
+            color:"var(--gold)",fontWeight:900,border:"3px solid rgba(251,191,36,.4)"}}>
+            {guild.name.slice(0,2)}
+          </div>
+        )}
+        <div style={{position:"absolute",bottom:-10,right:-10,width:38,height:38,borderRadius:"50%",
+          background:"var(--bg2)",border:"3px solid var(--gold)",display:"flex",alignItems:"center",
+          justifyContent:"center",fontSize:18,boxShadow:"0 0 18px rgba(251,191,36,.4)"}}>⚠</div>
+      </div>
+
+      <div style={{maxWidth:500}}>
+        <div className="tag tag-gold" style={{marginBottom:13,fontSize:11}}>⚠ البوت غير موجود</div>
+        <h2 style={{fontSize:28,fontWeight:900,marginBottom:12,fontFamily:"'Tajawal',sans-serif"}}>{guild.name}</h2>
+        <p style={{color:"var(--muted)",fontSize:14,lineHeight:1.9,marginBottom:30}}>
+          البوت <strong style={{color:"var(--blue)"}}>Lyn</strong> غير مضاف لهذا السيرفر بعد.
+          <br/>
+          أضفه الآن لتستفيد من <strong style={{color:"var(--cyan)"}}>86 أمر</strong> والتحكم الكامل من الداشبورد.
+        </p>
+
+        <a href={fullInvite} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>
+          <button className="btn btn-discord" style={{fontSize:15,padding:"16px 34px"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057.102 18.085.12 18.11.144 18.13a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+            </svg>
+            أضف البوت لـ {guild.name}
+          </button>
+        </a>
+
+        <div style={{marginTop:16}}>
+          <button className="btn btn-ghost" style={{padding:"9px 20px",fontSize:12}} onClick={()=>window.location.reload()}>
+            🔄 لقد أضفت البوت — تحقق الآن
+          </button>
+        </div>
+
+        <div style={{marginTop:26,padding:"13px 17px",background:"rgba(0,200,255,.04)",
+          borderRadius:10,border:"1px solid var(--border)",fontSize:12,color:"var(--muted)",lineHeight:1.8}}>
+          💡 سيفتح Discord في نافذة جديدة. بعد إضافة البوت، اضغط "تحقق الآن" أو أعد تحميل الصفحة.
+        </div>
+      </div>
+
+      {/* Features preview */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,maxWidth:580,width:"100%",marginTop:14}}>
+        {[
+          {icon:"🛡",label:"15 أمر إشراف",color:"var(--green)"},
+          {icon:"🤖",label:"ذكاء اصطناعي",color:"var(--blue)"},
+          {icon:"💰",label:"نظام اقتصاد",color:"var(--gold)"},
+          {icon:"🎫",label:"نظام تذاكر",color:"var(--purple)"},
+          {icon:"⭐",label:"XP ومستويات",color:"var(--purple)"},
+          {icon:"🔒",label:"حماية كاملة",color:"var(--red)"},
+        ].map(f=>(
+          <div key={f.label} className="card" style={{padding:"12px 10px",textAlign:"center"}}>
+            <div style={{fontSize:22,marginBottom:5}}>{f.icon}</div>
+            <div style={{fontSize:11,fontWeight:700,color:f.color}}>{f.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════
 function Dashboard() {
@@ -1468,6 +1544,8 @@ function Dashboard() {
   const [saving,         setSaving]         = useState(false)
   const [userSubscription, setUserSub]      = useState(null)
   const [guildPlan,      setGuildPlan]      = useState("free")
+  const [botGuilds, setBotGuilds] = useState([])
+  const [loadingBotGuilds, setLoadingBotGuilds] = useState(true)
 
   let user=null, guilds=[]
   try { user=JSON.parse(localStorage.getItem("user")) } catch {}
@@ -1484,8 +1562,24 @@ function Dashboard() {
   }
   useEffect(()=>{fetchSub()},[user?.id])
 
+  // جلب قائمة سيرفرات البوت
+  const fetchBotGuilds = useCallback(() => {
+    setLoadingBotGuilds(true)
+    fetch(`${API}/api/bot/guilds`)
+      .then(r => r.json())
+      .then(d => { if(Array.isArray(d)) setBotGuilds(d) })
+      .catch(()=>{})
+      .finally(()=>setLoadingBotGuilds(false))
+  }, [])
+
+  useEffect(() => { fetchBotGuilds() }, [fetchBotGuilds])
+
   const selectGuild = async g => {
     setSelectedGuild(g); setActiveSection("overview")
+
+    // لو البوت مو موجود في السيرفر → لا تحمل أي بيانات
+    if (!botGuilds.includes(g.id)) return
+
     try {
       await authFetch(`${API}/api/guild/save`,{method:"POST",body:JSON.stringify({guildId:g.id})})
       const [sr,pr] = await Promise.all([
@@ -1519,6 +1613,12 @@ function Dashboard() {
         <p style={{color:"var(--muted)",maxWidth:300,fontSize:13}}>اختر سيرفراً من القائمة الجانبية لعرض لوحة التحكم</p>
       </div>
     )
+
+    // ✅ البوت مو موجود في السيرفر → اعرض صفحة الدعوة
+    if (selectedGuild && !botGuilds.includes(selectedGuild.id) && !["subscriptions","payment-requests"].includes(activeSection)) {
+      return <BotNotInGuild guild={selectedGuild} inviteUrl={BOT_INVITE_URL}/>
+    }
+
     const p = { guild:selectedGuild, guildPlan, onNotif:setNotif }
     switch(activeSection) {
       case "overview":          return <OverviewSection {...p} settings={settings} onSection={setActiveSection}/>
@@ -1619,16 +1719,23 @@ function Dashboard() {
         <div style={{padding:"7px 7px 0",borderTop:"1px solid var(--border)",flexShrink:0}}>
           <div className="section-lbl">السيرفرات ({guilds.length})</div>
           <div style={{maxHeight:160,overflowY:"auto"}}>
-            {guilds.slice(0,15).map(g=>(
-              <div key={g.id} className={`guild-item${selectedGuild?.id===g.id?" active":""}`} onClick={()=>selectGuild(g)}>
-                {g.icon
-                  ? <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png`} alt="" width={24} height={24} style={{borderRadius:6,flexShrink:0}}/>
-                  : <div style={{width:24,height:24,borderRadius:6,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"var(--blue)",fontWeight:700,flexShrink:0}}>{g.name.slice(0,2)}</div>
-                }
-                <span style={{fontSize:11,fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.name}</span>
-                {selectedGuild?.id===g.id&&<div className="pulse-dot" style={{width:5,height:5}}/>}
-              </div>
-            ))}
+            {guilds.slice(0,15).map(g => {
+              const hasBot = botGuilds.includes(g.id)
+              return (
+                <div key={g.id}
+                  className={`guild-item${selectedGuild?.id===g.id?" active":""}`}
+                  onClick={()=>selectGuild(g)}
+                  title={hasBot ? g.name : `${g.name} — البوت غير موجود، اضغط للإضافة`}>
+                  {g.icon
+                    ? <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png`} alt="" width={24} height={24} style={{borderRadius:6,flexShrink:0,opacity:hasBot?1:.5,filter:hasBot?"none":"grayscale(.6)"}}/>
+                    : <div style={{width:24,height:24,borderRadius:6,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:hasBot?"var(--blue)":"var(--muted)",fontWeight:700,flexShrink:0,opacity:hasBot?1:.6}}>{g.name.slice(0,2)}</div>
+                  }
+                  <span style={{fontSize:11,fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",opacity:hasBot?1:.65}}>{g.name}</span>
+                  {!hasBot && <span style={{fontSize:11,color:"var(--gold)",flexShrink:0}} title="البوت غير موجود">⚠</span>}
+                  {hasBot && selectedGuild?.id===g.id && <div className="pulse-dot" style={{width:5,height:5}}/>}
+                </div>
+              )
+            })}
           </div>
         </div>
 

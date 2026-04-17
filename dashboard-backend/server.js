@@ -80,6 +80,33 @@ async function initDB() {
 initDB()
 
 // ══════════════════════════════════════
+//  BOT GUILDS — قائمة سيرفرات البوت
+// ══════════════════════════════════════
+let botGuildsCache = { data: null, fetchedAt: 0 }
+const BOT_GUILDS_TTL = 60 * 1000 // دقيقة واحدة
+
+app.get("/api/bot/guilds", async (req, res) => {
+  try {
+    // استخدم الكاش لو ما انتهى
+    if (botGuildsCache.data && Date.now() - botGuildsCache.fetchedAt < BOT_GUILDS_TTL) {
+      return res.json(botGuildsCache.data)
+    }
+
+    const guilds = await fetchDiscordJSON("https://discord.com/api/users/@me/guilds", {
+      headers: { Authorization: `Bot ${CONFIG.BOT_TOKEN}` }
+    })
+
+    const ids = Array.isArray(guilds) ? guilds.map(g => g.id) : []
+
+    botGuildsCache = { data: ids, fetchedAt: Date.now() }
+    res.json(ids)
+  } catch (err) {
+    console.error("[BOT_GUILDS]", err.message)
+    res.json(botGuildsCache.data || [])
+  }
+})
+
+// ══════════════════════════════════════
 //  PLANS
 // ══════════════════════════════════════
 const PLANS = {
