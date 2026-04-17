@@ -45,7 +45,54 @@ try {
     await client.login(DISCORD_TOKEN)
     logger.success("DISCORD_CLIENT_CONNECTED")
     subRoleSystem.init(client)
+// ══════════════════════════════════════
+//  ✅ نشر الأوامر تلقائياً عند بدء التشغيل
+// ══════════════════════════════════════
+try {
+  const { REST, Routes } = require("discord.js")
+  const path = require("path")
+  const fs = require("fs")
 
+  const DEPLOY_MODE = process.env.DEPLOY_MODE || "guild"
+  const GUILD_ID = process.env.GUILD_ID
+  const CLIENT_ID = process.env.CLIENT_ID
+
+  const commands = []
+  const commandsPath = path.join(__dirname, "commands")
+  const folders = fs.readdirSync(commandsPath)
+
+  for (const folder of folders) {
+    const folderPath = path.join(commandsPath, folder)
+    if (!fs.lstatSync(folderPath).isDirectory()) continue
+
+    const files = fs.readdirSync(folderPath).filter(f => f.endsWith(".js"))
+    for (const file of files) {
+      const command = require(path.join(folderPath, file))
+      if (command?.data?.toJSON) {
+        commands.push(command.data.toJSON())
+      }
+    }
+  }
+
+  const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN)
+
+  if (DEPLOY_MODE === "guild" && GUILD_ID) {
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      { body: commands }
+    )
+    logger.success(`COMMANDS_DEPLOYED_GUILD ${commands.length} → ${GUILD_ID}`)
+  } else if (DEPLOY_MODE === "global") {
+    await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: commands }
+    )
+    logger.success(`COMMANDS_DEPLOYED_GLOBAL ${commands.length}`)
+  }
+
+} catch (err) {
+  logger.error("AUTO_DEPLOY_COMMANDS_FAILED", { error: err.message })
+}
 
     const { updateAllGuilds } = require("./systems/statsSystem")
     setInterval(async () => {
