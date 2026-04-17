@@ -8,6 +8,11 @@ const TOKEN = process.env.DISCORD_TOKEN
 const CLIENT_ID = process.env.CLIENT_ID
 const GUILD_ID = process.env.GUILD_ID
 
+// ✅ وضع النشر
+// DEPLOY_MODE=guild   → فقط في GUILD_ID (أسرع — للتطوير والاختبار)
+// DEPLOY_MODE=global  → عالمياً فقط (للإنتاج — بعد التأكد)
+const DEPLOY_MODE = process.env.DEPLOY_MODE || "guild"
+
 // ✅ تحقق من المتغيرات
 if (!TOKEN) {
   console.error("❌ DISCORD_TOKEN مفقود في .env")
@@ -16,6 +21,11 @@ if (!TOKEN) {
 
 if (!CLIENT_ID) {
   console.error("❌ CLIENT_ID مفقود في .env")
+  process.exit(1)
+}
+
+if (DEPLOY_MODE === "guild" && !GUILD_ID) {
+  console.error("❌ DEPLOY_MODE=guild لكن GUILD_ID مفقود في .env")
   process.exit(1)
 }
 
@@ -48,26 +58,41 @@ const rest = new REST({ version: "10" }).setToken(TOKEN)
 
 ;(async () => {
   try {
-    console.log(`\n🚀 جاري نشر ${commands.length} أمر...\n`)
+    console.log(`\n🚀 جاري نشر ${commands.length} أمر...`)
+    console.log(`📦 وضع النشر: ${DEPLOY_MODE}\n`)
 
-    if (GUILD_ID) {
-      // ✅ سيرفر واحد (أسرع — للتطوير)
+    if (DEPLOY_MODE === "guild") {
+      // ═══════════════════════════════════════
+      //  نشر في السيرفر المحدد فقط (فوري)
+      // ═══════════════════════════════════════
       await rest.put(
         Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
         { body: commands }
       )
       console.log(`✅ تم نشر الأوامر في السيرفر: ${GUILD_ID}`)
-    } else {
-      // ✅ NEW: global (كل السيرفرات — للإنتاج)
+      console.log("⚡ الأوامر متاحة فوراً في هذا السيرفر فقط")
+
+    } else if (DEPLOY_MODE === "global") {
+      // ═══════════════════════════════════════
+      //  نشر عالمياً (كل السيرفرات — حتى ساعة)
+      // ═══════════════════════════════════════
       await rest.put(
         Routes.applicationCommands(CLIENT_ID),
         { body: commands }
       )
       console.log("✅ تم نشر الأوامر عالمياً (كل السيرفرات)")
       console.log("⏳ ملاحظة: الأوامر العالمية تاخذ حتى ساعة عشان تظهر")
+
+    } else {
+      console.error(`❌ DEPLOY_MODE غير صالح: ${DEPLOY_MODE}`)
+      console.error("   القيم المسموحة: guild | global")
+      process.exit(1)
     }
+
+    console.log("\n✨ اكتمل النشر بنجاح!")
 
   } catch (error) {
     console.error("❌ فشل نشر الأوامر:", error)
+    process.exit(1)
   }
 })()
