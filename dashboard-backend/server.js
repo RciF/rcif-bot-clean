@@ -748,6 +748,9 @@ app.post("/api/admin/payment-requests/:id/approve", requireAuth, requireOwnerAut
       ON CONFLICT(user_id) DO UPDATE SET plan_id=$2, status='active', expires_at=$3, updated_at=NOW()
     `, [payReq.user_id, payReq.plan_id, expiresAt])
     await pool.query("UPDATE payment_requests SET status='approved', reviewed_at=NOW() WHERE id=$1", [id])
+    
+const { grantSubscriptionRole } = require("../systems/subscriptionRoleSystem")
+await grantSubscriptionRole(payReq.user_id, payReq.plan_id)
     try {
       const dm = await fetchDiscordJSON("https://discord.com/api/users/@me/channels", {
         method:"POST", headers:{ Authorization:`Bot ${CONFIG.BOT_TOKEN}`, "Content-Type":"application/json" },

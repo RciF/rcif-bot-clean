@@ -5,7 +5,7 @@ const { Client, GatewayIntentBits, Collection } = require("discord.js")
 const startupSystem = require("./systems/startupSystem")
 const { startApiServer } = require("./systems/apiServerSystem")
 const logger = require("./systems/loggerSystem")
-
+const subRoleSystem = require("./systems/subscriptionRoleSystem")
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 
 if (!DISCORD_TOKEN) {
@@ -44,6 +44,8 @@ try {
     await startupSystem()
     await client.login(DISCORD_TOKEN)
     logger.success("DISCORD_CLIENT_CONNECTED")
+    subRoleSystem.init(client)
+
 
     const { updateAllGuilds } = require("./systems/statsSystem")
     setInterval(async () => {
