@@ -3,6 +3,7 @@ const errorSystem      = require("../systems/errorSystem")
 const ticketSystem     = require("../systems/ticketSystem")
 const { handleButtonRoleInteraction } = require("../commands/roles/button-role")
 const { handleEventButton }           = require("../commands/events/event")
+const { handleVerifyPanelButton }     = require("../commands/admin/verify-panel")
 
 // ══════════════════════════════════════
 //  DASHBOARD SETTINGS CACHE
@@ -139,6 +140,11 @@ module.exports = {
     // ══════════════════════════════════════
     if (interaction.isButton()) {
       const customId = interaction.customId
+
+      // ✅ NEW: Verify Panel Button
+      if (customId.startsWith("verify_panel:")) {
+        return await handleVerifyPanelButton(interaction)
+      }
 
       if (customId.startsWith("brole_")) {
         return await handleButtonRoleInteraction(interaction)
