@@ -10,6 +10,12 @@ const {
 
 const ticketSystem = require("../../systems/ticketSystem")
 
+// ✅ تحويل \n النصي إلى سطر جديد حقيقي
+function parseMessage(str) {
+  if (!str) return null
+  return str.replace(/\\n/g, "\n")
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("تذاكر")
@@ -238,7 +244,7 @@ async function handleSettings(interaction) {
     category_id: currentSettings.category_id,
     log_channel_id: currentSettings.log_channel_id,
     support_role_id: currentSettings.support_role_id,
-    welcome_message: welcomeMsg || currentSettings.welcome_message,
+    welcome_message: parseMessage(welcomeMsg) || currentSettings.welcome_message,
     max_open_tickets: maxTickets || currentSettings.max_open_tickets,
     auto_close_hours: autoClose || currentSettings.auto_close_hours,
     transcript_enabled: transcriptOpt !== null ? transcriptOpt === "true" : currentSettings.transcript_enabled,
