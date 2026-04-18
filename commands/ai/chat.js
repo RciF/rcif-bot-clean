@@ -46,7 +46,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    try {
+ try {
       if (!interaction.guild) {
         return interaction.reply({
           content: "❌ هذا الأمر داخل السيرفر فقط",
@@ -56,6 +56,18 @@ module.exports = {
 
       const question = interaction.options.getString("سؤال")
       const model    = interaction.options.getString("النموذج") || "smart"
+
+      // ✅ تحقق من حد الخطة قبل أي شي
+      const planGateSystem = require("../../systems/planGateSystem")
+      const limitType = model === "creative" ? "creative" : "command"
+      const limitCheck = await planGateSystem.checkAILimit(interaction.guild.id, limitType)
+
+      if (!limitCheck.allowed) {
+        return interaction.reply({
+          content: limitCheck.message,
+          ephemeral: true
+        })
+      }
 
       // ✅ تأجيل الرد مع مؤشر التفكير
       await interaction.deferReply()
@@ -68,7 +80,17 @@ module.exports = {
       let errorMessage = null
 
       try {
-        answer = await aiHandler.askAI?.(interaction.user.id, question, { model })
+        answer = await aiHandler.askAI?.(interaction.user.id, question, {
+          model,
+          guild: interaction.guild,
+          channel: interaction.channel,
+          user: interaction.user
+        })
+
+        // ✅ سجّل الاستخدام بعد الرد الناجح
+        if (answer) {
+          planGateSystem.recordAIUsage(interaction.guild.id, limitType)
+        }
       } catch (aiError) {
         console.error("[AI HANDLER ERROR]", aiError)
         errorMessage = aiError.message || "خطأ غير معروف"

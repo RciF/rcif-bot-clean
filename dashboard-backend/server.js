@@ -109,14 +109,18 @@ app.get("/api/bot/guilds", async (req, res) => {
 //  PLANS
 // ══════════════════════════════════════
 const PLANS = {
-  free:   { id:"free",    name:"مجاني", price:0,   durationDays:null, guildLimit:1, ai_limit:0,
+  free:   { id:"free",    name:"مجاني", price:0,   durationDays:null, guildLimit:1,
+    ai_mention_limit:0, ai_command_limit:0, ai_creative_limit:0,
     features:["الإشراف الكامل","معلومات السيرفر","أوامر أساسية"] },
-  silver: { id:"silver",  name:"فضي",   price:29,  durationDays:30,   guildLimit:1, ai_limit:0,
+  silver: { id:"silver",  name:"فضي",   price:29,  durationDays:30,   guildLimit:1,
+    ai_mention_limit:0, ai_command_limit:0, ai_creative_limit:0,
     features:["كل مميزات المجاني","نظام الترحيب والوداع","السجلات (لوق) كامل","Reaction Roles + لوحة الرتب","إحصائيات السيرفر","XP والمستويات كامل","تغيير أسماء الأوامر","بريفكس مخصص"] },
-  gold:   { id:"gold",    name:"ذهبي",  price:79,  durationDays:30,   guildLimit:1, ai_limit:300,
-    features:["كل مميزات الفضي","الاقتصاد الكامل","نظام التذاكر","الفعاليات","الحماية (Anti-Spam/Raid/Nuke)","ذكاء اصطناعي 300 رسالة/يوم"] },
-  diamond:{ id:"diamond", name:"ماسي",  price:149, durationDays:30,   guildLimit:1, ai_limit:700,
-    features:["جميع المميزات","ذكاء اصطناعي 700 رسالة/يوم","إحصائيات متقدمة في الداشبورد","أولوية دعم قصوى"] },
+  gold:   { id:"gold",    name:"ذهبي",  price:79,  durationDays:30,   guildLimit:1,
+    ai_mention_limit:200, ai_command_limit:100, ai_creative_limit:0,
+    features:["كل مميزات الفضي","الاقتصاد الكامل","نظام التذاكر","الفعاليات","الحماية (Anti-Spam/Raid/Nuke)","ذكاء اصطناعي: 200 منشن + 100 أمر يومياً"] },
+  diamond:{ id:"diamond", name:"ماسي",  price:149, durationDays:30,   guildLimit:1,
+    ai_mention_limit:500, ai_command_limit:200, ai_creative_limit:50,
+    features:["جميع المميزات","ذكاء اصطناعي: 500 منشن + 200 أمر يومياً","النموذج الإبداعي GPT-4o (50 رسالة/يوم)","إحصائيات متقدمة في الداشبورد","أولوية دعم قصوى"] },
 }
 
 // ══════════════════════════════════════

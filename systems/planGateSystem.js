@@ -33,7 +33,8 @@ const FEATURE_REQUIREMENTS = {
 
   xp: "silver",
   economy: "silver",
-  ai: "silver",
+  ai: "gold",
+  ai_creative: "diamond",
 
   custom_commands: "gold",
   advanced_stats: "gold",
@@ -49,25 +50,33 @@ const FEATURE_REQUIREMENTS = {
 const PLAN_LIMITS = {
   free: {
     guilds: 1,
-    ai_messages_per_day: 0,
+    ai_mention_per_day: 0,
+    ai_command_per_day: 0,
+    ai_creative_per_day: 0,
     economy_enabled: false,
     xp_enabled: false,
   },
   silver: {
     guilds: 1,
-    ai_messages_per_day: 200,
+    ai_mention_per_day: 0,
+    ai_command_per_day: 0,
+    ai_creative_per_day: 0,
     economy_enabled: true,
     xp_enabled: true,
   },
   gold: {
     guilds: 1,
-    ai_messages_per_day: 500,
+    ai_mention_per_day: 200,
+    ai_command_per_day: 100,
+    ai_creative_per_day: 0,
     economy_enabled: true,
     xp_enabled: true,
   },
   diamond: {
     guilds: 1,
-    ai_messages_per_day: 1000,
+    ai_mention_per_day: 500,
+    ai_command_per_day: 200,
+    ai_creative_per_day: 50,
     economy_enabled: true,
     xp_enabled: true,
   }
@@ -112,17 +121,17 @@ function getToday() {
   return new Date().toISOString().slice(0, 10) // "2026-04-08"
 }
 
-function getAIUsage(guildId) {
-  const key = `${guildId}:${getToday()}`
+function getAIUsage(guildId, type = "mention") {
+  const key = `${guildId}:${type}:${getToday()}`
   return aiDailyUsage.get(key) || 0
 }
 
-function incrementAIUsage(guildId) {
-  const key = `${guildId}:${getToday()}`
+function incrementAIUsage(guildId, type = "mention") {
+  const key = `${guildId}:${type}:${getToday()}`
   const current = aiDailyUsage.get(key) || 0
   aiDailyUsage.set(key, current + 1)
 
-  // تنظيف الأيام القديمة (أبقِ بس اليوم)
+  // تنظيف الأيام القديمة
   const today = getToday()
   for (const [k] of aiDailyUsage) {
     if (!k.endsWith(today)) {
@@ -137,24 +146,42 @@ function incrementAIUsage(guildId) {
  * تحقق هل السيرفر يقدر يستخدم AI (حسب الحد اليومي)
  * @returns {{ allowed: boolean, remaining: number, limit: number, message: string }}
  */
-async function checkAILimit(guildId) {
+async function checkAILimit(guildId, type = "mention") {
   try {
     const subscription = await getGuildSubscription(guildId)
     const plan = subscription.plan_id || "free"
     const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free
-    const dailyLimit = limits.ai_messages_per_day
 
-    // خطة مجانية = ما فيه AI
+    // تحديد الحد حسب نوع الطلب
+    let dailyLimit = 0
+    let limitKey = ""
+
+    if (type === "creative") {
+      dailyLimit = limits.ai_creative_per_day
+      limitKey = "creative"
+    } else if (type === "command") {
+      dailyLimit = limits.ai_command_per_day
+      limitKey = "command"
+    } else {
+      dailyLimit = limits.ai_mention_per_day
+      limitKey = "mention"
+    }
+
     if (dailyLimit === 0) {
+      const messages = {
+        creative: "🔒 النموذج الإبداعي متاح للخطة الماسية فقط.",
+        command: "🔒 أمر /ذكاء يحتاج اشتراك ذهبي أو أعلى.",
+        mention: "🔒 الذكاء الاصطناعي يحتاج اشتراك ذهبي أو أعلى."
+      }
       return {
         allowed: false,
         remaining: 0,
         limit: 0,
-        message: "🔒 الذكاء الاصطناعي يحتاج اشتراك فضي أو أعلى."
+        message: messages[limitKey]
       }
     }
 
-    const used = getAIUsage(guildId)
+    const used = getAIUsage(guildId, limitKey)
     const remaining = Math.max(0, dailyLimit - used)
 
     if (used >= dailyLimit) {
@@ -181,8 +208,8 @@ async function checkAILimit(guildId) {
 /**
  * سجّل استخدام رسالة AI (يُستدعى بعد كل رد ناجح)
  */
-function recordAIUsage(guildId) {
-  return incrementAIUsage(guildId)
+function recordAIUsage(guildId, type = "mention") {
+  return incrementAIUsage(guildId, type)
 }
 
 /**
@@ -192,13 +219,23 @@ async function getAIStats(guildId) {
   const subscription = await getGuildSubscription(guildId)
   const plan = subscription.plan_id || "free"
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free
-  const used = getAIUsage(guildId)
-  const limit = limits.ai_messages_per_day
+
+  const mentionUsed = getAIUsage(guildId, "mention")
+  const commandUsed = getAIUsage(guildId, "command")
+  const creativeUsed = getAIUsage(guildId, "creative")
+
+  const totalUsed = mentionUsed + commandUsed + creativeUsed
+  const totalLimit = limits.ai_mention_per_day + limits.ai_command_per_day + limits.ai_creative_per_day
 
   return {
-    used,
-    limit,
-    remaining: Math.max(0, limit - used),
+    used: totalUsed,
+    limit: totalLimit,
+    remaining: Math.max(0, totalLimit - totalUsed),
+    breakdown: {
+      mention: { used: mentionUsed, limit: limits.ai_mention_per_day },
+      command: { used: commandUsed, limit: limits.ai_command_per_day },
+      creative: { used: creativeUsed, limit: limits.ai_creative_per_day }
+    },
     plan,
     resetDate: getToday()
   }

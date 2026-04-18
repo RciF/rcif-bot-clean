@@ -155,9 +155,9 @@ module.exports = async (message) => {
       return message.reply("⚠️ استخدمت الذكاء الاصطناعي كثيراً.")
     }
 
-    // ✅ NEW: تحقق من حد السيرفر اليومي
+    // ✅ تحقق من حد السيرفر اليومي للمنشن
     if (message.guild) {
-      const aiLimit = await planGateSystem.checkAILimit(message.guild.id)
+      const aiLimit = await planGateSystem.checkAILimit(message.guild.id, "mention")
       if (!aiLimit.allowed) {
         return message.reply(aiLimit.message)
       }
@@ -214,9 +214,9 @@ recentReplies.set(dedupeKey, now)
     await new Promise(r => setTimeout(r, randomDelay()))
 
     await message.reply(safeReply)
-    // ✅ NEW: سجّل الاستخدام بعد الرد الناجح
+    // ✅ سجّل استخدام المنشن بعد الرد الناجح
     if (message.guild) {
-      planGateSystem.recordAIUsage(message.guild.id)
+      planGateSystem.recordAIUsage(message.guild.id, "mention")
     }
 
     // 🔥 behavior memory

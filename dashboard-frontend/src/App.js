@@ -10,14 +10,18 @@ const BOT_INVITE_URL = `https://discord.com/oauth2/authorize?client_id=${CLIENT_
 //  CONSTANTS
 // ══════════════════════════════════════
 const PLANS = [
-  { id:"free",    name:"مجاني", price:0,   color:"#64748b", icon:"🆓", ai_limit:0,
+  { id:"free",    name:"مجاني", price:0,   color:"#64748b", icon:"🆓",
+    ai_mention_limit:0, ai_command_limit:0, ai_creative_limit:0,
     features:["الإشراف الكامل","معلومات السيرفر","أوامر أساسية"] },
-  { id:"silver",  name:"فضي",   price:29,  color:"#94a3b8", icon:"🥈", ai_limit:0,
+  { id:"silver",  name:"فضي",   price:29,  color:"#94a3b8", icon:"🥈",
+    ai_mention_limit:0, ai_command_limit:0, ai_creative_limit:0,
     features:["كل مميزات المجاني","نظام الترحيب والوداع","السجلات كامل","Reaction Roles + لوحة الرتب","إحصائيات السيرفر","XP والمستويات","تغيير أسماء الأوامر","بريفكس مخصص"] },
-  { id:"gold",    name:"ذهبي",  price:79,  color:"#fbbf24", icon:"👑", ai_limit:300, popular:true,
-    features:["كل مميزات الفضي","الاقتصاد الكامل","نظام التذاكر","الفعاليات","الحماية كاملة","ذكاء اصطناعي 300 رسالة/يوم"] },
-  { id:"diamond", name:"ماسي",  price:149, color:"#00ffe7", icon:"💎", ai_limit:700,
-    features:["جميع المميزات","ذكاء اصطناعي 700 رسالة/يوم","إحصائيات متقدمة في الداشبورد","أولوية دعم قصوى"] },
+  { id:"gold",    name:"ذهبي",  price:79,  color:"#fbbf24", icon:"👑", popular:true,
+    ai_mention_limit:200, ai_command_limit:100, ai_creative_limit:0,
+    features:["كل مميزات الفضي","الاقتصاد الكامل","نظام التذاكر","الفعاليات","الحماية كاملة","ذكاء اصطناعي: 200 منشن + 100 أمر يومياً"] },
+  { id:"diamond", name:"ماسي",  price:149, color:"#00ffe7", icon:"💎",
+    ai_mention_limit:500, ai_command_limit:200, ai_creative_limit:50,
+    features:["جميع المميزات","ذكاء اصطناعي: 500 منشن + 200 أمر يومياً","🎨 النموذج الإبداعي GPT-4o (50/يوم)","إحصائيات متقدمة في الداشبورد","أولوية دعم قصوى"] },
 ]
 
 const PLAN_HIERARCHY = { free:0, silver:1, gold:2, diamond:3 }
@@ -749,30 +753,47 @@ function StatsSection({ guild, guildPlan, onNotif }) {
 }
 
 function AISection({ guild, guildPlan, settings, onSaveSettings, onNotif }) {
-  const plan    = PLANS.find(p => p.id === guildPlan) || PLANS[0]
-  const aiLimit = plan.ai_limit || 0
+  const plan = PLANS.find(p => p.id === guildPlan) || PLANS[0]
+  const mentionLimit = plan.ai_mention_limit || 0
+  const commandLimit = plan.ai_command_limit || 0
+  const creativeLimit = plan.ai_creative_limit || 0
+  const totalLimit = mentionLimit + commandLimit + creativeLimit
+
   return (
     <SectionWrapper id="ai" guild={guild} guildPlan={guildPlan} requiredPlan="gold">
       <div className="card" style={{padding:20,marginBottom:14,borderColor:"rgba(0,200,255,.22)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:16}}>
           <div>
-            <div style={{fontSize:14,fontWeight:700,color:"var(--blue)",marginBottom:5}}>🤖 حد الرسائل اليومي</div>
+            <div style={{fontSize:14,fontWeight:700,color:"var(--blue)",marginBottom:5}}>🤖 حدود الذكاء الاصطناعي اليومية</div>
             <div style={{fontSize:13,color:"var(--muted)"}}>
-              خطة <span style={{color:plan.color,fontWeight:700}}>{plan.name}</span> ←
-              <span style={{color:"var(--blue)",fontWeight:700}}> {aiLimit} </span>رسالة/يوم
+              خطة <span style={{color:plan.color,fontWeight:700}}>{plan.name}</span>
             </div>
           </div>
           <div style={{textAlign:"center"}}>
-            <div style={{fontSize:30,fontWeight:900,color:"var(--blue)"}}>{aiLimit}</div>
-            <div style={{fontSize:10,color:"var(--muted)"}}>رسالة/يوم</div>
+            <div style={{fontSize:30,fontWeight:900,color:"var(--blue)"}}>{totalLimit}</div>
+            <div style={{fontSize:10,color:"var(--muted)"}}>المجموع/يوم</div>
           </div>
         </div>
-        <div style={{marginTop:12}}>
-          <div className="bar-track" style={{height:5}}>
-            <div className="bar-fill" style={{width:`${(aiLimit/700)*100}%`}}/>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:10}}>
+          <div style={{padding:12,borderRadius:8,background:"rgba(0,200,255,.08)",border:"1px solid rgba(0,200,255,.2)"}}>
+            <div style={{fontSize:11,color:"var(--muted)",marginBottom:4}}>💬 المنشن</div>
+            <div style={{fontSize:20,fontWeight:900,color:"var(--blue)"}}>{mentionLimit}</div>
+            <div style={{fontSize:9,color:"var(--muted)"}}>رسالة/يوم</div>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--muted)",marginTop:3}}>
-            <span>0</span><span>700 (ماسي)</span>
+          <div style={{padding:12,borderRadius:8,background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.2)"}}>
+            <div style={{fontSize:11,color:"var(--muted)",marginBottom:4}}>⚡ أمر /ذكاء</div>
+            <div style={{fontSize:20,fontWeight:900,color:"#fbbf24"}}>{commandLimit}</div>
+            <div style={{fontSize:9,color:"var(--muted)"}}>استخدام/يوم</div>
+          </div>
+          <div style={{padding:12,borderRadius:8,background:creativeLimit>0?"rgba(0,255,231,.08)":"rgba(100,116,139,.08)",border:`1px solid ${creativeLimit>0?"rgba(0,255,231,.2)":"rgba(100,116,139,.2)"}`}}>
+            <div style={{fontSize:11,color:"var(--muted)",marginBottom:4}}>🎨 الإبداعي (GPT-4o)</div>
+            <div style={{fontSize:20,fontWeight:900,color:creativeLimit>0?"#00ffe7":"#64748b"}}>
+              {creativeLimit > 0 ? creativeLimit : "🔒"}
+            </div>
+            <div style={{fontSize:9,color:"var(--muted)"}}>
+              {creativeLimit > 0 ? "رسالة/يوم" : "ماسي فقط"}
+            </div>
           </div>
         </div>
       </div>

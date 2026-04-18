@@ -84,17 +84,22 @@ class AIHandler {
     return `${userId}:${message}:${context}:${knowledge}`.slice(0, 500);
   }
 
-  async generateAIResponse(messages, cacheKey = null) {
+  async generateAIResponse(messages, cacheKey = null, options = {}) {
     try {
       if (cacheKey && this.responseCache.has(cacheKey)) {
         return this.responseCache.get(cacheKey);
       }
 
+      // اختيار الموديل حسب الطلب
+      const model = options.model === "creative" ? "gpt-4o" : "gpt-4o-mini";
+      const maxTokens = options.model === "creative" ? 1000 : 500;
+      const temperature = options.model === "creative" ? 0.95 : 0.85;
+
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model,
         messages,
-        temperature: 0.85,
-        max_tokens: this.maxModelTokens
+        temperature,
+        max_tokens: maxTokens
       });
 
       const content = response?.choices?.[0]?.message?.content || null;
@@ -278,7 +283,9 @@ ${contextBlock}
         { role: "user", content: cleanMessage }
       ];
 
-      let reply = await this.generateAIResponse(messages, null);
+      let reply = await this.generateAIResponse(messages, null, {
+        model: context.model || "smart"
+      });
 
       this.activeRequests.delete(requestKey);
 
