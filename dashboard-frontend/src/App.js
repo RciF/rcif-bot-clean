@@ -1070,6 +1070,134 @@ function AnalyticsSection({ guild, guildPlan, onNotif }) {
 
 function OverviewSection({ guild, guildPlan, settings, onSection }) {
   const plan = PLANS.find(p=>p.id===guildPlan)||PLANS[0]
+  const [unlinking, setUnlinking] = useState(false)
+  const [confirmUnlink, setConfirmUnlink] = useState(false)
+  const [notif, setNotif] = useState("")
+  const isLinked = guildPlan !== "free"
+
+  const handleUnlink = async () => {
+    setUnlinking(true)
+    try {
+      const r = await authFetch(`${API}/api/guild/${guild.id}/link`, { method: "DELETE" })
+      const d = await r.json()
+      if (d.success) {
+        setNotif("✅ تم فك ربط السيرفر بنجاح. أعد تحميل الصفحة.")
+        setConfirmUnlink(false)
+        setTimeout(() => window.location.reload(), 1500)
+      } else {
+        setNotif("❌ " + (d.error || "فشل فك الربط"))
+      }
+    } catch {
+      setNotif("❌ خطأ في الاتصال")
+    }
+    setUnlinking(false)
+  }
+
+  const quickBtns = [
+    {id:"moderation",icon:"🛡",label:"الإشراف",   color:"var(--green)"},
+    {id:"logs",      icon:"📋",label:"السجلات",   color:"var(--blue)"},
+    {id:"protection",icon:"🔒",label:"الحماية",   color:"var(--red)"},
+    {id:"welcome",   icon:"🤝",label:"الترحيب",   color:"var(--cyan)"},
+    {id:"tickets",   icon:"🎫",label:"التذاكر",   color:"var(--purple)"},
+    {id:"economy",   icon:"💰",label:"الاقتصاد",  color:"var(--gold)"},
+    {id:"xp",        icon:"⭐",label:"XP",         color:"var(--purple)"},
+    {id:"ai",        icon:"🤖",label:"الذكاء",    color:"var(--blue)"},
+  ]
+  return (
+    <div className="fade-in">
+      {notif && (
+        <div className="card" style={{padding:12,marginBottom:14,background:notif.startsWith("✅")?"rgba(34,197,94,.1)":"rgba(239,68,68,.1)",borderColor:notif.startsWith("✅")?"rgba(34,197,94,.3)":"rgba(239,68,68,.3)"}}>
+          <div style={{fontSize:13,fontWeight:600}}>{notif}</div>
+        </div>
+      )}
+
+      <div style={{marginBottom:22}}>
+        <div className="tag tag-blue" style={{marginBottom:9}}>لوحة التحكم</div>
+        <h1 style={{fontFamily:"'Tajawal',sans-serif",fontSize:24,fontWeight:900}}>{guild.name}</h1>
+        <p style={{color:"var(--muted)",fontSize:12,marginTop:4}}>
+          خطة <span style={{color:plan.color,fontWeight:700}}>{plan.icon} {plan.name}</span>
+          {plan.ai_limit>0 && <span style={{marginRight:10,color:"var(--blue)"}}>• AI: {plan.ai_limit} رسالة/يوم</span>}
+        </p>
+      </div>
+
+      {isLinked && (
+        <div className="card" style={{padding:16,marginBottom:22,borderColor:"rgba(239,68,68,.2)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>🔗 حالة الربط</div>
+              <div style={{fontSize:11,color:"var(--muted)"}}>هذا السيرفر مربوط باشتراكك الحالي</div>
+            </div>
+            {!confirmUnlink ? (
+              <button
+                onClick={()=>setConfirmUnlink(true)}
+                style={{padding:"8px 14px",background:"rgba(239,68,68,.1)",color:"var(--red)",border:"1px solid rgba(239,68,68,.3)",borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer"}}
+              >
+                🔓 فك الربط
+              </button>
+            ) : (
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{fontSize:11,color:"var(--muted)"}}>متأكد؟</span>
+                <button
+                  onClick={handleUnlink}
+                  disabled={unlinking}
+                  style={{padding:"7px 12px",background:"var(--red)",color:"#fff",border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:unlinking?"wait":"pointer",opacity:unlinking?.6:1}}
+                >
+                  {unlinking?"...جاري":"✓ نعم، فك"}
+                </button>
+                <button
+                  onClick={()=>setConfirmUnlink(false)}
+                  disabled={unlinking}
+                  style={{padding:"7px 12px",background:"transparent",color:"var(--muted)",border:"1px solid var(--border)",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer"}}
+                >
+                  إلغاء
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="stats-grid" style={{marginBottom:22}}>
+        {[
+          {label:"الأنظمة النشطة",    value:`${[settings?.ai,settings?.xp,settings?.economy].filter(Boolean).length}/3`, icon:"⚡",color:"var(--blue)"},
+          {label:"الذكاء الاصطناعي", value:settings?.ai?"مفعّل":"متوقف",  icon:"🤖",color:settings?.ai?"var(--green)":"var(--red)"},
+          {label:"نظام XP",           value:settings?.xp?"مفعّل":"متوقف",  icon:"⭐",color:settings?.xp?"var(--green)":"var(--red)"},
+          {label:"الاقتصاد",          value:settings?.economy?"مفعّل":"متوقف", icon:"💰",color:settings?.economy?"var(--green)":"var(--red)"},
+        ].map(s=>(
+          <div key={s.label} className="card">
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{fontSize:22,width:40,height:40,background:"rgba(88,101,242,.1)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.icon}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,color:"var(--muted)",marginBottom:2}}>{s.label}</div>
+                <div style={{fontSize:15,fontWeight:800,color:s.color}}>{s.value}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{padding:18}}>
+        <h3 style={{fontSize:15,fontWeight:800,marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+          <span>⚡</span> وصول سريع
+        </h3>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10}}>
+          {quickBtns.map(b=>(
+            <button
+              key={b.id}
+              onClick={()=>onSection(b.id)}
+              style={{padding:"14px 10px",background:"rgba(255,255,255,.02)",border:"1px solid var(--border)",borderRadius:10,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,color:"var(--text)",transition:"all .2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.05)";e.currentTarget.style.borderColor=b.color}}
+              onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.02)";e.currentTarget.style.borderColor="var(--border)"}}
+            >
+              <div style={{fontSize:22,color:b.color}}>{b.icon}</div>
+              <div style={{fontSize:11,fontWeight:700}}>{b.label}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
   const quickBtns = [
     {id:"moderation",icon:"🛡",label:"الإشراف",   color:"var(--green)"},
     {id:"logs",      icon:"📋",label:"السجلات",   color:"var(--blue)"},
