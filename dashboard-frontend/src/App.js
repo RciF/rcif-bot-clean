@@ -1199,6 +1199,7 @@ function OverviewSection({ guild, guildPlan, settings, onSection }) {
   )
 }
 
+function SubscriptionsSection({ userId, userSubscription, onNotif, onRefresh }) {
   const [step, setStep] = useState("plans")
   const [selectedPlan, setSelectedPlan] = useState(null)
   const [refNumber, setRefNumber] = useState("")
