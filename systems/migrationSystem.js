@@ -91,6 +91,51 @@ async function runMigrations() {
                 created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000
             );
         `)
+        
+// AI CONVERSATIONS
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS ai_conversations (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                guild_id TEXT NOT NULL DEFAULT 'dm',
+                channel_id TEXT NOT NULL DEFAULT 'dm',
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000
+            );
+        `)
+
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_ai_conv_lookup
+            ON ai_conversations (user_id, guild_id, channel_id, created_at DESC);
+        `)
+
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_ai_conv_cleanup
+            ON ai_conversations (created_at);
+        `)
+        // AI CONVERSATIONS
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS ai_conversations (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                guild_id TEXT NOT NULL DEFAULT 'dm',
+                channel_id TEXT NOT NULL DEFAULT 'dm',
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000
+            );
+        `)
+
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_ai_conv_lookup
+            ON ai_conversations (user_id, guild_id, channel_id, created_at DESC);
+        `)
+
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_ai_conv_cleanup
+            ON ai_conversations (created_at);
+        `)
 
         // ECONOMY USERS
         await databaseSystem.query(`

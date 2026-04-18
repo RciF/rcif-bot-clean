@@ -245,6 +245,9 @@ ${knowledgeContext}
       const cleanMessage = this.sanitize(message);
       if (!cleanMessage) return "رسالتك غير واضحة.";
 
+      const guildId = context.guild?.id || "dm";
+      const channelId = context.channel?.id || "dm";
+
       requestKey = `${userId}:${cleanMessage}`;
 
       if (this.activeRequests.has(requestKey)) {
@@ -255,7 +258,7 @@ ${knowledgeContext}
 
       const systemPrompt = await this.buildSystemPrompt(userId, cleanMessage, context);
 
-      let memory = memoryManager.getMemory(userId) || [];
+      let memory = await memoryManager.getMemory(userId, guildId, channelId) || [];
       memory = this.trimConversation(memory);
 
       const messages = [
@@ -264,9 +267,7 @@ ${knowledgeContext}
         { role: "user", content: cleanMessage }
       ];
 
-      const cacheKey = this.buildCacheKey(userId, cleanMessage, "", "");
-
-      let reply = await this.generateAIResponse(messages, cacheKey);
+      let reply = await this.generateAIResponse(messages, null);
 
       this.activeRequests.delete(requestKey);
 
@@ -277,8 +278,8 @@ ${knowledgeContext}
       reply = this.sanitize(reply);
       reply = aiResponseFormatterSystem.formatResponse(reply);
 
-      memoryManager.addMessage(userId, "user", cleanMessage);
-      memoryManager.addMessage(userId, "assistant", reply);
+      await memoryManager.addMessage(userId, "user", cleanMessage, guildId, channelId);
+      await memoryManager.addMessage(userId, "assistant", reply, guildId, channelId);
 
       try {
         await aiMemorySystem.storeMemory?.({
