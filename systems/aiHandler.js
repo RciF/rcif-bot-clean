@@ -120,8 +120,9 @@ class AIHandler {
       const user = context.user || {};
       const guild = context.guild || {};
       const channel = context.channel || {};
+      const messageObj = context.messageObj || null;
 
-      // ✅ FIX: الدالة الصحيحة هي analyze() وليس analyzeEmotion()
+      // 1) تحليل المشاعر
       let emotion = null;
       try {
         emotion = await aiEmotionSystem.analyze(message, { userId });
@@ -129,13 +130,16 @@ class AIHandler {
         logger.error("EMOTION_ANALYSIS_FAILED", { error: err.message });
       }
 
-      // 2) تحليل القرار
+      // 2) تحليل القرار والسلوك
       let decision = null;
       let trustLevel = "neutral";
+      let intent = "normal";
       try {
         if (aiDecisionSystem.analyzeMessage) {
-          const analysis = aiDecisionSystem.analyzeMessage(message);
-          decision = analysis;
+          decision = aiDecisionSystem.analyzeMessage(message);
+        }
+        if (aiDecisionSystem.detectIntent) {
+          intent = aiDecisionSystem.detectIntent(message) || "normal";
         }
         if (aiDecisionSystem.getTrustLevel) {
           const behavior = aiDecisionSystem.updateBehavior?.(userId, aiDecisionSystem.detectAggression?.(message));
@@ -170,58 +174,65 @@ class AIHandler {
         logger.error("PERSONALITY_BUILD_FAILED", { error: err.message });
       }
 
-      // 5) الذاكرة
-      let memoryContext = "";
+      // 5) الذاكرة طويلة المدى
+      let memories = [];
       try {
-        const memories = await aiMemorySystem.searchRelevantMemories?.(userId, message);
-        if (memories && memories.length > 0) {
-          memoryContext = `\n[ذكريات سابقة]\n${memories.slice(0, 5).join("\n")}\n`;
+        const rawMemories = await aiMemorySystem.searchRelevantMemories?.(userId, message);
+        if (Array.isArray(rawMemories)) {
+          memories = rawMemories;
         }
       } catch (err) {
         logger.error("MEMORY_FETCH_FAILED", { error: err.message });
       }
 
       // 6) المعرفة
-      let knowledgeContext = "";
+      let knowledge = [];
       try {
-        const knowledge = await aiKnowledgeSystem.searchKnowledge?.(message, userId);
-        if (knowledge && knowledge.length > 0) {
-          knowledgeContext = `\n[معرفة مكتسبة]\n${knowledge.slice(0, 3).map(k => k.content || k).join("\n")}\n`;
+        const rawKnowledge = await aiKnowledgeSystem.searchKnowledge?.(message, userId);
+        if (Array.isArray(rawKnowledge)) {
+          knowledge = rawKnowledge;
         }
       } catch (err) {
         logger.error("KNOWLEDGE_FETCH_FAILED", { error: err.message });
       }
 
       // 7) العلاقات الاجتماعية
-      let socialContext = "";
+      let socialScore = 0;
       try {
         const relation = await aiSocialAwarenessSystem.getOrLoadRelationship?.(userId, context.user?.id);
-        if (relation && relation.score !== 0) {
-          const level = relation.score > 10 ? "صديق" : relation.score > 0 ? "معرفة" : relation.score < -5 ? "متوتر" : "محايد";
-          socialContext = `\n[العلاقة مع المستخدم: ${level} (${relation.score})]\n`;
+        if (relation && relation.score) {
+          socialScore = relation.score;
         }
       } catch (err) {
-        // صامت — العلاقات اختيارية
+        // صامت
       }
 
-      // 8) سياق المشاعر
-      let emotionContext = "";
-      if (emotion && emotion.primary !== "neutral") {
-        emotionContext = `\n[مشاعر المستخدم: ${emotion.primary} | الشدة: ${emotion.intensity} | القطبية: ${emotion.polarity}]\n`;
+      // 8) بناء السياق الموحد عبر aiContextSystem
+      let contextBlock = "";
+      try {
+        contextBlock = aiContextSystem.buildContext({
+          user,
+          guild,
+          channel,
+          message,
+          messageObj,
+          intent,
+          memories,
+          knowledge,
+          emotion,
+          socialScore
+        }) || "";
+      } catch (err) {
+        logger.error("CONTEXT_BUILD_FAILED", { error: err.message });
       }
 
+      // 9) دمج كل شي في system prompt واحد
       const systemPrompt = `
 ${identityPrompt}
 
 ${personalityPrompt}
 
-${emotionContext}
-
-${socialContext}
-
-${memoryContext}
-
-${knowledgeContext}
+${contextBlock}
 
 [معلومات الجلسة]
 المستخدم: ${user.username || "مجهول"}
