@@ -76,7 +76,11 @@ Saud ينسخ ويلصق مباشرة. أي خطأ = مشاكل runtime.
 ## 6. ARCHITECTURAL LAYERS
 
 الطبقات:
+
+```
 Commands → Systems → Repositories → Database
+```
+
 **ممنوع:**
 - Commands تصل للـ Database مباشرة
 - Systems تكتب SQL مباشر
