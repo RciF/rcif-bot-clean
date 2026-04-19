@@ -11,6 +11,7 @@ const aiDecisionSystem = require("../systems/aiDecisionSystem");
 const aiEmotionSystem = require("../systems/aiEmotionSystem");
 const aiAutonomousSystem = require("../systems/aiAutonomousSystem");
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem");
+const aiServerAwarenessSystem = require("../systems/aiServerAwarenessSystem");
 
 const logger = require("../systems/loggerSystem");
 
@@ -84,35 +85,135 @@ class AIHandler {
     return `${userId}:${message}:${context}:${knowledge}`.slice(0, 500);
   }
 
-  async generateAIResponse(messages, cacheKey = null, options = {}) {
+  // ═══════════════════════════════════════════════════════
+  //  اختيار الموديل حسب النمط
+  // ═══════════════════════════════════════════════════════
+  chooseModel(mode) {
+    const map = {
+      fast: "gpt-4o-mini",
+      smart: "gpt-4o-mini",
+      creative: "gpt-4o",
+      mention: "gpt-4o-mini"
+    };
+    return map[mode] || "gpt-4o-mini";
+  }
+
+  chooseTemperature(mode) {
+    const map = {
+      fast: 0.7,
+      smart: 0.85,
+      creative: 1.0,
+      mention: 0.85
+    };
+    return map[mode] ?? 0.85;
+  }
+
+  async generateAIResponse(messages, options = {}) {
     try {
+      const {
+        cacheKey = null,
+        mode = "smart",
+        guild = null,
+        maxToolRounds = 3
+      } = options;
+
       if (cacheKey && this.responseCache.has(cacheKey)) {
         return this.responseCache.get(cacheKey);
       }
 
-      // اختيار الموديل حسب الطلب
-      const model = options.model === "creative" ? "gpt-4o" : "gpt-4o-mini";
-      const maxTokens = options.model === "creative" ? 1000 : 500;
-      const temperature = options.model === "creative" ? 0.95 : 0.85;
+      const model = this.chooseModel(mode);
+      const temperature = this.chooseTemperature(mode);
 
-      const response = await openai.chat.completions.create({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens
-      });
+      // الأدوات متاحة فقط لما يكون عندنا guild
+      const tools = guild
+        ? aiServerAwarenessSystem.getToolDefinitions(guild)
+        : null;
 
-      const content = response?.choices?.[0]?.message?.content || null;
+      let conversationMessages = [...messages];
+      let finalContent = null;
 
-      if (cacheKey && content) {
+      // ═══════════════════════════════════════════════
+      //  حلقة Tool Calling — أقصى 3 جولات
+      // ═══════════════════════════════════════════════
+      for (let round = 0; round < maxToolRounds; round++) {
+        const requestBody = {
+          model,
+          messages: conversationMessages,
+          temperature,
+          max_tokens: this.maxModelTokens
+        };
+
+        if (tools && tools.length > 0) {
+          requestBody.tools = tools;
+          requestBody.tool_choice = "auto";
+        }
+
+        const response = await openai.chat.completions.create(requestBody);
+        const choice = response?.choices?.[0];
+        const msg = choice?.message;
+
+        if (!msg) {
+          logger.error("AI_EMPTY_RESPONSE", { round });
+          return null;
+        }
+
+        // هل الموديل طلب أدوات؟
+        const toolCalls = msg.tool_calls;
+
+        if (toolCalls && toolCalls.length > 0 && guild) {
+          // أضف رسالة الموديل (اللي فيها tool_calls) للمحادثة
+          conversationMessages.push({
+            role: "assistant",
+            content: msg.content || null,
+            tool_calls: toolCalls
+          });
+
+          // نفّذ كل أداة
+          for (const toolCall of toolCalls) {
+            const toolName = toolCall.function?.name;
+            const toolArgs = toolCall.function?.arguments;
+
+            let toolResult;
+            try {
+              toolResult = await aiServerAwarenessSystem.executeTool(
+                toolName,
+                toolArgs,
+                guild,
+                options.user || null
+              );
+            } catch (err) {
+              logger.error("TOOL_CALL_FAILED", {
+                tool: toolName,
+                error: err.message
+              });
+              toolResult = { success: false, error: "فشل تنفيذ الأداة" };
+            }
+
+            conversationMessages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(toolResult)
+            });
+          }
+
+          // نرجع للحلقة عشان نخلي الموديل يستخدم نتائج الأدوات
+          continue;
+        }
+
+        // الموديل رد بدون أدوات → انتهينا
+        finalContent = msg.content || null;
+        break;
+      }
+
+      if (cacheKey && finalContent) {
         if (this.responseCache.size >= this.maxCacheSize) {
           const firstKey = this.responseCache.keys().next().value;
           this.responseCache.delete(firstKey);
         }
-        this.responseCache.set(cacheKey, content);
+        this.responseCache.set(cacheKey, finalContent);
       }
 
-      return content;
+      return finalContent;
 
     } catch (err) {
       logger.error("AI_OPENAI_REQUEST_FAILED", { error: err.message });
@@ -231,13 +332,54 @@ class AIHandler {
         logger.error("CONTEXT_BUILD_FAILED", { error: err.message });
       }
 
-      // 9) دمج كل شي في system prompt واحد
+   // 9) توجيهات الأدوات — إجبار صارم على الاستخدام
+      const toolsGuide = guild.id ? `
+[⚠️ قواعد صارمة — قراءة إلزامية]
+
+لديك أدوات حقيقية للوصول إلى معلومات هذا السيرفر. **لا تخمن أبداً**.
+
+الأدوات المتاحة:
+- find_channel(name) — للبحث عن قناة
+- find_role(name) — للبحث عن رتبة
+- get_server_stats() — لإحصائيات السيرفر
+- get_my_info() — لمعلومات المستخدم الحالي عن نفسه
+
+========================================
+🔴 متى يجب استخدام الأدوات (إجباري):
+========================================
+
+✅ "فين قناة X" / "وين قناة X" / "قناة X موجودة" → استدعِ find_channel
+✅ "رتبة X موجودة" / "وش رتبة X" → استدعِ find_role
+✅ "كم عضو" / "كم قناة" / "السيرفر كبير" → استدعِ get_server_stats
+✅ "متى انضميت" / "كم صار لي" / "وش رتبي" → استدعِ get_my_info
+
+========================================
+🔴 قواعد عرض النتائج:
+========================================
+
+عندما ترجع الأداة حقل "mention" يجب نسخه حرفياً في ردك:
+- قناة: الصيغة <#123456> (تظهر كلون أزرق في Discord)
+- رتبة: الصيغة <@&123456>
+
+مثال:
+المستخدم: "فين قناة عام؟"
+→ تستدعي find_channel("عام")
+→ ترجع: { mention: "<#111>" }
+→ ردك: "قناة <#111> هنا يا صاحبي"
+
+❌ ممنوع تقول "قناة عام موجودة" فقط — لازم <#id>
+❌ ممنوع تخمّن أن قناة/رتبة موجودة بدون استدعاء الأداة
+` : "";
+
+      // 10) دمج كل شي في system prompt واحد
       const systemPrompt = `
 ${identityPrompt}
 
 ${personalityPrompt}
 
 ${contextBlock}
+
+${toolsGuide}
 
 [معلومات الجلسة]
 المستخدم: ${user.username || "مجهول"}
@@ -283,9 +425,14 @@ ${contextBlock}
         { role: "user", content: cleanMessage }
       ];
 
-      let reply = await this.generateAIResponse(messages, null, {
-        model: context.model || "smart"
-      });
+    const cacheKey = this.buildCacheKey(userId, cleanMessage, "", "");
+
+   let reply = await this.generateAIResponse(messages, {
+      cacheKey,
+      mode: context.model || "smart",
+      guild: context.guild || null,
+      user: context.user || null
+    });
 
       this.activeRequests.delete(requestKey);
 

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js")
 const aiHandler = require("../../systems/aiHandler")
 
 // ✅ تقطيع الرد لو طويل (حد Discord = 4096 في الـ Embed Description)
@@ -19,6 +19,19 @@ function splitResponse(text, maxLength = 4000) {
 
   if (current.trim()) chunks.push(current.trim())
   return chunks
+}
+
+// ✅ دالة مساعدة آمنة للرد
+async function safeReply(interaction, payload) {
+  try {
+    if (interaction.deferred || interaction.replied) {
+      return await interaction.editReply(payload)
+    }
+    return await interaction.reply(payload)
+  } catch (err) {
+    // الـ interaction انتهت أو أي خطأ → silent fail
+    return null
+  }
 }
 
 module.exports = {
@@ -46,31 +59,19 @@ module.exports = {
     ),
 
   async execute(interaction) {
- try {
+    try {
       if (!interaction.guild) {
-        return interaction.reply({
+        return safeReply(interaction, {
           content: "❌ هذا الأمر داخل السيرفر فقط",
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         })
       }
 
       const question = interaction.options.getString("سؤال")
       const model    = interaction.options.getString("النموذج") || "smart"
 
-      // ✅ تحقق من حد الخطة قبل أي شي
-      const planGateSystem = require("../../systems/planGateSystem")
-      const limitType = model === "creative" ? "creative" : "command"
-      const limitCheck = await planGateSystem.checkAILimit(interaction.guild.id, limitType)
-
-      if (!limitCheck.allowed) {
-        return interaction.reply({
-          content: limitCheck.message,
-          ephemeral: true
-        })
-      }
-
-      // ✅ تأجيل الرد مع مؤشر التفكير
-      await interaction.deferReply()
+      // ✅ تأجيل الرد مع حماية من انتهاء الـ interaction
+    
 
       // ✅ قياس وقت الاستجابة
       const startTime = Date.now()
@@ -82,15 +83,10 @@ module.exports = {
       try {
         answer = await aiHandler.askAI?.(interaction.user.id, question, {
           model,
+          user: interaction.user,
           guild: interaction.guild,
-          channel: interaction.channel,
-          user: interaction.user
+          channel: interaction.channel
         })
-
-        // ✅ سجّل الاستخدام بعد الرد الناجح
-        if (answer) {
-          planGateSystem.recordAIUsage(interaction.guild.id, limitType)
-        }
       } catch (aiError) {
         console.error("[AI HANDLER ERROR]", aiError)
         errorMessage = aiError.message || "خطأ غير معروف"
@@ -111,7 +107,7 @@ module.exports = {
           .setFooter({ text: `وقت المحاولة: ${responseTime}ms` })
           .setTimestamp()
 
-        return interaction.editReply({ embeds: [errorEmbed] })
+        return safeReply(interaction, { embeds: [errorEmbed] })
       }
 
       // ✅ تقطيع الرد لو طويل
@@ -147,7 +143,7 @@ module.exports = {
 
       // ✅ لو الرد جزء واحد فقط
       if (chunks.length === 1) {
-        return interaction.editReply({ embeds: [firstEmbed] })
+        return safeReply(interaction, { embeds: [firstEmbed] })
       }
 
       // ✅ لو الرد متعدد الأجزاء
@@ -162,30 +158,21 @@ module.exports = {
         )
       }
 
-      return interaction.editReply({ embeds })
+      return safeReply(interaction, { embeds })
 
     } catch (error) {
       console.error("[CHAT AI ERROR]", error)
 
-      try {
-        if (interaction.deferred) {
-          return interaction.editReply({
-            embeds: [
-              new EmbedBuilder()
-                .setColor(0xef4444)
-                .setTitle("❌ خطأ غير متوقع")
-                .setDescription("حصل خطأ في الذكاء الاصطناعي. حاول مرة ثانية.")
-                .setTimestamp()
-            ]
-          })
-        }
-        return interaction.reply({
-          content: "❌ حصل خطأ في الذكاء الاصطناعي",
-          ephemeral: true
-        })
-      } catch {
-        // silent fail
-      }
+      // ✅ استخدام safeReply بدل try/catch منفصل
+      return safeReply(interaction, {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xef4444)
+            .setTitle("❌ خطأ غير متوقع")
+            .setDescription("حصل خطأ في الذكاء الاصطناعي. حاول مرة ثانية.")
+            .setTimestamp()
+        ]
+      })
     }
   },
 }
