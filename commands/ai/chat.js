@@ -1,5 +1,8 @@
+// commands/ai/chat.js
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js")
 const aiHandler = require("../../systems/aiHandler")
+const aiRateLimitSystem = require("../../systems/aiRateLimitSystem")
+const planGateSystem = require("../../systems/planGateSystem")
 
 // ✅ تقطيع الرد لو طويل (حد Discord = 4096 في الـ Embed Description)
 function splitResponse(text, maxLength = 4000) {
@@ -67,11 +70,51 @@ module.exports = {
         })
       }
 
+      const userId = interaction.user.id
       const question = interaction.options.getString("سؤال")
       const model    = interaction.options.getString("النموذج") || "smart"
 
+      // ✅ NEW: فحص Rate Limit للمستخدم (قبل أي شيء آخر)
+      const rateLimitCheck = aiRateLimitSystem.checkUserRateLimit(userId)
+
+      if (!rateLimitCheck.allowed) {
+        const rateLimitEmbed = new EmbedBuilder()
+          .setColor(0xf59e0b)
+          .setTitle("⏳ تجاوزت الحد المسموح")
+          .setDescription(rateLimitCheck.message)
+          .setFooter({ text: "هذا الحد لحماية الذكاء الاصطناعي من الضغط" })
+          .setTimestamp()
+
+        return safeReply(interaction, {
+          embeds: [rateLimitEmbed],
+          flags: MessageFlags.Ephemeral
+        })
+      }
+
+      // ✅ NEW: فحص حد السيرفر اليومي (حسب الخطة)
+      // نوع الاستخدام: creative يختلف عن العادي
+      const limitType = model === "creative" ? "creative" : "command"
+      const aiLimit = await planGateSystem.checkAILimit(interaction.guild.id, limitType)
+
+      if (!aiLimit.allowed) {
+        const limitEmbed = new EmbedBuilder()
+          .setColor(0xef4444)
+          .setTitle("🚫 وصلتوا الحد اليومي")
+          .setDescription(aiLimit.message)
+          .setTimestamp()
+
+        return safeReply(interaction, {
+          embeds: [limitEmbed],
+          flags: MessageFlags.Ephemeral
+        })
+      }
+
       // ✅ تأجيل الرد مع حماية من انتهاء الـ interaction
-    
+      try {
+        await interaction.deferReply()
+      } catch {
+        return
+      }
 
       // ✅ قياس وقت الاستجابة
       const startTime = Date.now()
@@ -109,6 +152,9 @@ module.exports = {
 
         return safeReply(interaction, { embeds: [errorEmbed] })
       }
+
+      // ✅ NEW: سجّل استخدام السيرفر بعد الرد الناجح
+      planGateSystem.recordAIUsage(interaction.guild.id, limitType)
 
       // ✅ تقطيع الرد لو طويل
       const chunks = splitResponse(answer)

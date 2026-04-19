@@ -1,3 +1,4 @@
+// systems/aiAutoReplySystem.js
 const aiHandler = require("./aiHandler")
 const aiRateLimitSystem = require("./aiRateLimitSystem")
 const aiTokenUsageSystem = require("./aiTokenUsageSystem")
@@ -149,10 +150,11 @@ module.exports = async (message) => {
 
     cooldowns.set(userId, now)
 
-   const allowed = aiRateLimitSystem.canUseAI(userId)
+    // ✅ UPDATED: استخدام checkUserRateLimit الجديد مع رسائل ذكية
+    const rateLimitCheck = aiRateLimitSystem.checkUserRateLimit(userId)
 
-    if (!allowed) {
-      return message.reply("⚠️ استخدمت الذكاء الاصطناعي كثيراً.")
+    if (!rateLimitCheck.allowed) {
+      return message.reply(rateLimitCheck.message)
     }
 
     // ✅ تحقق من حد السيرفر اليومي للمنشن
@@ -174,8 +176,8 @@ module.exports = async (message) => {
 
     const dedupeKey = `${userId}:${message.id}`
 
-if (recentReplies.has(dedupeKey)) return
-recentReplies.set(dedupeKey, now)
+    if (recentReplies.has(dedupeKey)) return
+    recentReplies.set(dedupeKey, now)
 
     const intent = aiBrainSystem.detectIntent(content)
 
@@ -214,6 +216,7 @@ recentReplies.set(dedupeKey, now)
     await new Promise(r => setTimeout(r, randomDelay()))
 
     await message.reply(safeReply)
+
     // ✅ سجّل استخدام المنشن بعد الرد الناجح
     if (message.guild) {
       planGateSystem.recordAIUsage(message.guild.id, "mention")
