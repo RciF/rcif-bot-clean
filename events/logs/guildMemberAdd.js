@@ -73,6 +73,22 @@ async function getWelcomeSettings(guildId) {
   }
 }
 
+// ══════════════════════════════════════
+//  جلب رتبة الدخول التلقائي
+// ══════════════════════════════════════
+async function getAutoJoinRole(guildId) {
+  try {
+    const result = await databaseSystem.queryOne(
+      "SELECT auto_join_role_id FROM guild_auto_roles WHERE guild_id = $1",
+      [guildId]
+    )
+    return result?.auto_join_role_id || null
+  } catch {
+    // الجدول ممكن ما يكون موجوداً بعد في سيرفرات قديمة
+    return null
+  }
+}
+
 module.exports = {
   name: "guildMemberAdd",
 
@@ -80,14 +96,57 @@ module.exports = {
     try {
       if (!member.guild) return
 
-      // 🛡️ Anti-Raid — يشتغل فوراً عند دخول عضو
+      // ══════════════════════════════════════
+      //  1. Auto Role — إعطاء رتبة جديد تلقائياً
+      // ══════════════════════════════════════
+      try {
+        const autoRoleId = await getAutoJoinRole(member.guild.id)
+
+        if (autoRoleId) {
+          const autoRole = member.guild.roles.cache.get(autoRoleId)
+
+          if (autoRole) {
+            const botMember = member.guild.members.me
+            const canGive = autoRole.position < botMember.roles.highest.position
+
+            if (canGive) {
+              await member.roles.add(autoRole, "Auto Role — عند الدخول")
+              logger.info("AUTO_ROLE_GIVEN", {
+                guild: member.guild.id,
+                user: member.id,
+                role: autoRoleId,
+                roleName: autoRole.name
+              })
+            } else {
+              logger.warn("AUTO_ROLE_SKIPPED_HIERARCHY", {
+                guild: member.guild.id,
+                role: autoRoleId,
+                roleName: autoRole.name
+              })
+            }
+          } else {
+            logger.warn("AUTO_ROLE_NOT_FOUND", {
+              guild: member.guild.id,
+              roleId: autoRoleId
+            })
+          }
+        }
+      } catch (err) {
+        logger.error("AUTO_ROLE_FAILED", { error: err.message })
+      }
+
+      // ══════════════════════════════════════
+      //  2. Anti-Raid
+      // ══════════════════════════════════════
       try {
         await protectionSystem.checkRaid(member)
       } catch (err) {
         logger.error("ANTIRAID_FAILED", { error: err.message })
       }
 
-      // 👋 نظام الترحيب
+      // ══════════════════════════════════════
+      //  3. نظام الترحيب
+      // ══════════════════════════════════════
       const settings = await getWelcomeSettings(member.guild.id)
       if (!settings || !settings.enabled) return
 

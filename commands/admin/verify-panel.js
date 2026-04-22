@@ -10,6 +10,7 @@ const {
 
 const commandGuardSystem = require("../../systems/commandGuardSystem")
 const logger = require("../../systems/loggerSystem")
+const databaseSystem = require("../../systems/databaseSystem")
 
 const COLORS = {
   blue:   0x3b82f6,
@@ -19,6 +20,51 @@ const COLORS = {
   purple: 0x8b5cf6,
   cyan:   0x06b6d4,
   gold:   0xfbbf24
+}
+
+// ══════════════════════════════════════
+//  إنشاء جدول Auto Role (لو مو موجود)
+// ══════════════════════════════════════
+async function ensureAutoRoleTable() {
+  try {
+    await databaseSystem.query(`
+      CREATE TABLE IF NOT EXISTS guild_auto_roles (
+        guild_id         TEXT PRIMARY KEY,
+        auto_join_role_id TEXT,
+        updated_at       TIMESTAMP DEFAULT NOW()
+      );
+    `)
+  } catch (err) {
+    logger.error("AUTO_ROLE_TABLE_CREATE_FAILED", { error: err.message })
+  }
+}
+
+// حفظ رتبة الدخول التلقائي
+async function saveAutoJoinRole(guildId, roleId) {
+  try {
+    await databaseSystem.query(`
+      INSERT INTO guild_auto_roles (guild_id, auto_join_role_id, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (guild_id)
+      DO UPDATE SET auto_join_role_id = $2, updated_at = NOW()
+    `, [guildId, roleId])
+  } catch (err) {
+    logger.error("AUTO_ROLE_SAVE_FAILED", { error: err.message })
+  }
+}
+
+// جلب رتبة الدخول التلقائي
+async function getAutoJoinRole(guildId) {
+  try {
+    const result = await databaseSystem.queryOne(
+      "SELECT auto_join_role_id FROM guild_auto_roles WHERE guild_id = $1",
+      [guildId]
+    )
+    return result?.auto_join_role_id || null
+  } catch (err) {
+    logger.error("AUTO_ROLE_FETCH_FAILED", { error: err.message })
+    return null
+  }
 }
 
 module.exports = {
@@ -37,13 +83,13 @@ module.exports = {
     .addRoleOption(option =>
       option
         .setName("رتبة_عضو")
-        .setDescription("الرتبة التي تُعطى بعد التحقق")
+        .setDescription("الرتبة التي تُعطى بعد الضغط على زر التحقق")
         .setRequired(true)
     )
     .addRoleOption(option =>
       option
         .setName("رتبة_جديد")
-        .setDescription("الرتبة التي تُسحب بعد التحقق (اختياري)")
+        .setDescription("الرتبة التي تُعطى تلقائياً عند الدخول + تُسحب بعد التحقق")
         .setRequired(false)
     )
     .addStringOption(option =>
@@ -96,6 +142,9 @@ module.exports = {
 
       await interaction.deferReply({ ephemeral: true })
 
+      // تأكد من وجود الجدول
+      await ensureAutoRoleTable()
+
       const channel    = interaction.options.getChannel("القناة")
       const memberRole = interaction.options.getRole("رتبة_عضو")
       const newRole    = interaction.options.getRole("رتبة_جديد")
@@ -112,7 +161,7 @@ module.exports = {
         })
       }
 
-      // تحقق إن رتبة البوت أعلى من الرتب المطلوبة
+      // تحقق إن رتبة البوت أعلى من الرتب
       const botMember = interaction.guild.members.me
       if (memberRole.position >= botMember.roles.highest.position) {
         return interaction.editReply({
@@ -124,6 +173,19 @@ module.exports = {
         return interaction.editReply({
           content: `❌ رتبة **${newRole.name}** أعلى من رتبة البوت — ارفع البوت أولاً`
         })
+      }
+
+      // ══ خزّن رتبة الدخول التلقائي (رتبة_جديد) ══
+      if (newRole) {
+        await saveAutoJoinRole(interaction.guild.id, newRole.id)
+        logger.info("AUTO_JOIN_ROLE_SET", {
+          guild: interaction.guild.id,
+          role: newRole.id,
+          roleName: newRole.name
+        })
+      } else {
+        // لو ما حدد رتبة_جديد، امسح الإعداد القديم
+        await saveAutoJoinRole(interaction.guild.id, null)
       }
 
       // بناء الـ embed
@@ -138,7 +200,6 @@ module.exports = {
         .setTimestamp()
 
       // بناء الزر
-      // customId يحمل: verify_panel:memberRoleId:newRoleId
       const customId = `verify_panel:${memberRole.id}:${newRole?.id || "none"}`
 
       const button = new ButtonBuilder()
@@ -162,15 +223,23 @@ module.exports = {
         .addFields(
           { name: "📢 القناة",       value: `${channel}`,           inline: true },
           { name: "🏷️ رتبة عضو",     value: `${memberRole}`,        inline: true },
-          { name: "🆔 الرسالة",      value: `\`${sentMsg.id}\``,    inline: true },
-          { name: "🔗 الرابط",       value: `[اضغط هنا](${sentMsg.url})` }
+          { name: "🆔 الرسالة",      value: `\`${sentMsg.id}\``,    inline: true }
         )
 
       if (newRole) {
-        confirmEmbed.addFields({ name: "🏷️ رتبة جديد (تُسحب)", value: `${newRole}`, inline: true })
+        confirmEmbed.addFields(
+          { name: "🏷️ رتبة جديد", value: `${newRole}`, inline: true },
+          { name: "🤖 الدخول التلقائي", value: "✅ أي عضو يدخل السيرفر سيحصل تلقائياً على رتبة **" + newRole.name + "**", inline: false }
+        )
+      } else {
+        confirmEmbed.addFields(
+          { name: "🤖 الدخول التلقائي", value: "❌ لم تحدد رتبة جديد — الأعضاء لن يحصلوا على رتبة تلقائية", inline: false }
+        )
       }
 
-      confirmEmbed.setTimestamp()
+      confirmEmbed
+        .addFields({ name: "🔗 الرابط", value: `[اضغط هنا](${sentMsg.url})` })
+        .setTimestamp()
 
       return interaction.editReply({ embeds: [confirmEmbed] })
 
@@ -186,12 +255,11 @@ module.exports = {
 }
 
 // ══════════════════════════════════════
-//  BUTTON HANDLER
+//  BUTTON HANDLER — زر التحقق
 // ══════════════════════════════════════
 
 module.exports.handleVerifyPanelButton = async function (interaction) {
   try {
-    // customId: verify_panel:memberRoleId:newRoleId
     const parts = interaction.customId.split(":")
     if (parts[0] !== "verify_panel") return false
 
@@ -209,7 +277,7 @@ module.exports.handleVerifyPanelButton = async function (interaction) {
       })
     }
 
-    // تحقق إن عنده الرتبة بالفعل
+    // العضو عنده الرتبة بالفعل؟
     if (member.roles.cache.has(memberRole.id)) {
       return interaction.reply({
         embeds: [
@@ -243,7 +311,6 @@ module.exports.handleVerifyPanelButton = async function (interaction) {
       }
     }
 
-    // رد ترحيب
     return interaction.reply({
       embeds: [
         new EmbedBuilder()
@@ -269,6 +336,12 @@ module.exports.handleVerifyPanelButton = async function (interaction) {
     return true
   }
 }
+
+// ══════════════════════════════════════
+//  AUTO ROLE HELPER — للاستخدام في guildMemberAdd
+// ══════════════════════════════════════
+
+module.exports.getAutoJoinRole = getAutoJoinRole
 
 // ══════════════════════════════════════
 //  HELPERS
