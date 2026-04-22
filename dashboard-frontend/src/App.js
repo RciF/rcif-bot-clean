@@ -1468,6 +1468,21 @@ function Home() {
           </div>
         ))}
       </div>
+      {/* Discord Widget */}
+      <div style={{marginTop:32,position:"relative",zIndex:2}}>
+        <div style={{fontSize:11,color:"var(--muted)",textAlign:"center",marginBottom:8,letterSpacing:2,textTransform:"uppercase"}}>
+          سيرفر الدعم
+        </div>
+        <iframe
+          src="https://discord.com/widget?id=1490775708291694684&theme=dark"
+          width="350"
+          height="500"
+          allowTransparency="true"
+          frameBorder="0"
+          sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+          style={{borderRadius:12,border:"1px solid var(--border)",display:"block"}}
+        />
+      </div>
     </div>
   )
 }
@@ -1593,6 +1608,7 @@ function BotNotInGuild({guild, inviteUrl}) {
     </div>
   )
 }
+
 
 // ══════════════════════════════════════
 //  DASHBOARD
