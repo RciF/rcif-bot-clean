@@ -1,7 +1,7 @@
 const analyticsTracker = require("../systems/analyticsTracker")
 const errorSystem      = require("../systems/errorSystem")
 const ticketSystem     = require("../systems/ticketSystem")
-const { handleButtonRoleInteraction } = require("../commands/roles/button-role")
+const { handleButtonRoleInteraction } = require("../commands/roles/button-role-handler")
 const { handleEventButton }           = require("../commands/events/event")
 const { handleVerifyPanelButton }     = require("../commands/admin/verify-panel")
 
