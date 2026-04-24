@@ -16,7 +16,7 @@ const eventAttendees = {
     .setName("فعالية-حضور")
     .setDescription("عرض قائمة المسجلين في فعالية")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
+    .setDefaultMemberPermissions(0n)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
@@ -100,7 +100,7 @@ const eventRemind = {
     .setName("فعالية-تذكير")
     .setDescription("إرسال تذكير لجميع المسجلين في فعالية")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
+    .setDefaultMemberPermissions(0n)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     )

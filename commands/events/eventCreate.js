@@ -21,6 +21,7 @@ module.exports = {
     .setName("فعالية-إنشاء")
     .setDescription("إنشاء فعالية جديدة في السيرفر")
     .setDMPermission(false)
+    .setDefaultMemberPermissions(0n)
     .addStringOption(o =>
       o.setName("العنوان").setDescription("عنوان الفعالية").setRequired(true).setMaxLength(100)
     )

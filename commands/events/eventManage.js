@@ -18,7 +18,7 @@ const eventCancel = {
     .setName("فعالية-إلغاء")
     .setDescription("إلغاء فعالية")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
+    .setDefaultMemberPermissions(0n)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     )
@@ -108,7 +108,7 @@ const eventStart = {
     .setName("فعالية-بدء")
     .setDescription("تفعيل الفعالية — جارية الآن")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
+    .setDefaultMemberPermissions(0n)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
@@ -198,7 +198,7 @@ const eventEnd = {
     .setName("فعالية-إنهاء")
     .setDescription("إنهاء فعالية جارية")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
+    .setDefaultMemberPermissions(0n)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
