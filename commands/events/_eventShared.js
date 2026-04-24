@@ -247,16 +247,24 @@ async function canManageEvents(interaction) {
 }
 
 // ══════════════════════════════════════
-//  LOG HELPER
+//  LOG HELPER — موحّد مع نظام اللوق الرئيسي
+//  يستخدم utils/logSender بدل system منفصل
 // ══════════════════════════════════════
+
+const { sendLog } = require("../../utils/logSender")
 
 async function logEvent(guild, action, event, user) {
   try {
-    const settings = await getEventSettings(guild.id)
-    if (!settings?.log_channel_id) return
+    // Mapping: action داخلي → eventType في نظام اللوق الموحّد
+    const eventTypeMap = {
+      created:   "event_create",
+      cancelled: "event_cancel",
+      started:   "event_start",
+      ended:     "event_end"
+    }
 
-    const channel = guild.channels.cache.get(settings.log_channel_id)
-    if (!channel) return
+    const eventType = eventTypeMap[action]
+    if (!eventType) return
 
     const color = {
       created:   0x22c55e,
@@ -272,17 +280,29 @@ async function logEvent(guild, action, event, user) {
       ended:     "🏁 انتهت فعالية"
     }[action] || action
 
-    await channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(color)
-          .setTitle(label)
-          .addFields(
-            { name: "📌 الفعالية", value: `${event.title} (#${event.id})`, inline: true },
-            { name: "👤 بواسطة",   value: `<@${user.id}>`,                 inline: true }
-          )
-          .setTimestamp()
-      ]
+    const emoji = EVENT_EMOJIS[event.category] || "🎉"
+    const categoryLabel = EVENT_LABELS[event.category] || "فعالية"
+
+    const fields = [
+      { name: "📌 الفعالية", value: `${emoji} **${event.title}** (#${event.id})`, inline: false },
+      { name: "🏷️ النوع",    value: categoryLabel,           inline: true },
+      { name: "👤 بواسطة",   value: `<@${user.id}>`,         inline: true }
+    ]
+
+    if (event.start_time) {
+      const ts = Math.floor(event.start_time / 1000)
+      fields.push({ name: "📅 الموعد", value: `<t:${ts}:f>`, inline: true })
+    }
+
+    if (event.location) {
+      fields.push({ name: "📍 المكان", value: event.location, inline: true })
+    }
+
+    await sendLog(guild.client, guild.id, eventType, {
+      title: label,
+      color,
+      fields,
+      footer: `معرف الفعالية: ${event.id}`
     })
   } catch {}
 }

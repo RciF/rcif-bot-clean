@@ -315,6 +315,7 @@ await databaseSystem.query(`
             "guild_update_channel",
             "emoji_channel",
             "invite_channel",
+            "event_channel",
         ]
 
         for (const col of newLogColumns) {

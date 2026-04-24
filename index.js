@@ -68,6 +68,18 @@ try {
     const files = fs.readdirSync(folderPath).filter(f => f.endsWith(".js"))
     for (const file of files) {
       const command = require(path.join(folderPath, file))
+
+      // ✅ دعم الملفات التي تصدّر commands[] — يسجّل كل أمر
+      if (Array.isArray(command?.commands)) {
+        for (const cmd of command.commands) {
+          if (cmd?.toJSON) {
+            commands.push(cmd.toJSON())
+          }
+        }
+        continue
+      }
+
+      // الحالة العادية — أمر واحد عبر data
       if (command?.data?.toJSON) {
         commands.push(command.data.toJSON())
       }
