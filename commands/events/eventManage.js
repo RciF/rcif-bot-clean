@@ -40,7 +40,7 @@ const eventCancel = {
 
       await ensureTables()
 
-      const allowed = await canManageEvents(interaction)
+      const allowed = canManageEvents(interaction)
       if (!allowed) {
         return interaction.reply({ content: "❌ ما عندك صلاحية إلغاء الفعاليات.", ephemeral: true })
       }
@@ -133,7 +133,7 @@ const eventStart = {
 
       await ensureTables()
 
-      const allowed = await canManageEvents(interaction)
+      const allowed = canManageEvents(interaction)
       if (!allowed) {
         return interaction.reply({ content: "❌ ما عندك صلاحية تفعيل الفعاليات.", ephemeral: true })
       }
@@ -228,7 +228,7 @@ const eventEnd = {
 
       await ensureTables()
 
-      const allowed = await canManageEvents(interaction)
+      const allowed = canManageEvents(interaction)
       if (!allowed) {
         return interaction.reply({ content: "❌ ما عندك صلاحية إنهاء الفعاليات.", ephemeral: true })
       }

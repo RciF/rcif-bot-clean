@@ -96,7 +96,7 @@ module.exports = {
 
       await ensureTables()
 
-      const allowed = await canManageEvents(interaction)
+      const allowed = canManageEvents(interaction)
       if (!allowed) {
         return interaction.reply({
           embeds: [

@@ -82,15 +82,6 @@ async function ensureTables() {
   `)
 
   await databaseSystem.query(`
-    CREATE TABLE IF NOT EXISTS event_settings (
-      guild_id        TEXT PRIMARY KEY,
-      manager_role_id TEXT,
-      log_channel_id  TEXT,
-      updated_at      TIMESTAMP DEFAULT NOW()
-    );
-  `)
-
-  await databaseSystem.query(`
     CREATE INDEX IF NOT EXISTS idx_guild_events_guild
     ON guild_events (guild_id, status);
   `)
@@ -102,160 +93,24 @@ async function ensureTables() {
 }
 
 // ══════════════════════════════════════
-//  DATABASE — SETTINGS
+//  PERMISSIONS
+//  يعتمد فقط على صلاحية Manage Server من Discord
+//  (الأدمن يملك كل الصلاحيات تلقائياً)
 // ══════════════════════════════════════
 
-async function getEventSettings(guildId) {
-  return await databaseSystem.queryOne(
-    "SELECT * FROM event_settings WHERE guild_id = $1",
-    [guildId]
-  )
-}
-
-async function setManagerRole(guildId, roleId) {
-  await databaseSystem.query(`
-    INSERT INTO event_settings (guild_id, manager_role_id)
-    VALUES ($1, $2)
-    ON CONFLICT (guild_id)
-    DO UPDATE SET manager_role_id = $2, updated_at = NOW()
-  `, [guildId, roleId])
-}
-
-async function setLogChannel(guildId, channelId) {
-  await databaseSystem.query(`
-    INSERT INTO event_settings (guild_id, log_channel_id)
-    VALUES ($1, $2)
-    ON CONFLICT (guild_id)
-    DO UPDATE SET log_channel_id = $2, updated_at = NOW()
-  `, [guildId, channelId])
-}
-
-// ══════════════════════════════════════
-//  DATABASE — EVENTS
-// ══════════════════════════════════════
-
-async function createEvent(data) {
-  return await databaseSystem.queryOne(`
-    INSERT INTO guild_events
-    (guild_id, channel_id, creator_id, title, description, category,
-     start_time, end_time, max_attendees, image_url, location, ping_role_id)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-    RETURNING *
-  `, [
-    data.guild_id, data.channel_id, data.creator_id, data.title,
-    data.description || null, data.category || "other",
-    data.start_time, data.end_time || null, data.max_attendees || null,
-    data.image_url || null, data.location || null, data.ping_role_id || null
-  ])
-}
-
-async function getEvent(eventId) {
-  return await databaseSystem.queryOne(
-    "SELECT * FROM guild_events WHERE id = $1",
-    [eventId]
-  )
-}
-
-async function updateEventMessage(eventId, messageId) {
-  await databaseSystem.query(
-    "UPDATE guild_events SET message_id = $1 WHERE id = $2",
-    [messageId, eventId]
-  )
-}
-
-async function updateEventStatus(eventId, status) {
-  await databaseSystem.query(
-    "UPDATE guild_events SET status = $1 WHERE id = $2",
-    [status, eventId]
-  )
-}
-
-async function getGuildEvents(guildId, status = "upcoming", limit = 10) {
-  const result = await databaseSystem.query(`
-    SELECT e.*,
-      COUNT(a.id) FILTER (WHERE a.status = 'going') as going_count,
-      COUNT(a.id) FILTER (WHERE a.status = 'maybe') as maybe_count
-    FROM guild_events e
-    LEFT JOIN event_attendees a ON a.event_id = e.id
-    WHERE e.guild_id = $1 AND e.status = $2
-    GROUP BY e.id
-    ORDER BY e.start_time ASC
-    LIMIT $3
-  `, [guildId, status, limit])
-  return result.rows || []
-}
-
-async function getEventStats(eventId) {
-  return await databaseSystem.queryOne(`
-    SELECT
-      COUNT(*) FILTER (WHERE status = 'going') as going_count,
-      COUNT(*) FILTER (WHERE status = 'maybe') as maybe_count,
-      COUNT(*) as total
-    FROM event_attendees
-    WHERE event_id = $1
-  `, [eventId])
-}
-
-// ══════════════════════════════════════
-//  DATABASE — ATTENDEES
-// ══════════════════════════════════════
-
-async function getAttendees(eventId) {
-  const result = await databaseSystem.query(`
-    SELECT * FROM event_attendees
-    WHERE event_id = $1
-    ORDER BY joined_at ASC
-  `, [eventId])
-  return result.rows || []
-}
-
-async function getUserStatus(eventId, userId) {
-  return await databaseSystem.queryOne(
-    "SELECT * FROM event_attendees WHERE event_id = $1 AND user_id = $2",
-    [eventId, userId]
-  )
-}
-
-async function setAttendeeStatus(eventId, userId, status) {
-  await databaseSystem.query(`
-    INSERT INTO event_attendees (event_id, user_id, status)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (event_id, user_id)
-    DO UPDATE SET status = $3, joined_at = NOW()
-  `, [eventId, userId, status])
-}
-
-async function removeAttendee(eventId, userId) {
-  await databaseSystem.query(
-    "DELETE FROM event_attendees WHERE event_id = $1 AND user_id = $2",
-    [eventId, userId]
-  )
-}
-
-// ══════════════════════════════════════
-//  PERMISSION HELPER
-// ══════════════════════════════════════
-
-async function canManageEvents(interaction) {
-  const isAdmin = interaction.member?.permissions?.has?.("Administrator") || false
-  if (isAdmin) return true
-
-  const settings = await getEventSettings(interaction.guild.id)
-  if (!settings?.manager_role_id) return false
-
-  return interaction.member?.roles?.cache?.has(settings.manager_role_id) || false
+function canManageEvents(interaction) {
+  return interaction.member?.permissions?.has("ManageGuild") || false
 }
 
 // ══════════════════════════════════════
 //  LOG HELPER — موحّد مع نظام اللوق الرئيسي
-//  يستخدم utils/logSender بدل system منفصل
+//  يستخدم utils/logSender
 // ══════════════════════════════════════
 
 const { sendLog } = require("../../utils/logSender")
 
 async function logEvent(guild, action, event, user) {
   try {
-    // Mapping: action داخلي → eventType في نظام اللوق الموحّد
     const eventTypeMap = {
       created:   "event_create",
       cancelled: "event_cancel",
@@ -308,6 +163,125 @@ async function logEvent(guild, action, event, user) {
 }
 
 // ══════════════════════════════════════
+//  DATABASE — EVENTS
+// ══════════════════════════════════════
+
+async function createEvent(data) {
+  const result = await databaseSystem.query(`
+    INSERT INTO guild_events
+      (guild_id, channel_id, creator_id, title, description, category,
+       start_time, end_time, max_attendees, image_url, location, ping_role_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    RETURNING *
+  `, [
+    data.guild_id,
+    data.channel_id,
+    data.creator_id,
+    data.title,
+    data.description || null,
+    data.category || "other",
+    data.start_time,
+    data.end_time || null,
+    data.max_attendees || null,
+    data.image_url || null,
+    data.location || null,
+    data.ping_role_id || null
+  ])
+
+  return result.rows[0]
+}
+
+async function getEvent(eventId) {
+  return await databaseSystem.queryOne(
+    "SELECT * FROM guild_events WHERE id = $1",
+    [eventId]
+  )
+}
+
+async function updateEventMessage(eventId, messageId) {
+  await databaseSystem.query(
+    "UPDATE guild_events SET message_id = $1 WHERE id = $2",
+    [messageId, eventId]
+  )
+}
+
+async function updateEventStatus(eventId, status) {
+  await databaseSystem.query(
+    "UPDATE guild_events SET status = $1 WHERE id = $2",
+    [status, eventId]
+  )
+}
+
+async function getGuildEvents(guildId, status = null, limit = 25) {
+  if (status) {
+    const result = await databaseSystem.query(`
+      SELECT e.*,
+             COALESCE((SELECT COUNT(*) FROM event_attendees a
+                       WHERE a.event_id = e.id AND a.status = 'going'), 0) AS going_count
+      FROM guild_events e
+      WHERE e.guild_id = $1 AND e.status = $2
+      ORDER BY e.start_time ASC
+      LIMIT $3
+    `, [guildId, status, limit])
+    return result.rows
+  }
+
+  const result = await databaseSystem.query(`
+    SELECT e.*,
+           COALESCE((SELECT COUNT(*) FROM event_attendees a
+                     WHERE a.event_id = e.id AND a.status = 'going'), 0) AS going_count
+    FROM guild_events e
+    WHERE e.guild_id = $1
+    ORDER BY e.start_time ASC
+    LIMIT $2
+  `, [guildId, limit])
+  return result.rows
+}
+
+async function getEventStats(eventId) {
+  return await databaseSystem.queryOne(`
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'going') AS going_count,
+      COUNT(*) FILTER (WHERE status = 'maybe') AS maybe_count,
+      COUNT(*) FILTER (WHERE status = 'notgoing') AS notgoing_count
+    FROM event_attendees
+    WHERE event_id = $1
+  `, [eventId])
+}
+
+async function getAttendees(eventId) {
+  const result = await databaseSystem.query(
+    "SELECT * FROM event_attendees WHERE event_id = $1 ORDER BY joined_at ASC",
+    [eventId]
+  )
+  return result.rows
+}
+
+async function getUserStatus(eventId, userId) {
+  const row = await databaseSystem.queryOne(
+    "SELECT status FROM event_attendees WHERE event_id = $1 AND user_id = $2",
+    [eventId, userId]
+  )
+  return row?.status || null
+}
+
+async function setAttendeeStatus(eventId, userId, status) {
+  await databaseSystem.query(`
+    INSERT INTO event_attendees (event_id, user_id, status)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (event_id, user_id)
+    DO UPDATE SET status = $3, joined_at = NOW()
+  `, [eventId, userId, status])
+}
+
+async function removeAttendee(eventId, userId) {
+  await databaseSystem.query(
+    "DELETE FROM event_attendees WHERE event_id = $1 AND user_id = $2",
+    [eventId, userId]
+  )
+}
+
+// ══════════════════════════════════════
 //  TIME HELPERS
 // ══════════════════════════════════════
 
@@ -337,96 +311,94 @@ function parseDateTime(input) {
   if (timeMatch) {
     hour   = parseInt(timeMatch[1])
     minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0
-    const period = timeMatch[3] || ""
 
-    if (period.includes("م") || period.toLowerCase().includes("pm")) {
-      if (hour !== 12) hour += 12
-    } else if (period.includes("ص") || period.toLowerCase().includes("am")) {
+    const ampm = timeMatch[3]?.toLowerCase() || ""
+    if (ampm.includes("م") || ampm.includes("pm")) {
+      if (hour < 12) hour += 12
+    } else if (ampm.includes("ص") || ampm.includes("am")) {
       if (hour === 12) hour = 0
     }
   }
 
-  if (hour === null) return null
+  const target = new Date(now)
 
-  let targetDate = new Date(now)
-
-  if (text.includes("غداً") || text.includes("غدا") || text.includes("tomorrow")) {
-    targetDate.setDate(targetDate.getDate() + 1)
+  if (text.includes("غد") || text.includes("tomorrow")) {
+    target.setDate(target.getDate() + 1)
   } else if (text.includes("اليوم") || text.includes("today")) {
-    // اليوم
+    // same day
   } else {
-    const days = {
-      "الأحد": 0, "الاثنين": 1, "الثلاثاء": 2, "الأربعاء": 3,
-      "الخميس": 4, "الجمعة": 5, "السبت": 6,
-      "sunday": 0, "monday": 1, "tuesday": 2, "wednesday": 3,
-      "thursday": 4, "friday": 5, "saturday": 6
+    const daysAr = {
+      "الأحد": 0, "الاحد": 0, "sunday": 0,
+      "الاثنين": 1, "الإثنين": 1, "monday": 1,
+      "الثلاثاء": 2, "tuesday": 2,
+      "الأربعاء": 3, "الاربعاء": 3, "wednesday": 3,
+      "الخميس": 4, "thursday": 4,
+      "الجمعة": 5, "friday": 5,
+      "السبت": 6, "saturday": 6
     }
 
-    let found = false
-    for (const [dayName, dayNum] of Object.entries(days)) {
-      if (text.includes(dayName)) {
-        const currentDay = now.getDay()
-        let diff = dayNum - currentDay
+    for (const [key, value] of Object.entries(daysAr)) {
+      if (text.includes(key)) {
+        const currentDay = target.getDay()
+        let diff = value - currentDay
         if (diff <= 0) diff += 7
-        targetDate.setDate(targetDate.getDate() + diff)
-        found = true
+        target.setDate(target.getDate() + diff)
         break
       }
     }
-
-    if (!found) targetDate.setDate(targetDate.getDate() + 1)
   }
 
-  targetDate.setHours(hour, minute, 0, 0)
+  if (hour !== null) {
+    target.setHours(hour, minute, 0, 0)
+  }
 
-  if (targetDate.getTime() <= now.getTime()) return null
+  if (target.getTime() <= now.getTime()) return null
 
-  return targetDate.getTime()
+  return target.getTime()
 }
 
 // ══════════════════════════════════════
-//  EMBED + BUTTONS BUILDERS
+//  EMBED & BUTTONS BUILDERS
 // ══════════════════════════════════════
 
 async function buildEventEmbed(event, guild, goingCount = 0, maybeCount = 0) {
+  const color = EVENT_COLORS[event.category] || 0x5865f2
   const emoji = EVENT_EMOJIS[event.category] || "🎉"
-  const color = EVENT_COLORS[event.category] || 0x8b5cf6
   const label = EVENT_LABELS[event.category] || "فعالية"
+
+  const creator = await guild.members.fetch(event.creator_id).catch(() => null)
+  const creatorName = creator?.displayName || "غير معروف"
 
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`${emoji} ${event.title}`)
     .setTimestamp()
 
-  if (event.description) embed.setDescription(event.description)
+  if (event.description) {
+    embed.setDescription(event.description)
+  }
 
-  const fields = []
-
-  fields.push({ name: "📅 موعد البداية", value: formatTime(event.start_time), inline: false })
+  const fields = [
+    { name: "🏷️ النوع",        value: label,                            inline: true },
+    { name: "📊 الحالة",       value: EVENT_STATUS[event.status] || event.status, inline: true },
+    { name: "👤 المنظّم",       value: `<@${event.creator_id}>`,          inline: true },
+    { name: "📅 الموعد",       value: formatTime(event.start_time),     inline: false }
+  ]
 
   if (event.end_time) {
-    fields.push({ name: "🏁 موعد الانتهاء", value: formatTimeShort(event.end_time), inline: true })
+    fields.push({ name: "🏁 الانتهاء", value: formatTime(event.end_time), inline: false })
   }
 
   if (event.location) {
     fields.push({ name: "📍 المكان", value: event.location, inline: true })
   }
 
-  fields.push({ name: "🏷️ النوع", value: `${emoji} ${label}`, inline: true })
+  const maxText = event.max_attendees ? `/${event.max_attendees}` : ""
+  fields.push({ name: "👥 حاضر",  value: `${goingCount}${maxText}`, inline: true })
+  fields.push({ name: "🤔 ربما",   value: `${maybeCount}`,           inline: true })
 
-  let attendanceText = `✅ حاضر: **${goingCount}**`
-  if (event.max_attendees) attendanceText += `/${event.max_attendees}`
-  attendanceText += `  |  🤔 ربما: **${maybeCount}**`
-
-  if (event.max_attendees) {
-    const remaining = event.max_attendees - goingCount
-    attendanceText += `\n📊 المتبقي: **${Math.max(0, remaining)}** مكان`
-  }
-
-  fields.push({ name: "👥 الحضور", value: attendanceText, inline: false })
-
-  if (event.status === "live") {
-    embed.setFooter({ text: "🔴 الفعالية جارية الآن! — اضغط للتسجيل" })
+  if (event.status === "upcoming") {
+    embed.setFooter({ text: `🆔 ${event.id} — اضغط للتسجيل` })
   } else if (event.status === "ended") {
     embed.setFooter({ text: "✅ انتهت الفعالية — شكراً للمشاركين" })
   } else if (event.status === "cancelled") {
@@ -481,9 +453,6 @@ module.exports = {
   EVENT_LABELS,
   EVENT_STATUS,
   ensureTables,
-  getEventSettings,
-  setManagerRole,
-  setLogChannel,
   canManageEvents,
   logEvent,
   createEvent,

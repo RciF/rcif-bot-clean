@@ -35,7 +35,7 @@ const eventAttendees = {
 
       await ensureTables()
 
-      const allowed = await canManageEvents(interaction)
+      const allowed = canManageEvents(interaction)
       if (!allowed) {
         return interaction.reply({ content: "❌ ما عندك صلاحية عرض قائمة الحضور.", ephemeral: true })
       }
@@ -148,7 +148,7 @@ const eventRemind = {
 
       await ensureTables()
 
-      const allowed = await canManageEvents(interaction)
+      const allowed = canManageEvents(interaction)
       if (!allowed) {
         return interaction.reply({ content: "❌ ما عندك صلاحية إرسال التذكير.", ephemeral: true })
       }
