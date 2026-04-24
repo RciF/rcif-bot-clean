@@ -1,12 +1,18 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js")
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  PermissionFlagsBits
+} = require("discord.js")
 const {
   ensureTables,
   canManageEvents,
   getEvent,
   getAttendees,
+  getEventStats,
   updateEventStatus,
   buildEventEmbed,
-  buildEventButtons
+  buildEventButtons,
+  logEvent
 } = require("./_eventShared")
 
 // ══════════════════════════════════════
@@ -16,14 +22,14 @@ const {
 const eventCancel = {
   data: new SlashCommandBuilder()
     .setName("فعالية-إلغاء")
-    .setDescription("إلغاء فعالية")
+    .setDescription("إلغاء فعالية قادمة أو جارية")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(0n)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     )
     .addStringOption(o =>
-      o.setName("السبب").setDescription("سبب الإلغاء").setRequired(false)
+      o.setName("السبب").setDescription("سبب الإلغاء").setRequired(false).setMaxLength(200)
     ),
 
   async execute(interaction) {
@@ -46,7 +52,7 @@ const eventCancel = {
 
       const event = await getEvent(eventId)
       if (!event || event.guild_id !== interaction.guild.id) {
-        return interaction.editReply({ content: "❌ فعالية غير موجودة." })
+        return interaction.editReply({ content: `❌ ما فيه فعالية برقم #${eventId}.` })
       }
 
       if (event.status === "ended" || event.status === "cancelled") {
@@ -55,6 +61,7 @@ const eventCancel = {
 
       await updateEventStatus(eventId, "cancelled")
 
+      // ── تحديث رسالة الفعالية ──
       if (event.message_id && event.channel_id) {
         try {
           const channel = interaction.guild.channels.cache.get(event.channel_id)
@@ -67,7 +74,10 @@ const eventCancel = {
                     .setColor(0x64748b)
                     .setTitle(`❌ ${event.title} — ملغية`)
                     .setDescription(`**السبب:** ${reason}`)
-                    .addFields({ name: "✏️ ألغاها", value: `${interaction.user}`, inline: true })
+                    .addFields(
+                      { name: "✏️ ألغاها",   value: `${interaction.user}`, inline: true },
+                      { name: "🆔 الفعالية", value: `#${event.id}`,        inline: true }
+                    )
                     .setTimestamp()
                 ],
                 components: []
@@ -77,14 +87,16 @@ const eventCancel = {
         } catch {}
       }
 
+      await logEvent(interaction.guild, "cancelled", event, interaction.user)
+
       return interaction.editReply({
         embeds: [
           new EmbedBuilder()
             .setColor(0x64748b)
             .setTitle("✅ تم إلغاء الفعالية")
             .addFields(
-              { name: "🎉 الفعالية", value: event.title, inline: true },
-              { name: "📝 السبب",    value: reason,       inline: true }
+              { name: "🎉 الفعالية", value: `${event.title} (#${event.id})`, inline: true },
+              { name: "📝 السبب",    value: reason,                           inline: true }
             )
             .setTimestamp()
         ]
@@ -106,9 +118,9 @@ const eventCancel = {
 const eventStart = {
   data: new SlashCommandBuilder()
     .setName("فعالية-بدء")
-    .setDescription("تفعيل الفعالية — جارية الآن")
+    .setDescription("تفعيل الفعالية — تصبح جارية الآن")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(0n)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
@@ -131,24 +143,25 @@ const eventStart = {
 
       const event = await getEvent(eventId)
       if (!event || event.guild_id !== interaction.guild.id) {
-        return interaction.editReply({ content: "❌ فعالية غير موجودة." })
+        return interaction.editReply({ content: `❌ ما فيه فعالية برقم #${eventId}.` })
       }
 
       if (event.status !== "upcoming") {
-        return interaction.editReply({ content: "❌ الفعالية ليست في حالة قادمة." })
+        return interaction.editReply({ content: `❌ الفعالية حالتها الحالية: **${event.status}** — لا يمكن تفعيلها.` })
       }
 
       await updateEventStatus(eventId, "live")
 
+      // ── تحديث رسالة الفعالية وتنبيه المسجلين ──
       if (event.message_id && event.channel_id) {
         try {
           const channel = interaction.guild.channels.cache.get(event.channel_id)
           if (channel) {
             const msg = await channel.messages.fetch(event.message_id).catch(() => null)
             if (msg) {
-              const attendees  = await getAttendees(eventId)
-              const goingCount = attendees.filter(a => a.status === "going").length
-              const maybeCount = attendees.filter(a => a.status === "maybe").length
+              const stats      = await getEventStats(eventId)
+              const goingCount = parseInt(stats?.going_count || 0)
+              const maybeCount = parseInt(stats?.maybe_count || 0)
               const liveEvent  = { ...event, status: "live" }
 
               await msg.edit({
@@ -156,12 +169,14 @@ const eventStart = {
                 components: [buildEventButtons(eventId, "live")]
               })
 
-              const going    = attendees.filter(a => a.status === "going")
-              const mentions = going.slice(0, 10).map(a => `<@${a.user_id}>`).join(" ")
+              // تنبيه المسجلين
+              const attendees = await getAttendees(eventId)
+              const going     = attendees.filter(a => a.status === "going")
+              const mentions  = going.slice(0, 10).map(a => `<@${a.user_id}>`).join(" ")
 
               if (mentions) {
                 await channel.send({
-                  content: `🔴 **الفعالية بدأت الآن!**\n${mentions}${going.length > 10 ? ` و${going.length - 10} آخرين` : ""}`,
+                  content: `🔴 **الفعالية بدأت الآن!** ${mentions}${going.length > 10 ? ` و**${going.length - 10}** آخرين` : ""}`,
                   allowedMentions: { users: going.slice(0, 10).map(a => a.user_id) }
                 })
               }
@@ -170,12 +185,14 @@ const eventStart = {
         } catch {}
       }
 
+      await logEvent(interaction.guild, "started", event, interaction.user)
+
       return interaction.editReply({
         embeds: [
           new EmbedBuilder()
             .setColor(0xef4444)
             .setTitle("🔴 الفعالية بدأت!")
-            .setDescription(`تم تفعيل **${event.title}** — الفعالية جارية الآن`)
+            .setDescription(`**${event.title}** (#${event.id}) — جارية الآن`)
             .setTimestamp()
         ]
       })
@@ -196,9 +213,9 @@ const eventStart = {
 const eventEnd = {
   data: new SlashCommandBuilder()
     .setName("فعالية-إنهاء")
-    .setDescription("إنهاء فعالية جارية")
+    .setDescription("إنهاء فعالية جارية أو قادمة")
     .setDMPermission(false)
-    .setDefaultMemberPermissions(0n)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
@@ -221,7 +238,11 @@ const eventEnd = {
 
       const event = await getEvent(eventId)
       if (!event || event.guild_id !== interaction.guild.id) {
-        return interaction.editReply({ content: "❌ فعالية غير موجودة." })
+        return interaction.editReply({ content: `❌ ما فيه فعالية برقم #${eventId}.` })
+      }
+
+      if (event.status === "ended" || event.status === "cancelled") {
+        return interaction.editReply({ content: "❌ الفعالية منتهية أو ملغية بالفعل." })
       }
 
       await updateEventStatus(eventId, "ended")
@@ -232,9 +253,9 @@ const eventEnd = {
           if (channel) {
             const msg = await channel.messages.fetch(event.message_id).catch(() => null)
             if (msg) {
-              const attendees  = await getAttendees(eventId)
-              const goingCount = attendees.filter(a => a.status === "going").length
-              const maybeCount = attendees.filter(a => a.status === "maybe").length
+              const stats      = await getEventStats(eventId)
+              const goingCount = parseInt(stats?.going_count || 0)
+              const maybeCount = parseInt(stats?.maybe_count || 0)
               const endedEvent = { ...event, status: "ended" }
 
               await msg.edit({
@@ -247,12 +268,11 @@ const eventEnd = {
                   new EmbedBuilder()
                     .setColor(0x22c55e)
                     .setTitle("✅ انتهت الفعالية")
-                    .setDescription(`**${event.title}** اختتمت!\nشكراً لجميع المشاركين 🎉`)
-                    .addFields({
-                      name: "👥 إجمالي الحضور المسجل",
-                      value: `${goingCount} شخص`,
-                      inline: true
-                    })
+                    .setDescription(`**${event.title}** اختتمت! شكراً لجميع المشاركين 🎉`)
+                    .addFields(
+                      { name: "👥 إجمالي الحضور", value: `${goingCount} شخص`, inline: true },
+                      { name: "🤔 ربما",           value: `${maybeCount} شخص`, inline: true }
+                    )
                     .setTimestamp()
                 ]
               })
@@ -261,7 +281,17 @@ const eventEnd = {
         } catch {}
       }
 
-      return interaction.editReply({ content: "✅ تم إنهاء الفعالية بنجاح." })
+      await logEvent(interaction.guild, "ended", event, interaction.user)
+
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x22c55e)
+            .setTitle("✅ تم إنهاء الفعالية")
+            .setDescription(`**${event.title}** (#${event.id}) — انتهت بنجاح`)
+            .setTimestamp()
+        ]
+      })
 
     } catch (err) {
       console.error("[EVENT-END ERROR]", err)
@@ -273,7 +303,7 @@ const eventEnd = {
 }
 
 // ══════════════════════════════════════
-//  EXPORTS — commandHandler يقرأ commands[]
+//  EXPORTS
 // ══════════════════════════════════════
 
 module.exports = {

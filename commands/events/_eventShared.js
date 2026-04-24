@@ -37,6 +37,13 @@ const EVENT_LABELS = {
   other:   "فعالية عامة"
 }
 
+const EVENT_STATUS = {
+  upcoming:  "⏳ قادمة",
+  live:      "🔴 جارية الآن",
+  ended:     "✅ انتهت",
+  cancelled: "❌ ملغية"
+}
+
 // ══════════════════════════════════════
 //  DATABASE — TABLES
 // ══════════════════════════════════════
@@ -78,6 +85,7 @@ async function ensureTables() {
     CREATE TABLE IF NOT EXISTS event_settings (
       guild_id        TEXT PRIMARY KEY,
       manager_role_id TEXT,
+      log_channel_id  TEXT,
       updated_at      TIMESTAMP DEFAULT NOW()
     );
   `)
@@ -85,6 +93,11 @@ async function ensureTables() {
   await databaseSystem.query(`
     CREATE INDEX IF NOT EXISTS idx_guild_events_guild
     ON guild_events (guild_id, status);
+  `)
+
+  await databaseSystem.query(`
+    CREATE INDEX IF NOT EXISTS idx_event_attendees_event
+    ON event_attendees (event_id, status);
   `)
 }
 
@@ -106,6 +119,15 @@ async function setManagerRole(guildId, roleId) {
     ON CONFLICT (guild_id)
     DO UPDATE SET manager_role_id = $2, updated_at = NOW()
   `, [guildId, roleId])
+}
+
+async function setLogChannel(guildId, channelId) {
+  await databaseSystem.query(`
+    INSERT INTO event_settings (guild_id, log_channel_id)
+    VALUES ($1, $2)
+    ON CONFLICT (guild_id)
+    DO UPDATE SET log_channel_id = $2, updated_at = NOW()
+  `, [guildId, channelId])
 }
 
 // ══════════════════════════════════════
@@ -163,6 +185,17 @@ async function getGuildEvents(guildId, status = "upcoming", limit = 10) {
   return result.rows || []
 }
 
+async function getEventStats(eventId) {
+  return await databaseSystem.queryOne(`
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'going') as going_count,
+      COUNT(*) FILTER (WHERE status = 'maybe') as maybe_count,
+      COUNT(*) as total
+    FROM event_attendees
+    WHERE event_id = $1
+  `, [eventId])
+}
+
 // ══════════════════════════════════════
 //  DATABASE — ATTENDEES
 // ══════════════════════════════════════
@@ -211,6 +244,47 @@ async function canManageEvents(interaction) {
   if (!settings?.manager_role_id) return false
 
   return interaction.member?.roles?.cache?.has(settings.manager_role_id) || false
+}
+
+// ══════════════════════════════════════
+//  LOG HELPER
+// ══════════════════════════════════════
+
+async function logEvent(guild, action, event, user) {
+  try {
+    const settings = await getEventSettings(guild.id)
+    if (!settings?.log_channel_id) return
+
+    const channel = guild.channels.cache.get(settings.log_channel_id)
+    if (!channel) return
+
+    const color = {
+      created:   0x22c55e,
+      cancelled: 0xef4444,
+      started:   0xf59e0b,
+      ended:     0x5865f2
+    }[action] || 0x8b5cf6
+
+    const label = {
+      created:   "✅ تم إنشاء فعالية",
+      cancelled: "❌ تم إلغاء فعالية",
+      started:   "🔴 بدأت فعالية",
+      ended:     "🏁 انتهت فعالية"
+    }[action] || action
+
+    await channel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(color)
+          .setTitle(label)
+          .addFields(
+            { name: "📌 الفعالية", value: `${event.title} (#${event.id})`, inline: true },
+            { name: "👤 بواسطة",   value: `<@${user.id}>`,                 inline: true }
+          )
+          .setTimestamp()
+      ]
+    })
+  } catch {}
 }
 
 // ══════════════════════════════════════
@@ -324,14 +398,21 @@ async function buildEventEmbed(event, guild, goingCount = 0, maybeCount = 0) {
   if (event.max_attendees) attendanceText += `/${event.max_attendees}`
   attendanceText += `  |  🤔 ربما: **${maybeCount}**`
 
+  if (event.max_attendees) {
+    const remaining = event.max_attendees - goingCount
+    attendanceText += `\n📊 المتبقي: **${Math.max(0, remaining)}** مكان`
+  }
+
   fields.push({ name: "👥 الحضور", value: attendanceText, inline: false })
 
   if (event.status === "live") {
-    embed.setFooter({ text: "🔴 الفعالية جارية الآن!" })
+    embed.setFooter({ text: "🔴 الفعالية جارية الآن! — اضغط للتسجيل" })
   } else if (event.status === "ended") {
-    embed.setFooter({ text: "✅ انتهت الفعالية" })
+    embed.setFooter({ text: "✅ انتهت الفعالية — شكراً للمشاركين" })
+  } else if (event.status === "cancelled") {
+    embed.setFooter({ text: "❌ تم إلغاء الفعالية" })
   } else {
-    embed.setFooter({ text: `🆔 ${event.id} | اضغط للتسجيل` })
+    embed.setFooter({ text: `🆔 ${event.id} | اضغط للتسجيل في الفعالية` })
   }
 
   embed.addFields(fields)
@@ -342,7 +423,7 @@ async function buildEventEmbed(event, guild, goingCount = 0, maybeCount = 0) {
 }
 
 function buildEventButtons(eventId, status = "upcoming") {
-  const disabled = status === "ended"
+  const disabled = status === "ended" || status === "cancelled"
 
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -365,7 +446,7 @@ function buildEventButtons(eventId, status = "upcoming") {
 
     new ButtonBuilder()
       .setCustomId(`event_attendees_${eventId}`)
-      .setLabel("قائمة الحضور")
+      .setLabel("قائمة الحضور 👥")
       .setStyle(ButtonStyle.Primary)
   )
 }
@@ -378,15 +459,19 @@ module.exports = {
   EVENT_COLORS,
   EVENT_EMOJIS,
   EVENT_LABELS,
+  EVENT_STATUS,
   ensureTables,
   getEventSettings,
   setManagerRole,
+  setLogChannel,
   canManageEvents,
+  logEvent,
   createEvent,
   getEvent,
   updateEventMessage,
   updateEventStatus,
   getGuildEvents,
+  getEventStats,
   getAttendees,
   getUserStatus,
   setAttendeeStatus,
