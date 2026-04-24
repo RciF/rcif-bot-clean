@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js")
 const {
   ensureTables,
   canManageEvents,
@@ -11,11 +11,12 @@ const {
 //  /فعالية-حضور
 // ══════════════════════════════════════
 
-module.exports.eventAttendees = {
+const eventAttendees = {
   data: new SlashCommandBuilder()
     .setName("فعالية-حضور")
     .setDescription("عرض قائمة المسجلين في فعالية")
     .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
@@ -94,11 +95,12 @@ module.exports.eventAttendees = {
 //  /فعالية-تذكير
 // ══════════════════════════════════════
 
-module.exports.eventRemind = {
+const eventRemind = {
   data: new SlashCommandBuilder()
     .setName("فعالية-تذكير")
     .setDescription("إرسال تذكير لجميع المسجلين في فعالية")
     .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     )
@@ -163,4 +165,16 @@ module.exports.eventRemind = {
       if (!interaction.replied) return interaction.reply({ content: msg, ephemeral: true })
     }
   }
+}
+
+// ══════════════════════════════════════
+//  EXPORTS — commandHandler يقرأ commands[]
+// ══════════════════════════════════════
+
+module.exports = {
+  commands: [eventAttendees.data, eventRemind.data],
+  data: eventAttendees.data,
+  execute: eventAttendees.execute,
+  eventAttendees,
+  eventRemind
 }

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js")
 const {
   ensureTables,
   canManageEvents,
@@ -13,11 +13,12 @@ const {
 //  /فعالية-إلغاء
 // ══════════════════════════════════════
 
-module.exports.eventCancel = {
+const eventCancel = {
   data: new SlashCommandBuilder()
     .setName("فعالية-إلغاء")
     .setDescription("إلغاء فعالية")
     .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     )
@@ -46,10 +47,6 @@ module.exports.eventCancel = {
       const event = await getEvent(eventId)
       if (!event || event.guild_id !== interaction.guild.id) {
         return interaction.editReply({ content: "❌ فعالية غير موجودة." })
-      }
-
-      if (event.creator_id !== interaction.user.id && !await canManageEvents(interaction)) {
-        return interaction.editReply({ content: "❌ فقط منشئ الفعالية أو المدير يقدر يلغيها." })
       }
 
       if (event.status === "ended" || event.status === "cancelled") {
@@ -106,11 +103,12 @@ module.exports.eventCancel = {
 //  /فعالية-بدء
 // ══════════════════════════════════════
 
-module.exports.eventStart = {
+const eventStart = {
   data: new SlashCommandBuilder()
     .setName("فعالية-بدء")
     .setDescription("تفعيل الفعالية — جارية الآن")
     .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
@@ -195,11 +193,12 @@ module.exports.eventStart = {
 //  /فعالية-إنهاء
 // ══════════════════════════════════════
 
-module.exports.eventEnd = {
+const eventEnd = {
   data: new SlashCommandBuilder()
     .setName("فعالية-إنهاء")
     .setDescription("إنهاء فعالية جارية")
     .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
@@ -271,4 +270,17 @@ module.exports.eventEnd = {
       if (!interaction.replied) return interaction.reply({ content: msg, ephemeral: true })
     }
   }
+}
+
+// ══════════════════════════════════════
+//  EXPORTS — commandHandler يقرأ commands[]
+// ══════════════════════════════════════
+
+module.exports = {
+  commands: [eventCancel.data, eventStart.data, eventEnd.data],
+  data: eventCancel.data,
+  execute: eventCancel.execute,
+  eventCancel,
+  eventStart,
+  eventEnd
 }

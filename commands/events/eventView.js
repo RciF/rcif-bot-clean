@@ -13,7 +13,7 @@ const {
 //  /فعالية-عرض  — عام للجميع
 // ══════════════════════════════════════
 
-module.exports.eventView = {
+const eventView = {
   data: new SlashCommandBuilder()
     .setName("فعالية-عرض")
     .setDescription("عرض تفاصيل فعالية محددة")
@@ -60,7 +60,7 @@ module.exports.eventView = {
 //  /فعالية-قائمة  — عام للجميع
 // ══════════════════════════════════════
 
-module.exports.eventList = {
+const eventList = {
   data: new SlashCommandBuilder()
     .setName("فعالية-قائمة")
     .setDescription("عرض الفعاليات القادمة في السيرفر")
@@ -75,9 +75,9 @@ module.exports.eventList = {
       await ensureTables()
       await interaction.deferReply()
 
-      const upcoming   = await getGuildEvents(interaction.guild.id, "upcoming", 10)
-      const live       = await getGuildEvents(interaction.guild.id, "live", 5)
-      const allEvents  = [...live, ...upcoming]
+      const upcoming  = await getGuildEvents(interaction.guild.id, "upcoming", 10)
+      const live      = await getGuildEvents(interaction.guild.id, "live", 5)
+      const allEvents = [...live, ...upcoming]
 
       if (allEvents.length === 0) {
         return interaction.editReply({
@@ -100,11 +100,11 @@ module.exports.eventList = {
       let description = ""
 
       for (const ev of allEvents) {
-        const emoji      = EVENT_EMOJIS[ev.category] || "🎉"
+        const emoji       = EVENT_EMOJIS[ev.category] || "🎉"
         const statusBadge = ev.status === "live" ? " 🔴 **جارية الآن**" : ""
-        const ts         = Math.floor(ev.start_time / 1000)
-        const attendees  = parseInt(ev.going_count || 0)
-        const maxText    = ev.max_attendees ? `/${ev.max_attendees}` : ""
+        const ts          = Math.floor(ev.start_time / 1000)
+        const attendees   = parseInt(ev.going_count || 0)
+        const maxText     = ev.max_attendees ? `/${ev.max_attendees}` : ""
 
         description += `${emoji} **${ev.title}**${statusBadge}\n`
         description += `   🆔 #${ev.id} | 📅 <t:${ts}:f> | 👥 ${attendees}${maxText} حاضر\n\n`
@@ -122,4 +122,16 @@ module.exports.eventList = {
       if (!interaction.replied) return interaction.reply({ content: msg, ephemeral: true })
     }
   }
+}
+
+// ══════════════════════════════════════
+//  EXPORTS — commandHandler يقرأ commands[]
+// ══════════════════════════════════════
+
+module.exports = {
+  commands: [eventView.data, eventList.data],
+  data: eventView.data,
+  execute: eventView.execute,
+  eventView,
+  eventList
 }

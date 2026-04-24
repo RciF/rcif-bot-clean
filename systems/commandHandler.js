@@ -7,10 +7,8 @@ module.exports = (client) => {
   const commandsPath = path.join(__dirname, "../commands")
 
   if (!fs.existsSync(commandsPath)) {
-
     logger.warn("COMMANDS_FOLDER_NOT_FOUND")
     return
-
   }
 
   if (!client.commands) {
@@ -19,22 +17,18 @@ module.exports = (client) => {
 
   let loaded = 0
   let skipped = 0
-
   let commandFolders = []
 
   try {
     commandFolders = fs.readdirSync(commandsPath)
   } catch (err) {
-    logger.error("COMMAND_FOLDER_READ_FAILED", {
-      error: err.message
-    })
+    logger.error("COMMAND_FOLDER_READ_FAILED", { error: err.message })
     return
   }
 
   for (const folder of commandFolders) {
 
     const folderPath = path.join(commandsPath, folder)
-
     let stat
 
     try {
@@ -48,11 +42,9 @@ module.exports = (client) => {
     let commandFiles = []
 
     try {
-
       commandFiles = fs
         .readdirSync(folderPath)
         .filter(file => file.endsWith(".js"))
-
     } catch {
       continue
     }
@@ -62,21 +54,20 @@ module.exports = (client) => {
       try {
 
         const filePath = path.join(folderPath, file)
-
         delete require.cache[require.resolve(filePath)]
-
         const command = require(filePath)
 
         if (!command || !command.data || !command.data.name) {
-
           logger.warn(`INVALID_COMMAND_FILE ${file}`)
           skipped++
           continue
-
         }
 
-        // دعم الأوامر متعددة الأسماء (عربي + إنجليزي)
-        // لو الملف يصدّر commands[] نسجّل كل اسم، وإلا نسجّل data.name العادي
+        // ══════════════════════════════════════
+        //  دعم الملفات التي تصدّر commands[]
+        //  كل أمر يُسجَّل بـ sub-object الخاص به
+        //  حتى يكون execute الصح عند الاستدعاء
+        // ══════════════════════════════════════
         const commandList = command.commands
           ? command.commands
           : [command.data]
@@ -91,7 +82,16 @@ module.exports = (client) => {
             continue
           }
 
-          client.commands.set(name, command)
+          // ابحث عن الـ sub-object الصح للأمر
+          let cmdObj = command
+          if (command.commands) {
+            const key = Object.keys(command).find(k =>
+              command[k]?.data?.name === name
+            )
+            if (key) cmdObj = command[key]
+          }
+
+          client.commands.set(name, cmdObj)
           registered = true
         }
 

@@ -3,6 +3,9 @@ const errorSystem      = require("../systems/errorSystem")
 const ticketSystem     = require("../systems/ticketSystem")
 const { handleButtonRoleInteraction } = require("../commands/roles/button-role-handler")
 const { handleEventButton } = require("../commands/events/eventButtons")
+const { eventView, eventList } = require("../commands/events/eventView")
+const { eventCancel, eventStart, eventEnd } = require("../commands/events/eventManage")
+const { eventAttendees, eventRemind } = require("../commands/events/eventAttend")
 const { handleVerifyPanelButton }     = require("../commands/admin/verify-panel")
 
 // ══════════════════════════════════════
