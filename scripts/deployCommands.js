@@ -45,7 +45,15 @@ for (const folder of commandFolders) {
     const filePath = path.join(folderPath, file)
     const command = require(filePath)
 
-    if ("data" in command && "execute" in command) {
+    // ══════════════════════════════════════
+    //  دعم الملفات التي تصدّر commands[]
+    // ══════════════════════════════════════
+    if (command.commands) {
+      for (const cmd of command.commands) {
+        commands.push(cmd.toJSON())
+        console.log(`  ✅ ${cmd.name}`)
+      }
+    } else if ("data" in command && "execute" in command) {
       commands.push(command.data.toJSON())
       console.log(`  ✅ ${command.data.name}`)
     } else {
