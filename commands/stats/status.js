@@ -32,7 +32,7 @@ module.exports = async function handleStatus(interaction) {
     ? Math.round((onlineMembers / totalMembers) * 100)
     : 0
 
-  const configuredStats = await statsSystem.getAllChannels(guild.id)
+  const configuredStats = await statsSystem.getGuildStats(guild.id)
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.neutral)
