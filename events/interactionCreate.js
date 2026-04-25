@@ -7,6 +7,7 @@ const { eventView, eventList } = require("../commands/events/eventView")
 const { eventCancel, eventStart, eventEnd } = require("../commands/events/eventManage")
 const { eventAttendees, eventRemind } = require("../commands/events/eventAttend")
 const { handleVerifyPanelButton }     = require("../commands/admin/verify-panel")
+const helpInteractionHandler = require("../systems/helpInteractionHandler")
 
 // ══════════════════════════════════════
 //  DASHBOARD SETTINGS CACHE
@@ -144,6 +145,12 @@ module.exports = {
     if (interaction.isButton()) {
       const customId = interaction.customId
 
+// ✅ Help System Buttons
+      if (customId.startsWith("help:")) {
+        const handled = await helpInteractionHandler.handle(interaction)
+        if (handled) return
+      }
+
       // ✅ NEW: Verify Panel Button
       if (customId.startsWith("verify_panel:")) {
         return await handleVerifyPanelButton(interaction)
@@ -180,6 +187,11 @@ module.exports = {
     // ══════════════════════════════════════
     if (interaction.isStringSelectMenu()) {
       const customId = interaction.customId
+      // ✅ Help System Select Menus
+      if (customId.startsWith("help:")) {
+        const handled = await helpInteractionHandler.handle(interaction)
+        if (handled) return
+      }
       try {
         if (customId === "ticket_category_select") return await ticketSystem.handleCategorySelect(interaction)
         if (customId === "ticket_priority_select") return await ticketSystem.handlePrioritySelect(interaction)
