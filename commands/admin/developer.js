@@ -1,3 +1,18 @@
+// ══════════════════════════════════════════════════════════════════
+//  /مطور — لوحة تحكم المطور (خاصة بمالك البوت)
+//  المسار: commands/admin/developer.js
+//
+//  ⚠️ إخفاء بصري كامل:
+//   .setDefaultMemberPermissions(0n) → لا يظهر لأي عضو في قائمة Discord
+//   حتى مالك السيرفر و الإدمن لن يروه. لكن يبقى قابلاً للاستدعاء يدوياً
+//   (كتابة /مطور في صندوق الرسالة)، و requireOwner يضمن أن المالك فقط
+//   هو من يقدر يستخدمه فعلياً.
+//
+//  منطق الحماية: طبقتين
+//   1) Discord-level: إخفاء كامل (0n)
+//   2) Logic-level: requireOwner من commandGuardSystem
+// ══════════════════════════════════════════════════════════════════
+
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const { requireOwner } = require("../../systems/commandGuardSystem")
 const database = require("../../systems/databaseSystem")
@@ -60,6 +75,8 @@ async function buildMainEmbed(client, interaction) {
   const memUsage = process.memoryUsage()
   const rss = (memUsage.rss / 1024 / 1024).toFixed(1)
   const heap = (memUsage.heapUsed / 1024 / 1024).toFixed(1)
+  const heapTotal = (memUsage.heapTotal / 1024 / 1024).toFixed(1)
+  const heapPercent = ((memUsage.heapUsed / memUsage.heapTotal) * 100).toFixed(0)
   const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1)
   const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1)
   const cpuCount = os.cpus().length
@@ -69,7 +86,7 @@ async function buildMainEmbed(client, interaction) {
   const totalCommands = Object.values(commandsByFolder).reduce((a, b) => a + b, 0)
   const folderText = Object.entries(commandsByFolder)
     .map(([folder, count]) => {
-      const emojis = { admin: "⚙️", moderation: "🛡️", economy: "💰", ai: "🤖" }
+      const emojis = { admin: "⚙️", moderation: "🛡️", economy: "💰", ai: "🤖", roles: "🎭", tickets: "🎫", protection: "🔒", stats: "📊", xp: "⭐", events: "🎉" }
       return `${emojis[folder] || "📁"} **${folder}**: ${count}`
     })
     .join("\n")
@@ -110,6 +127,9 @@ async function buildMainEmbed(client, interaction) {
     })
     .join("\n")
 
+  // ✨ مؤشر صحة الذاكرة (مفيد لمراقبة Render Free Tier)
+  const heapEmoji = heapPercent < 60 ? "🟢" : heapPercent < 80 ? "🟡" : "🔴"
+
   return new EmbedBuilder()
     .setColor(0x8b5cf6)
     .setTitle("🛠️ لوحة تحكم المطور")
@@ -132,7 +152,7 @@ async function buildMainEmbed(client, interaction) {
       },
       {
         name: "💾 النظام",
-        value: `📊 RSS: **${rss} MB** | Heap: **${heap} MB**\n🖥️ **${platform}**\n🧮 المعالجات: **${cpuCount}** | 💽 **${freeMem}/${totalMem} GB**`,
+        value: `📊 RSS: **${rss} MB**\n${heapEmoji} Heap: **${heap}/${heapTotal} MB** (${heapPercent}%)\n🖥️ **${platform}**\n🧮 المعالجات: **${cpuCount}** | 💽 **${freeMem}/${totalMem} GB**`,
         inline: false
       },
       {
@@ -258,11 +278,15 @@ function buildButtons(activePage) {
       .setStyle(activePage === "servers" ? ButtonStyle.Primary : ButtonStyle.Secondary)
       .setEmoji("🌐"),
     new ButtonBuilder()
+      .setCustomId("dev_refresh")
+      .setLabel("تحديث")
+      .setStyle(ButtonStyle.Success)
+      .setEmoji("🔄"),
+    new ButtonBuilder()
       .setLabel("الداشبورد")
       .setStyle(ButtonStyle.Link)
       .setURL("https://rcif-dashboard.onrender.com")
       .setEmoji("🔗"),
-    
   )
 }
 
@@ -270,11 +294,15 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("مطور")
     .setDescription("لوحة تحكم المطور (خاصة بمالك البوت)")
-    .setDMPermission(false),
+    .setDMPermission(false)
+    // ⚠️ 0n = إخفاء بصري كامل من قائمة الأوامر لجميع الأعضاء
+    // الأمر يبقى قابلاً للاستدعاء يدوياً (كتابة /مطور)
+    .setDefaultMemberPermissions(0n),
 
   async execute(interaction) {
     try {
-      const isOwner = await requireOwner(interaction)
+      // ✅ طبقة حماية منطقية — حتى لو وصل الأمر، فقط OWNER_ID يقدر يستخدمه
+      const isOwner = requireOwner(interaction)
       if (!isOwner) {
         return interaction.reply({
           content: "❌ هذا الأمر مخصص لمالك البوت فقط.",
@@ -283,10 +311,10 @@ module.exports = {
       }
 
       try {
-  await interaction.deferReply({ ephemeral: true })
-} catch {
-  return
-}
+        await interaction.deferReply({ ephemeral: true })
+      } catch {
+        return
+      }
 
       const client = interaction.client
       const mainEmbed = await buildMainEmbed(client, interaction)
@@ -320,6 +348,11 @@ module.exports = {
             case "dev_servers":
               embed = await buildServersEmbed(client)
               page = "servers"
+              break
+            case "dev_refresh":
+              // ✨ زر التحديث: يعيد بناء الصفحة الحالية بأرقام محدّثة
+              embed = await buildMainEmbed(client, interaction)
+              page = "main"
               break
             default:
               return
