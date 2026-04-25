@@ -358,19 +358,8 @@ await databaseSystem.query(`
   );
 `)
 
-await databaseSystem.query(`
-  CREATE TABLE IF NOT EXISTS reaction_roles (
-    id SERIAL PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    message_id TEXT NOT NULL,
-    emoji TEXT NOT NULL,
-    role_id TEXT NOT NULL,
-    mode TEXT DEFAULT 'normal',
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE (guild_id, message_id, emoji)
-  );
-`)
+// ✅ حذف جدول reaction_roles القديم (تم حذف الأمر بالكامل)
+await databaseSystem.query(`DROP TABLE IF EXISTS reaction_roles CASCADE;`)
 
 // ✅ Protection Settings
 await databaseSystem.query(`

@@ -78,10 +78,6 @@ const ALL_COMMANDS = [
   { name:"تذاكر إعدادات",  category:"tickets",    plan:"gold",    description:"تعديل إعدادات نظام التذاكر" },
   { name:"تذاكر معلومات",  category:"tickets",    plan:"gold",    description:"عرض إعدادات وإحصائيات التذاكر" },
   // الرتب
-  { name:"reaction-role إعداد",  category:"roles", plan:"silver", description:"ربط إيموجي برتبة على رسالة" },
-  { name:"reaction-role حذف",    category:"roles", plan:"silver", description:"حذف ربط إيموجي من رسالة" },
-  { name:"reaction-role عرض",    category:"roles", plan:"silver", description:"عرض كل Reaction Roles" },
-  { name:"reaction-role مسح",    category:"roles", plan:"silver", description:"مسح كل Reaction Roles على رسالة" },
   { name:"لوحة-رتب إنشاء",       category:"roles", plan:"silver", description:"إنشاء لوحة رتب جديدة" },
   { name:"لوحة-رتب إضافة",       category:"roles", plan:"silver", description:"إضافة زر رتبة للوحة" },
   { name:"لوحة-رتب تعديل",       category:"roles", plan:"silver", description:"تعديل لوحة موجودة" },

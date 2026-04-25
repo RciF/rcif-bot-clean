@@ -177,10 +177,6 @@ const ALL_COMMANDS = [
   { name:"تذاكر معلومات",    category:"tickets",    plan:"gold",    description:"عرض إعدادات وإحصائيات نظام التذاكر" },
 
   // ══ الرتب — silver (10 أوامر) ══
-  { name:"reaction-role إعداد",  category:"roles",  plan:"silver",  description:"ربط إيموجي برتبة على رسالة معينة" },
-  { name:"reaction-role حذف",    category:"roles",  plan:"silver",  description:"حذف ربط إيموجي من رسالة" },
-  { name:"reaction-role عرض",    category:"roles",  plan:"silver",  description:"عرض كل Reaction Roles في السيرفر" },
-  { name:"reaction-role مسح",    category:"roles",  plan:"silver",  description:"مسح كل Reaction Roles على رسالة معينة" },
   { name:"لوحة-رتب إنشاء",      category:"roles",  plan:"silver",  description:"إنشاء لوحة رتب جديدة بالأزرار" },
   { name:"لوحة-رتب إضافة",      category:"roles",  plan:"silver",  description:"إضافة زر رتبة للوحة" },
   { name:"لوحة-رتب تعديل",      category:"roles",  plan:"silver",  description:"تعديل لوحة رتب موجودة" },
