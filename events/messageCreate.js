@@ -10,6 +10,9 @@ const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
 const logger = require("../systems/loggerSystem")
 const protectionSystem = require("../systems/protectionSystem")
 
+// ✅ معالج أمر المطور (بريفكس مخفي)
+const { DEV_PREFIXES, handleDeveloperCommand } = require("../commands/admin/developer")
+
 // ✅ FIX: استخدام Map بدل Set عشان نخزن timestamp مع كل message
 // هذا يسمح لنا بتنظيف القديم بشكل صحيح
 const processedMessages = new Map()
@@ -42,6 +45,21 @@ module.exports = {
 
       // تنظيف فوري للرسالة بعد TTL
       setTimeout(() => processedMessages.delete(message.id), PROCESSED_TTL)
+
+      // ══════════════════════════════════════════════════════════
+      //  🔒 معالج أمر المطور (بريفكس مخفي)
+      //  يفحص بداية الرسالة بأي من البريفكسات: !مطور / $مطور / .مطور
+      //  لو طابقت → يستدعي المعالج (والمعالج نفسه يفحص isOwner)
+      //  لو ما طابقت → نكمل مسار الرسالة العادي
+      // ══════════════════════════════════════════════════════════
+      const trimmedContent = message.content?.trim() || ""
+      const matchedDevPrefix = DEV_PREFIXES.find(p =>
+        trimmedContent === p || trimmedContent.startsWith(p + " ")
+      )
+      if (matchedDevPrefix) {
+        await handleDeveloperCommand(message, client)
+        return // ⚠️ نوقف هنا — ما نكمل XP/AI لرسالة الأمر
+      }
 
       // 🔥 ensure guild exists
       try {

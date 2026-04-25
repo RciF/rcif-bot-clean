@@ -1,24 +1,23 @@
 // ══════════════════════════════════════════════════════════════════
-//  /مطور — لوحة تحكم المطور (خاصة بمالك البوت)
+//  /مطور — لوحة تحكم المطور (أمر بريفكس مخفي)
 //  المسار: commands/admin/developer.js
 //
-//  ⚠️ إخفاء بصري كامل:
-//   .setDefaultMemberPermissions(0n) → لا يظهر لأي عضو في قائمة Discord
-//   حتى مالك السيرفر و الإدمن لن يروه. لكن يبقى قابلاً للاستدعاء يدوياً
-//   (كتابة /مطور في صندوق الرسالة)، و requireOwner يضمن أن المالك فقط
-//   هو من يقدر يستخدمه فعلياً.
+//  ⚠️ هذا الملف ما يصدّر data — عشان commandHandler ما يسجّله كـ slash.
+//   الأمر يُستدعى من events/messageCreate.js بأي من البريفكسات:
+//   !مطور  أو  $مطور  أو  .مطور
 //
-//  منطق الحماية: طبقتين
-//   1) Discord-level: إخفاء كامل (0n)
-//   2) Logic-level: requireOwner من commandGuardSystem
+//  النتيجة: لا يظهر في Discord إطلاقاً (مستحيل اكتشافه عبر الـ API).
 // ══════════════════════════════════════════════════════════════════
 
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
-const { requireOwner } = require("../../systems/commandGuardSystem")
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
+const ownerSystem = require("../../systems/ownerSystem")
 const database = require("../../systems/databaseSystem")
 const fs = require("fs")
 const path = require("path")
 const os = require("os")
+
+// البريفكسات المقبولة لأمر المطور
+const DEV_PREFIXES = ["!مطور", "$مطور", ".مطور"]
 
 function formatUptime(seconds) {
   seconds = Math.floor(seconds)
@@ -64,23 +63,23 @@ function getCommandsByFolder() {
 }
 
 // ✅ بناء Embed الرئيسي
-async function buildMainEmbed(client, interaction) {
-  const totalServers = client.guilds.cache.size
-  const totalUsers = client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0)
+async function buildMainEmbed(client, message) {
+  const totalServers  = client.guilds.cache.size
+  const totalUsers    = client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0)
   const totalChannels = client.channels.cache.size
-  const gatewayPing = client.ws.ping
-  const apiPing = Date.now() - interaction.createdTimestamp
-  const uptime = formatUptime(process.uptime())
+  const gatewayPing   = client.ws.ping
+  const apiPing       = Date.now() - message.createdTimestamp
+  const uptime        = formatUptime(process.uptime())
 
-  const memUsage = process.memoryUsage()
-  const rss = (memUsage.rss / 1024 / 1024).toFixed(1)
-  const heap = (memUsage.heapUsed / 1024 / 1024).toFixed(1)
-  const heapTotal = (memUsage.heapTotal / 1024 / 1024).toFixed(1)
+  const memUsage    = process.memoryUsage()
+  const rss         = (memUsage.rss / 1024 / 1024).toFixed(1)
+  const heap        = (memUsage.heapUsed / 1024 / 1024).toFixed(1)
+  const heapTotal   = (memUsage.heapTotal / 1024 / 1024).toFixed(1)
   const heapPercent = ((memUsage.heapUsed / memUsage.heapTotal) * 100).toFixed(0)
-  const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1)
-  const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1)
-  const cpuCount = os.cpus().length
-  const platform = `${os.platform()} ${os.arch()}`
+  const totalMem    = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1)
+  const freeMem     = (os.freemem() / 1024 / 1024 / 1024).toFixed(1)
+  const cpuCount    = os.cpus().length
+  const platform    = `${os.platform()} ${os.arch()}`
 
   const commandsByFolder = getCommandsByFolder()
   const totalCommands = Object.values(commandsByFolder).reduce((a, b) => a + b, 0)
@@ -127,7 +126,7 @@ async function buildMainEmbed(client, interaction) {
     })
     .join("\n")
 
-  // ✨ مؤشر صحة الذاكرة (مفيد لمراقبة Render Free Tier)
+  // ✨ مؤشر صحة الذاكرة
   const heapEmoji = heapPercent < 60 ? "🟢" : heapPercent < 80 ? "🟡" : "🔴"
 
   return new EmbedBuilder()
@@ -184,7 +183,6 @@ async function buildUsageEmbed(client) {
     .setTimestamp()
 
   try {
-    // أكثر الأوامر استخداماً
     const topCommands = await database.query(
       "SELECT command, count FROM analytics ORDER BY count DESC LIMIT 10"
     )
@@ -208,11 +206,10 @@ async function buildUsageEmbed(client) {
       embed.addFields({ name: "🏆 أكثر الأوامر استخداماً", value: commandsList, inline: false })
     }
 
-    // إحصائيات الاقتصاد
     const economyStats = await database.query(
       "SELECT COUNT(*) as users, SUM(coins) as total_coins FROM economy_users WHERE coins > 0"
     )
-    const totalCoins = parseInt(economyStats.rows[0]?.total_coins || 0)
+    const totalCoins  = parseInt(economyStats.rows[0]?.total_coins || 0)
     const activeUsers = parseInt(economyStats.rows[0]?.users || 0)
 
     const richest = await database.query(
@@ -290,98 +287,88 @@ function buildButtons(activePage) {
   )
 }
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("مطور")
-    .setDescription("لوحة تحكم المطور (خاصة بمالك البوت)")
-    .setDMPermission(false)
-    // ⚠️ 0n = إخفاء بصري كامل من قائمة الأوامر لجميع الأعضاء
-    // الأمر يبقى قابلاً للاستدعاء يدوياً (كتابة /مطور)
-    .setDefaultMemberPermissions(0n),
-
-  async execute(interaction) {
-    try {
-      // ✅ طبقة حماية منطقية — حتى لو وصل الأمر، فقط OWNER_ID يقدر يستخدمه
-      const isOwner = requireOwner(interaction)
-      if (!isOwner) {
-        return interaction.reply({
-          content: "❌ هذا الأمر مخصص لمالك البوت فقط.",
-          ephemeral: true
-        })
-      }
-
-      try {
-        await interaction.deferReply({ ephemeral: true })
-      } catch {
-        return
-      }
-
-      const client = interaction.client
-      const mainEmbed = await buildMainEmbed(client, interaction)
-      const buttons = buildButtons("main")
-
-      const response = await interaction.editReply({
-        embeds: [mainEmbed],
-        components: [buttons]
-      })
-
-      // ✅ انتظار الأزرار (5 دقائق)
-      const collector = response.createMessageComponentCollector({
-        filter: (i) => i.user.id === interaction.user.id,
-        time: 300000
-      })
-
-      collector.on("collect", async (i) => {
-        try {
-          let embed
-          let page
-
-          switch (i.customId) {
-            case "dev_main":
-              embed = await buildMainEmbed(client, interaction)
-              page = "main"
-              break
-            case "dev_usage":
-              embed = await buildUsageEmbed(client)
-              page = "usage"
-              break
-            case "dev_servers":
-              embed = await buildServersEmbed(client)
-              page = "servers"
-              break
-            case "dev_refresh":
-              // ✨ زر التحديث: يعيد بناء الصفحة الحالية بأرقام محدّثة
-              embed = await buildMainEmbed(client, interaction)
-              page = "main"
-              break
-            default:
-              return
-          }
-
-          await i.update({
-            embeds: [embed],
-            components: [buildButtons(page)]
-          })
-        } catch (err) {
-          console.error("[DEV BUTTON ERROR]", err)
-        }
-      })
-
-      collector.on("end", async () => {
-        try {
-          await response.edit({ components: [] })
-        } catch {}
-      })
-
-    } catch (err) {
-      console.error("[DEV PANEL ERROR]", err)
-
-      if (interaction.deferred) {
-        return interaction.editReply({ content: "❌ حدث خطأ في لوحة المطور." })
-      }
-      if (!interaction.replied) {
-        return interaction.reply({ content: "❌ حدث خطأ في لوحة المطور.", ephemeral: true })
-      }
+// ══════════════════════════════════════════════════════════════════
+//  المعالج الرئيسي للأمر البريفكس
+//  يُستدعى من events/messageCreate.js
+// ══════════════════════════════════════════════════════════════════
+async function handleDeveloperCommand(message, client) {
+  try {
+    // ✅ فحص: المالك فقط
+    if (!ownerSystem.isOwner(message.author.id)) {
+      // ما نرد ولا نسوي شي — كأن الأمر ما موجود (الإخفاء التام)
+      return
     }
-  },
+
+    const mainEmbed = await buildMainEmbed(client, message)
+    const buttons   = buildButtons("main")
+
+    const response = await message.reply({
+      embeds: [mainEmbed],
+      components: [buttons],
+      allowedMentions: { repliedUser: false }
+    })
+
+    // ✅ collector للأزرار (5 دقائق)
+    const collector = response.createMessageComponentCollector({
+      filter: (i) => i.user.id === message.author.id,
+      time: 300000
+    })
+
+    collector.on("collect", async (i) => {
+      try {
+        let embed
+        let page
+
+        switch (i.customId) {
+          case "dev_main":
+            embed = await buildMainEmbed(client, message)
+            page = "main"
+            break
+          case "dev_usage":
+            embed = await buildUsageEmbed(client)
+            page = "usage"
+            break
+          case "dev_servers":
+            embed = await buildServersEmbed(client)
+            page = "servers"
+            break
+          case "dev_refresh":
+            embed = await buildMainEmbed(client, message)
+            page = "main"
+            break
+          default:
+            return
+        }
+
+        await i.update({
+          embeds: [embed],
+          components: [buildButtons(page)]
+        })
+      } catch (err) {
+        console.error("[DEV BUTTON ERROR]", err)
+      }
+    })
+
+    collector.on("end", async () => {
+      try {
+        await response.edit({ components: [] })
+      } catch {}
+    })
+
+  } catch (err) {
+    console.error("[DEV PANEL ERROR]", err)
+    try {
+      await message.reply({ content: "❌ حدث خطأ في لوحة المطور." })
+    } catch {}
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  EXPORTS
+//  ⚠️ ما نصدّر data — هذا يخلّي commandHandler يتجاهل الملف
+//   ويمنع تسجيله كـ slash command.
+// ══════════════════════════════════════════════════════════════════
+module.exports = {
+  DEV_PREFIXES,
+  handleDeveloperCommand
 }
