@@ -4,28 +4,37 @@ import DashboardLayout from '@/layouts/DashboardLayout';
 import AuthLayout from '@/layouts/AuthLayout';
 import HomePage from '@/pages/HomePage';
 import LoginPage from '@/pages/LoginPage';
+import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import DashboardPage from '@/pages/DashboardPage';
 import ServersPage from '@/pages/ServersPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
     errorElement: <NotFoundPage />,
     children: [
-      // Public routes
+      // Public
       { path: '/', element: <HomePage /> },
 
-      // Auth routes
+      // Auth
       {
         element: <AuthLayout />,
-        children: [{ path: 'login', element: <LoginPage /> }],
+        children: [
+          { path: 'login', element: <LoginPage /> },
+        ],
       },
+      { path: 'auth/callback', element: <AuthCallbackPage /> },
 
-      // Dashboard routes (protected later in Day 5)
+      // Protected dashboard
       {
         path: 'dashboard',
-        element: <DashboardLayout />,
+        element: (
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        ),
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'servers', element: <ServersPage /> },

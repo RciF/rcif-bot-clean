@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
+import { useAuthStore } from '@/store/authStore';
+import { toast } from 'sonner';
 
 const navItems = [
   { to: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
@@ -34,6 +36,15 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = async () => {
+    await logout();
+    toast.success('تم تسجيل الخروج');
+    navigate('/login');
+  };
+
+  const userInitial = user?.username?.[0]?.toUpperCase() || 'م';
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -44,7 +55,6 @@ export default function DashboardLayout() {
           sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         )}
       >
-        {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl lyn-gradient flex items-center justify-center">
@@ -60,7 +70,6 @@ export default function DashboardLayout() {
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="p-4 space-y-1">
           {navItems.map((item) => (
             <NavLink
@@ -83,10 +92,23 @@ export default function DashboardLayout() {
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border">
+        {/* User & Logout */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border space-y-3">
+          {user && (
+            <div className="flex items-center gap-3 px-2">
+              <div className="w-9 h-9 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-semibold">
+                {userInitial}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm truncate">{user.username}</div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {user.isOwner ? 'المالك' : 'مطوّر'}
+                </div>
+              </div>
+            </div>
+          )}
           <button
-            onClick={() => navigate('/login')}
+            onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
           >
             <LogOut className="w-5 h-5" />
@@ -95,7 +117,6 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      {/* Overlay */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -103,9 +124,7 @@ export default function DashboardLayout() {
         />
       )}
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
         <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-20">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -127,12 +146,11 @@ export default function DashboardLayout() {
               <span className="absolute top-1.5 left-1.5 w-2 h-2 bg-lyn-pink-500 rounded-full" />
             </button>
             <div className="w-9 h-9 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-semibold">
-              م
+              {userInitial}
             </div>
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 p-6 overflow-auto">
           <Outlet />
         </main>
