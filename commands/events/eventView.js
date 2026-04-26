@@ -31,6 +31,31 @@ const eventView = {
         .setMinValue(1)
     ),
 
+  helpMeta: {
+    category: "events",
+    aliases: ["event-view", "view-event", "فعالية-عرض"],
+    description: "عرض تفاصيل فعالية محددة (الموعد، الحضور، الحالة)",
+    options: [
+      { name: "الرقم", description: "رقم الفعالية", required: true }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-قائمة", "فعالية-حضور", "فعالية-إنشاء"],
+    examples: [
+      "/فعالية-عرض الرقم:1",
+      "/فعالية-عرض الرقم:25"
+    ],
+    notes: [
+      "متاح للجميع (ليس للأدمن فقط)",
+      "يعرض الـ embed الأصلي مع الأزرار للتسجيل",
+      "يعرض عدد الحاضرين وعدد 'ربما'"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
@@ -91,6 +116,32 @@ const eventList = {
           { name: "❌ الملغية",       value: "cancelled" }
         )
     ),
+
+  helpMeta: {
+    category: "events",
+    aliases: ["event-list", "list-events", "فعالية-قائمة"],
+    description: "عرض قائمة الفعاليات في السيرفر مع إمكانية الفلترة بالحالة",
+    options: [
+      { name: "الحالة", description: "فلترة (القادمة/الجارية/المنتهية/الملغية)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-عرض", "فعالية-إنشاء"],
+    examples: [
+      "/فعالية-قائمة",
+      "/فعالية-قائمة الحالة:⏳ القادمة",
+      "/فعالية-قائمة الحالة:✅ المنتهية"
+    ],
+    notes: [
+      "بدون فلتر: يعرض الجارية + القادمة معاً",
+      "حد أقصى 15 فعالية في القائمة",
+      "متاح للجميع"
+    ]
+  },
 
   async execute(interaction) {
     try {

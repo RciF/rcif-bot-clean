@@ -19,6 +19,32 @@ module.exports = {
         )
     ),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["leaderboard", "top", "rich", "متصدرين"],
+    description: "عرض أغنى الأعضاء — 3 أنواع ترتيب",
+    options: [
+      { name: "النوع", description: "ترتيب: أعلى رصيد / أعلى ثروة / أكثر ممتلكات", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["رصيد", "ممتلكاتي"],
+    examples: [
+      "/متصدرين",
+      "/متصدرين النوع:💎 أعلى ثروة (رصيد + ممتلكات)",
+      "/متصدرين النوع:📦 أكثر ممتلكات"
+    ],
+    notes: [
+      "الترتيب عالمي (الاقتصاد عالمي، مو لكل سيرفر)",
+      "Top 50 لاعب",
+      "يعرض ترتيبك حتى لو ما طلعت في القائمة"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

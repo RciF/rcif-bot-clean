@@ -26,6 +26,32 @@ module.exports = {
         .setMaxValue(10)
     ),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["sell", "بيع"],
+    description: "بيع عنصر من ممتلكاتك بـ 60% من سعره الأصلي",
+    options: [
+      { name: "العنصر", description: "اسم العنصر المراد بيعه (Autocomplete من ممتلكاتك)", required: true },
+      { name: "الكمية", description: "عدد القطع للبيع (افتراضي 1)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["شراء", "متجر", "ممتلكاتي"],
+    examples: [
+      "/بيع العنصر:🚗 سيارة",
+      "/بيع العنصر:💻 لابتوب الكمية:2"
+    ],
+    notes: [
+      "السعر = 60% من السعر الأصلي (خسارة 40%)",
+      "Autocomplete يعرض فقط الأشياء اللي تملكها",
+      "العملية لا تُلغى بعد التأكيد"
+    ]
+  },
+
   async autocomplete(interaction) {
     try {
       const focused = interaction.options.getFocused().toLowerCase()

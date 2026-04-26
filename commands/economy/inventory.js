@@ -14,6 +14,30 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["inventory", "inv", "items", "ممتلكاتي"],
+    description: "عرض جميع ممتلكاتك (سيارات، عقارات، بنية تحتية، أدوات)",
+    options: [
+      { name: "العضو", description: "عرض ممتلكات عضو آخر (اختياري)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["متجر", "بيع", "شراء"],
+    examples: [
+      "/ممتلكاتي",
+      "/ممتلكاتي العضو:@أحمد"
+    ],
+    notes: [
+      "يعرض القيمة الإجمالية للممتلكات",
+      "مجمّعة حسب الفئة (سيارات، عقارات، إلخ)"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

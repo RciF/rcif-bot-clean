@@ -61,6 +61,33 @@ module.exports = {
         )
     ),
 
+  helpMeta: {
+    category: "ai",
+    aliases: ["ai", "chat", "ask", "ذكاء"],
+    description: "اسأل لين (الذكاء الاصطناعي) أي شيء — تكلم معه بالعربي",
+    options: [
+      { name: "سؤال", description: "اكتب سؤالك أو رسالتك للين", required: true },
+      { name: "النموذج", description: "النموذج المستخدم (سريع/ذكي/إبداعي)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 10,
+    relatedCommands: [],
+    examples: [
+      "/ذكاء سؤال:كم عدد الأعضاء في السيرفر؟",
+      "/ذكاء سؤال:اكتب لي قصيدة عن البحر النموذج:🎨 إبداعي | Creative"
+    ],
+    notes: [
+      "تقدر تكلم لين أيضاً عبر منشن @لين في أي قناة (بدون أمر)",
+      "النموذج الإبداعي (GPT-4o) لمستخدمي Gold و Diamond فقط",
+      "حدود يومية: Gold = 100 أمر/يوم، Diamond = 200 أمر/يوم",
+      "تذكير: لين بوت ذكي يفهم سياق السيرفر — يقدر يبحث عن قنوات وأعضاء ورتب"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

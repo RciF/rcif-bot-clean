@@ -27,6 +27,28 @@ const eventAttendees = {
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
 
+  helpMeta: {
+    category: "events",
+    aliases: ["event-attendance", "attendees", "فعالية-حضور"],
+    description: "عرض قائمة المسجلين في فعالية معينة",
+    options: [
+      { name: "الرقم", description: "رقم الفعالية", required: true }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageGuild"],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-عرض", "فعالية-تذكير"],
+    examples: ["/فعالية-حضور الرقم:1"],
+    notes: [
+      "يعرض الحاضرين (أول 20) + 'ربما' (أول 10)",
+      "يعرض إحصائيات السعة المتاحة لو محددة",
+      "للأدمن فقط"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
@@ -139,6 +161,34 @@ const eventRemind = {
           { name: "👥 الجميع",         value: "all"   }
         )
     ),
+
+  helpMeta: {
+    category: "events",
+    aliases: ["event-remind", "remind", "فعالية-تذكير"],
+    description: "إرسال تذكير يدوي لكل المسجلين في فعالية",
+    options: [
+      { name: "الرقم", description: "رقم الفعالية", required: true },
+      { name: "الرسالة", description: "نص التذكير المخصص (اختياري)", required: false },
+      { name: "المجموعة", description: "من تبي تذكّر (الحاضرين/ربما/الجميع)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageGuild"],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-حضور", "فعالية-بدء"],
+    examples: [
+      "/فعالية-تذكير الرقم:1",
+      "/فعالية-تذكير الرقم:1 الرسالة:فعاليتنا بدأت! اضغط دخول",
+      "/فعالية-تذكير الرقم:1 المجموعة:🤔 ربما فقط"
+    ],
+    notes: [
+      "يرسل ping في قناة الفعالية (أول 20)",
+      "الافتراضي: للحاضرين فقط",
+      "🚀 قريباً: تذكيرات تلقائية (24 ساعة، ساعة، عند البدء)"
+    ]
+  },
 
   async execute(interaction) {
     try {

@@ -32,6 +32,32 @@ const eventCancel = {
       o.setName("السبب").setDescription("سبب الإلغاء").setRequired(false).setMaxLength(200)
     ),
 
+  helpMeta: {
+    category: "events",
+    aliases: ["event-cancel", "cancel-event", "فعالية-إلغاء"],
+    description: "إلغاء فعالية مجدولة (للمنشئ أو الأدمن)",
+    options: [
+      { name: "الرقم", description: "رقم الفعالية", required: true },
+      { name: "السبب", description: "سبب الإلغاء (يُرسل للمسجلين)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageGuild"],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-إنشاء", "فعالية-بدء", "فعالية-إنهاء"],
+    examples: [
+      "/فعالية-إلغاء الرقم:1",
+      "/فعالية-إلغاء الرقم:1 السبب:تأجيل لظروف طارئة"
+    ],
+    notes: [
+      "ينفذها فقط منشئ الفعالية أو الأدمن",
+      "كل المسجلين يستلمون إشعار بالإلغاء + السبب",
+      "يحدّث الـ embed الأصلي ليصبح ملغي"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
@@ -124,6 +150,28 @@ const eventStart = {
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
+
+  helpMeta: {
+    category: "events",
+    aliases: ["event-start", "start-event", "فعالية-بدء"],
+    description: "تفعيل الفعالية يدوياً (تصبح 'جارية الآن')",
+    options: [
+      { name: "الرقم", description: "رقم الفعالية", required: true }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageGuild"],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-إنهاء", "فعالية-إنشاء"],
+    examples: ["/فعالية-بدء الرقم:1"],
+    notes: [
+      "يحدّث الـ embed الأصلي ويُعلم المسجلين",
+      "يضيف badge 'جارية الآن' على الفعالية",
+      "يُرسل ping للحاضرين (أول 10)"
+    ]
+  },
 
   async execute(interaction) {
     try {
@@ -219,6 +267,28 @@ const eventEnd = {
     .addIntegerOption(o =>
       o.setName("الرقم").setDescription("رقم الفعالية").setRequired(true).setMinValue(1)
     ),
+
+  helpMeta: {
+    category: "events",
+    aliases: ["event-end", "end-event", "فعالية-إنهاء"],
+    description: "إنهاء فعالية جارية (تصبح 'منتهية')",
+    options: [
+      { name: "الرقم", description: "رقم الفعالية", required: true }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageGuild"],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-بدء", "فعالية-إنشاء"],
+    examples: ["/فعالية-إنهاء الرقم:1"],
+    notes: [
+      "يرسل رسالة شكر للمسجلين",
+      "يحفظ الإحصائيات في السجل",
+      "يعطّل أزرار التسجيل"
+    ]
+  },
 
   async execute(interaction) {
     try {

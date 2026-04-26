@@ -14,6 +14,31 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "xp",
+    aliases: ["rank", "level", "xp", "مستوى"],
+    description: "عرض بطاقة XP الشخصية مع المستوى والتقدم",
+    options: [
+      { name: "العضو", description: "عرض مستوى عضو آخر (اختياري)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["متصدرين_xp"],
+    examples: [
+      "/مستوى",
+      "/مستوى العضو:@أحمد"
+    ],
+    notes: [
+      "يولد بطاقة صورة جميلة بالـ Canvas",
+      "يعرض: المستوى، XP الحالي، XP المطلوب، التقدم %",
+      "🚀 قريباً: تخصيص البطاقة (لون، خلفية، شارات)"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

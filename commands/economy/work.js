@@ -34,6 +34,26 @@ module.exports = {
     .setDescription("اشتغل واكسب كوينز")
     .setDMPermission(false),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["work", "job", "عمل"],
+    description: "اشتغل واكسب كوينز من 18 وظيفة عشوائية",
+    options: [],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 3600,
+    relatedCommands: ["يومي", "رصيد"],
+    examples: ["/عمل"],
+    notes: [
+      "تقدر تشتغل مرة كل ساعة",
+      "18 وظيفة مختلفة عشوائية (ميكانيكي، طباخ، مبرمج، إلخ)",
+      "10% فرصة لمضاعفة المكافأة (حظ مضاعف!)"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

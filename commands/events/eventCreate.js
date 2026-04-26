@@ -88,6 +88,41 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "events",
+    aliases: ["event-create", "create-event", "فعالية-إنشاء"],
+    description: "إنشاء فعالية جديدة في السيرفر مع تسجيل ومشاركين",
+    options: [
+      { name: "العنوان", description: "عنوان الفعالية", required: true },
+      { name: "الموعد", description: "موعد البداية (مثل: 'غداً 8م' أو '2025-12-25 20:00')", required: true },
+      { name: "النوع", description: "نوع الفعالية (جيمينج/صوتية/مشاهدة/مسابقة/اجتماع/أخرى)", required: false },
+      { name: "الوصف", description: "وصف الفعالية", required: false },
+      { name: "المكان", description: "مكان الفعالية", required: false },
+      { name: "الحد_الأقصى", description: "أقصى عدد مسجلين (2-500)", required: false },
+      { name: "موعد_الانتهاء", description: "موعد انتهاء الفعالية", required: false },
+      { name: "بينج", description: "رتبة يتم تنبيهها عند النشر", required: false },
+      { name: "القناة", description: "قناة النشر (افتراضي: القناة الحالية)", required: false },
+      { name: "صورة", description: "رابط صورة بانر للفعالية", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageGuild"],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["فعالية-عرض", "فعالية-قائمة", "فعالية-حضور", "فعالية-بدء", "فعالية-إنهاء"],
+    examples: [
+      "/فعالية-إنشاء العنوان:بطولة Valorant الموعد:غداً 8م",
+      "/فعالية-إنشاء العنوان:جلسة Among Us الموعد:الجمعة 9م النوع:🎮 جيمينج",
+      "/فعالية-إنشاء العنوان:سهرة فيلم الموعد:2025-12-25 20:00 الحد_الأقصى:50"
+    ],
+    notes: [
+      "يدعم تواريخ بصيغ متعددة (عربي/إنجليزي)",
+      "الأعضاء يسجلون عبر الأزرار (حاضر/ربما/غياب)",
+      "يحتاج صلاحية Manage Server"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

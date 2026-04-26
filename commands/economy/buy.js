@@ -24,6 +24,32 @@ module.exports = {
         .setMaxValue(10)
     ),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["buy", "شراء"],
+    description: "شراء عنصر من المتجر (سيارة، عقار، بنية تحتية، أداة)",
+    options: [
+      { name: "العنصر", description: "اسم العنصر المراد شراؤه (يدعم Autocomplete)", required: true },
+      { name: "الكمية", description: "عدد القطع (افتراضي 1، حد أقصى 50)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "gold"
+    },
+    cooldown: 0,
+    relatedCommands: ["متجر", "بيع", "ممتلكاتي"],
+    examples: [
+      "/شراء العنصر:🚗 سيارة",
+      "/شراء العنصر:💻 لابتوب الكمية:3"
+    ],
+    notes: [
+      "Autocomplete يعرض كل المنتجات المتاحة (تجاوز حد 25 choice)",
+      "البوت يفحص رصيدك قبل التنفيذ",
+      "العملية transaction آمن — لو فشلت، الفلوس ترجع لك"
+    ]
+  },
+
   async autocomplete(interaction) {
     try {
       const focused = interaction.options.getFocused().toLowerCase()

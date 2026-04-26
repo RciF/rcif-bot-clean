@@ -15,6 +15,31 @@ module.exports = {
         .setMaxValue(20)
     ),
 
+  helpMeta: {
+    category: "xp",
+    aliases: ["xp-leaderboard", "rank-top", "متصدرين_xp"],
+    description: "عرض أكثر الأعضاء نشاطاً في السيرفر (حسب XP)",
+    options: [
+      { name: "العدد", description: "عدد الأعضاء في القائمة (1-20، الافتراضي 10)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["مستوى"],
+    examples: [
+      "/متصدرين_xp",
+      "/متصدرين_xp العدد:20"
+    ],
+    notes: [
+      "الترتيب لكل سيرفر منفصل (مو عالمي مثل الاقتصاد)",
+      "يعرض ترتيبك حتى لو ما طلعت في الـ Top",
+      "🥇🥈🥉 ميداليات لأول 3"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
