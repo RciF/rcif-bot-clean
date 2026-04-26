@@ -20,6 +20,32 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["kick", "طرد"],
+    description: "طرد عضو من السيرفر — يقدر يرجع لو دخل من رابط دعوة جديد",
+    options: [
+      { name: "العضو", description: "العضو المراد طرده", required: true },
+      { name: "السبب", description: "سبب الطرد", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["KickMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["حظر", "اسكت", "تحذير"],
+    examples: [
+      "/طرد العضو:@أحمد",
+      "/طرد العضو:@أحمد السبب:سبام في القنوات"
+    ],
+    notes: [
+      "الطرد ما يمنع العضو من الرجوع — للمنع الدائم استخدم /حظر",
+      "العضو يستلم إشعار خاص لو الـ DM مفتوح",
+      "البوت لا يقدر يطرد صاحب السيرفر أو من رتبته أعلى من البوت"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

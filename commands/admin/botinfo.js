@@ -23,6 +23,26 @@ module.exports = {
     .setDescription("عرض معلومات وإحصائيات البوت")
     .setDMPermission(false),
 
+  helpMeta: {
+    category: "info",
+    aliases: ["botinfo", "stats", "بوت"],
+    description: "عرض معلومات وإحصائيات البوت (سيرفرات، مستخدمين، اتصال، أداء)",
+    options: [],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["السيرفر"],
+    examples: ["/بوت"],
+    notes: [
+      "يعرض ping البوابة + ping API + ping قاعدة البيانات",
+      "يعرض أكثر 3 أوامر استخداماً",
+      "أزرار سريعة: دعوة البوت + الداشبورد + الاشتراكات"
+    ]
+  },
+
   async execute(interaction) {
     try {
       const client = interaction.client

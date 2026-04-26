@@ -75,6 +75,35 @@ module.exports = {
       option.setName("السبب").setDescription("سبب الكتم").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["mute", "timeout", "اسكت", "كتم"],
+    description: "كتم عضو (Discord Timeout) لمدة محددة — يمنعه من الكتابة والتحدث الصوتي",
+    options: [
+      { name: "العضو", description: "العضو المراد كتمه", required: true },
+      { name: "المدة", description: "مدة الكتم بالأرقام (مثلاً: 5)", required: true },
+      { name: "الوحدة", description: "وحدة الوقت (ثانية / دقيقة / ساعة / يوم / أسبوع / شهر)", required: true },
+      { name: "السبب", description: "سبب الكتم", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ModerateMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["فك_الكتم", "تحذير", "طرد"],
+    examples: [
+      "/اسكت العضو:@أحمد المدة:1 الوحدة:ساعة",
+      "/اسكت العضو:@أحمد المدة:30 الوحدة:دقيقة السبب:إزعاج",
+      "/اسكت العضو:@أحمد المدة:1 الوحدة:يوم"
+    ],
+    notes: [
+      "الحد الأقصى للكتم هو 28 يوم (قيد من Discord)",
+      "العضو يقدر يقرأ الرسائل لكن ما يقدر يرد",
+      "ينتهي الكتم تلقائياً، أو استخدم /فك_الكتم لإنهائه مبكراً"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

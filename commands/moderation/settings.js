@@ -22,6 +22,26 @@ module.exports = {
     .setDescription("عرض إعدادات وحالة أنظمة السيرفر")
     .setDMPermission(false),
 
+  helpMeta: {
+    category: "admin",
+    aliases: ["settings", "إعدادات"],
+    description: "عرض إعدادات وحالة أنظمة السيرفر مع استخدام الذكاء الاصطناعي اليومي",
+    options: [],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["config"],
+    examples: ["/settings"],
+    notes: [
+      "يعرض الخطة الحالية + حالة كل الأنظمة",
+      "يعرض شريط تقدم لاستخدام AI اليومي",
+      "متاح للجميع (للعرض فقط)"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

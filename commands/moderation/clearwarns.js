@@ -27,6 +27,33 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["clearwarns", "delwarn", "مسح_التحذيرات"],
+    description: "مسح تحذير محدد بالرقم أو جميع تحذيرات عضو",
+    options: [
+      { name: "العضو", description: "العضو المراد مسح تحذيراته", required: true },
+      { name: "رقم_التحذير", description: "رقم التحذير المراد مسحه (اتركه فاضي لمسح الكل)", required: false },
+      { name: "السبب", description: "سبب مسح التحذيرات", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ModerateMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["تحذير", "التحذيرات"],
+    examples: [
+      "/مسح_التحذيرات العضو:@أحمد رقم_التحذير:2",
+      "/مسح_التحذيرات العضو:@أحمد (يمسح الكل)"
+    ],
+    notes: [
+      "للحصول على رقم التحذير، استخدم /التحذيرات أولاً",
+      "العضو يستلم إشعار بمسح تحذيراته",
+      "العملية لا تُلغى — لا يوجد استرداد"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

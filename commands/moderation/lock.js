@@ -18,6 +18,33 @@ module.exports = {
       option.setName("السبب").setDescription("سبب قفل القناة (اختياري)").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["lock", "قفل"],
+    description: "قفل قناة ومنع الأعضاء من الكتابة فيها (للأعضاء العاديين)",
+    options: [
+      { name: "القناة", description: "القناة المراد قفلها (الحالية إذا ما حددت)", required: false },
+      { name: "السبب", description: "سبب القفل", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageChannels"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["فتح", "بطيء"],
+    examples: [
+      "/قفل (يقفل القناة الحالية)",
+      "/قفل القناة:#general",
+      "/قفل القناة:#chat السبب:صيانة"
+    ],
+    notes: [
+      "القفل يمنع الأعضاء العاديين فقط — الأدمن لسه يقدر يكتب",
+      "البوت يفحص لو القناة مقفلة فعلاً",
+      "استخدم /فتح لإعادة فتحها"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

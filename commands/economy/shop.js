@@ -119,6 +119,32 @@ module.exports = {
         )
     ),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["shop", "store", "متجر", "المتجر"],
+    description: "تصفح المتجر — سيارات وعقارات وبنية تحتية بـ 6 فئات",
+    options: [
+      { name: "الفئة", description: "عرض فئة محددة مباشرة (اختياري)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["شراء", "بيع", "ممتلكاتي", "رصيد"],
+    examples: [
+      "/متجر",
+      "/متجر الفئة:🚗 سيارات اقتصادية",
+      "/متجر الفئة:🏠 عقارات"
+    ],
+    notes: [
+      "كل فئة فيها عناصر مرتبة من الأرخص للأغلى",
+      "بعض العناصر تحتاج شروط (تملك بيت، عدد سيارات، إلخ)",
+      "استخدم /شراء بعد ما تختار العنصر"
+    ]
+  },
+
   async execute(interaction) {
     try {
       const categoryChoice = interaction.options.getString("الفئة")

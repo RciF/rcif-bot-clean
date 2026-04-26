@@ -14,6 +14,31 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["balance", "bal", "رصيد"],
+    description: "عرض رصيدك وصافي ثروتك وممتلكاتك ومرحلتك في نظام الاقتصاد",
+    options: [
+      { name: "العضو", description: "عرض رصيد عضو آخر (اختياري)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["يومي", "عمل", "تحويل", "متجر", "متصدرين"],
+    examples: [
+      "/رصيد",
+      "/رصيد العضو:@أحمد"
+    ],
+    notes: [
+      "النظام عالمي — رصيدك واحد عبر كل السيرفرات",
+      "يعرض المرحلة الحالية (من سيارة إلى السيطرة العالمية)",
+      "يعرض أغلى ممتلكة لديك"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
@@ -23,7 +48,7 @@ module.exports = {
       const targetUser = interaction.options.getUser("العضو") || interaction.user
       const userId = targetUser.id
       const guildId = interaction.guild.id
- 
+
 
       // ✅ جلب أو إنشاء المستخدم
       await database.query(

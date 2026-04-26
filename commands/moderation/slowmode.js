@@ -66,6 +66,34 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["slowmode", "slow", "بطيء"],
+    description: "تفعيل أو تعطيل السلو مود في القناة — يفرض فترة انتظار بين الرسائل",
+    options: [
+      { name: "المدة", description: "مدة الانتظار (من 5 ثواني لـ 6 ساعات، أو إيقاف)", required: true },
+      { name: "القناة", description: "القناة المستهدفة (الحالية إذا ما حددت)", required: false },
+      { name: "السبب", description: "سبب التغيير", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageChannels"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["قفل"],
+    examples: [
+      "/بطيء المدة:5 ثواني",
+      "/بطيء المدة:دقيقة القناة:#general",
+      "/بطيء المدة:إيقاف (لتعطيل)"
+    ],
+    notes: [
+      "السلو مود يشتغل على القنوات النصية فقط",
+      "الحد الأقصى 6 ساعات (قيد من Discord)",
+      "الأدمن مستثنون من السلو مود"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

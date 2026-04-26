@@ -18,6 +18,31 @@ module.exports = {
       option.setName("السبب").setDescription("سبب فتح القناة (اختياري)").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["unlock", "فتح"],
+    description: "فتح قناة مقفلة وإعادة الكتابة للجميع",
+    options: [
+      { name: "القناة", description: "القناة المراد فتحها (الحالية إذا ما حددت)", required: false },
+      { name: "السبب", description: "سبب الفتح", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageChannels"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["قفل"],
+    examples: [
+      "/فتح",
+      "/فتح القناة:#general"
+    ],
+    notes: [
+      "البوت يفحص لو القناة فعلاً مقفلة",
+      "يعيد الإعدادات الافتراضية للقناة"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

@@ -125,6 +125,39 @@ module.exports = {
         .setDescription("عرض الإحصائيات الحالية للسيرفر")
     ),
 
+  helpMeta: {
+    category: "admin",
+    aliases: ["stats", "serverstats", "إحصائيات"],
+    description: "إعداد وإدارة قنوات الإحصائيات التلقائية للسيرفر (Voice channels تتحدث كل 5 دقائق)",
+    options: [
+      { name: "تلقائي", description: "إنشاء كل قنوات الإحصائيات دفعة واحدة في كاتيقوري جديدة", required: false },
+      { name: "إضافة", description: "إضافة قناة إحصائية واحدة (تختار النوع)", required: false },
+      { name: "حذف", description: "حذف قناة إحصائية محددة", required: false },
+      { name: "مسح", description: "حذف كل قنوات الإحصائيات", required: false },
+      { name: "تحديث", description: "تحديث كل القنوات الآن يدوياً", required: false },
+      { name: "حالة", description: "عرض الإحصائيات الحالية للسيرفر", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["Administrator"],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["السيرفر"],
+    examples: [
+      "/إحصائيات تلقائي شامل:true",
+      "/إحصائيات إضافة النوع:👥 إجمالي الأعضاء",
+      "/إحصائيات حالة",
+      "/إحصائيات تحديث"
+    ],
+    notes: [
+      "البوت يحدث القنوات كل 5 دقائق (Discord rate limit)",
+      "تحتاج خطة Silver أو أعلى",
+      "البوت محتاج صلاحية إدارة القنوات",
+      "10 أنواع إحصائيات مدعومة (الأعضاء، البوتات، الرتب، البوست، إلخ)"
+    ]
+  },
+
   // ══════════════════════════════════════════════════════════════════
   //  EXECUTE — routing للـ handler المناسب
   // ══════════════════════════════════════════════════════════════════

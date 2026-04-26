@@ -12,6 +12,31 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "info",
+    aliases: ["userinfo", "whois", "معلومات"],
+    description: "عرض معلومات تفصيلية عن عضو (الرتب، تاريخ الانضمام، البادجات)",
+    options: [
+      { name: "العضو", description: "العضو المراد عرض معلوماته (اتركه فاضي لعرض معلوماتك)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["السيرفر", "صورة"],
+    examples: [
+      "/معلومات",
+      "/معلومات العضو:@أحمد"
+    ],
+    notes: [
+      "يعرض كل البادجات (Nitro، Boost، Hypesquad، إلخ)",
+      "يعرض تاريخ إنشاء الحساب وتاريخ الانضمام",
+      "يعرض البانر لو موجود"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

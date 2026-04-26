@@ -27,6 +27,26 @@ module.exports = {
     .setDescription("عرض معلومات تفصيلية عن السيرفر")
     .setDMPermission(false),
 
+  helpMeta: {
+    category: "info",
+    aliases: ["serverinfo", "guildinfo", "السيرفر"],
+    description: "عرض معلومات تفصيلية عن السيرفر (الأعضاء، القنوات، البوست، الميزات)",
+    options: [],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["معلومات", "إحصائيات"],
+    examples: ["/السيرفر"],
+    notes: [
+      "يعرض مستوى التحقق، فلتر المحتوى، وميزات السيرفر",
+      "يعرض البانر لو موجود",
+      "متاح للجميع"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

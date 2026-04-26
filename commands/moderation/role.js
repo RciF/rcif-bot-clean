@@ -39,6 +39,37 @@ module.exports = {
       option.setName("السبب").setDescription("سبب تعديل الرتبة (اختياري)").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["role", "رتبة"],
+    description: "إعطاء أو سحب رتبة من عضو محدد أو مجموعة (كل البشر/البوتات/الكل)",
+    options: [
+      { name: "الرتبة", description: "الرتبة المراد إعطاؤها أو سحبها", required: true },
+      { name: "الإجراء", description: "إعطاء أو سحب الرتبة", required: true },
+      { name: "الهدف", description: "عضو محدد / كل البشر / كل البوتات / الكل", required: true },
+      { name: "العضو", description: "العضو المحدد (مطلوب فقط لخيار 'عضو محدد')", required: false },
+      { name: "السبب", description: "سبب التعديل", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ManageRoles"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوحة-رتب إنشاء"],
+    examples: [
+      "/رتبة الرتبة:@VIP الإجراء:إعطاء الهدف:عضو محدد العضو:@أحمد",
+      "/رتبة الرتبة:@Members الإجراء:إعطاء الهدف:كل البشر",
+      "/رتبة الرتبة:@Bot الإجراء:سحب الهدف:كل البوتات"
+    ],
+    notes: [
+      "ما تقدر تعدل رتبة @everyone أو الرتب المُدارة (تابعة لبوت)",
+      "البوت يحتاج رتبته أعلى من الرتبة المعنية",
+      "ما تقدر تعدل رتبة أعلى منك (إلا لو أنت صاحب السيرفر)",
+      "الإجراء على مجموعة يأخذ وقت — انتظر النتيجة"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

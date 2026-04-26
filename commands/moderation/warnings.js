@@ -24,6 +24,32 @@ module.exports = {
         )
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["warnings", "warns", "التحذيرات"],
+    description: "عرض تحذيرات عضو معين أو كل الأعضاء المحذرين في السيرفر",
+    options: [
+      { name: "العضو", description: "العضو المراد عرض تحذيراته (اتركه فاضي لعرض كل المحذرين)", required: false },
+      { name: "الترتيب", description: "ترتيب القائمة الجماعية (تنازلي/تصاعدي)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ModerateMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["تحذير", "مسح_التحذيرات"],
+    examples: [
+      "/التحذيرات العضو:@أحمد",
+      "/التحذيرات (يعرض كل المحذرين)"
+    ],
+    notes: [
+      "بدون تحديد عضو = قائمة كل المحذرين مرتبة حسب العدد",
+      "يعرض تاريخ كل تحذير واسم المُحذِّر",
+      "ألوان مختلفة حسب مستوى الخطورة"
+    ]
+  },
+
   async execute(interaction) {
     try {
       // ✅ Check: inside a guild only

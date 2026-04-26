@@ -22,6 +22,32 @@ module.exports = {
         .setMinValue(1)
     ),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["transfer", "pay", "send", "تحويل"],
+    description: "تحويل كوينز من رصيدك إلى عضو آخر",
+    options: [
+      { name: "العضو", description: "العضو المراد التحويل له", required: true },
+      { name: "المبلغ", description: "عدد الكوينز المراد تحويلها (1 أو أكثر)", required: true }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["رصيد", "يومي", "عمل"],
+    examples: [
+      "/تحويل العضو:@أحمد المبلغ:1000",
+      "/تحويل العضو:@محمد المبلغ:50000"
+    ],
+    notes: [
+      "ما تقدر تحول لنفسك أو لبوت",
+      "العملية tx-safe — لو فشل أي جزء، يرجع كل شي",
+      "لازم رصيدك يكفي للمبلغ المطلوب"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

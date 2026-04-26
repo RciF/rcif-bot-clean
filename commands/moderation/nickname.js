@@ -17,6 +17,33 @@ module.exports = {
       option.setName("السبب").setDescription("سبب تغيير اللقب (اختياري)").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["nick", "nickname", "لقب"],
+    description: "تغيير أو إزالة لقب عضو في السيرفر",
+    options: [
+      { name: "العضو", description: "العضو المراد تغيير لقبه", required: true },
+      { name: "اللقب", description: "اللقب الجديد (اتركه فاضي لإزالة اللقب)", required: false },
+      { name: "السبب", description: "سبب التغيير", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ManageNicknames"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: [],
+    examples: [
+      "/لقب العضو:@أحمد اللقب:محمد",
+      "/لقب العضو:@أحمد (يزيل اللقب)"
+    ],
+    notes: [
+      "الحد الأقصى 32 حرف للقب (قيد من Discord)",
+      "ما تقدر تغير لقب صاحب السيرفر إلا لو أنت صاحبه",
+      "البوت يحتاج رتبته أعلى من رتبة العضو"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

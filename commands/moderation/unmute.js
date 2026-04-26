@@ -14,6 +14,31 @@ module.exports = {
       option.setName("السبب").setDescription("سبب فك الكتم (اختياري)").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["unmute", "فك_الكتم"],
+    description: "فك كتم عضو مكتوم (إزالة الـ Timeout) قبل انتهاء مدته",
+    options: [
+      { name: "العضو", description: "العضو المراد فك كتمه", required: true },
+      { name: "السبب", description: "سبب فك الكتم (اختياري)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ModerateMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["اسكت"],
+    examples: [
+      "/فك_الكتم العضو:@أحمد",
+      "/فك_الكتم العضو:@أحمد السبب:تم العفو"
+    ],
+    notes: [
+      "البوت يفحص لو العضو مكتوم فعلاً قبل التنفيذ",
+      "العضو يستلم إشعار خاص بفك الكتم"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

@@ -19,6 +19,32 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["unban", "فك_الحظر"],
+    description: "فك حظر عضو من السيرفر باستخدام معرف Discord الخاص به",
+    options: [
+      { name: "الآيدي", description: "آيدي Discord للعضو المحظور (17-20 رقم)", required: true },
+      { name: "السبب", description: "سبب فك الحظر (اختياري)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["BanMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["حظر"],
+    examples: [
+      "/فك_الحظر الآيدي:123456789012345678",
+      "/فك_الحظر الآيدي:123456789012345678 السبب:تم العفو"
+    ],
+    notes: [
+      "تحتاج آيدي Discord الخاص بالعضو (مو اسمه)",
+      "البوت يفحص لو العضو فعلاً محظور قبل التنفيذ",
+      "إن أمكن، البوت يرسل DM للعضو يبشّره بفك الحظر"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
@@ -124,7 +150,8 @@ module.exports = {
           },
           {
             name: "📩 إشعار خاص",
-            value: dmSent ? "✅ تم إرسال إشعار" : "❌ ما تم الإرسال (الخاص مغلق)",
+            value: dmSent ?
+              "✅ تم إرسال إشعار" : "❌ ما تم الإرسال (الخاص مغلق)",
             inline: true
           },
           {

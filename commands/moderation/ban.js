@@ -33,6 +33,35 @@ module.exports = {
         )
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["ban", "حظر"],
+    description: "حظر عضو من السيرفر نهائياً مع إمكانية حذف رسائله السابقة",
+    options: [
+      { name: "العضو", description: "العضو المراد حظره", required: true },
+      { name: "السبب", description: "سبب الحظر (يظهر في رسالة الحظر والـ logs)", required: false },
+      { name: "حذف_الرسائل", description: "اختيار مدة حذف رسائله السابقة (من ساعة لأسبوع)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["BanMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["فك_الحظر", "طرد", "تحذير", "اسكت"],
+    examples: [
+      "/حظر العضو:@أحمد",
+      "/حظر العضو:@أحمد السبب:مخالفة القوانين",
+      "/حظر العضو:@أحمد السبب:سبام حذف_الرسائل:آخر يوم"
+    ],
+    notes: [
+      "البوت لا يقدر يحظر صاحب السيرفر",
+      "لازم تكون رتبتك أعلى من رتبة العضو",
+      "العضو يستلم إشعار خاص لو الـ DM مفتوح",
+      "الحظر دائم حتى يتم رفعه يدوياً عبر /فك_الحظر"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

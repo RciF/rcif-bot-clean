@@ -34,6 +34,37 @@ module.exports = {
       option.setName("السبب").setDescription("سبب المسح (اختياري — يظهر في اللوق)").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["purge", "clear", "clean", "مسح"],
+    description: "مسح رسائل من القناة الحالية مع إمكانية الفلترة المتقدمة",
+    options: [
+      { name: "العدد", description: "عدد الرسائل المراد مسحها (1-100)", required: true },
+      { name: "العضو", description: "مسح رسائل عضو معين فقط (اختياري)", required: false },
+      { name: "الفلتر", description: "نوع الرسائل (بوتات/بشر/روابط/مرفقات/إمبد/منشنات)", required: false },
+      { name: "السبب", description: "سبب المسح (يظهر في اللوق)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageMessages"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["قفل", "بطيء"],
+    examples: [
+      "/مسح العدد:50",
+      "/مسح العدد:100 العضو:@أحمد",
+      "/مسح العدد:30 الفلتر:🤖 رسائل البوتات فقط",
+      "/مسح العدد:50 العضو:@أحمد الفلتر:🔗 رسائل فيها روابط السبب:سبام"
+    ],
+    notes: [
+      "Discord ما يسمح بمسح رسائل أقدم من 14 يوم (قيد API)",
+      "البوت محتاج صلاحية إدارة الرسائل في القناة",
+      "النتيجة تظهر بـ embed مفصّل (إحصائيات + أكثر 3 أعضاء)",
+      "تنبيه عام في القناة يختفي بعد 6 ثواني"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

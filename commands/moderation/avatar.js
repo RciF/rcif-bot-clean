@@ -22,6 +22,33 @@ module.exports = {
         )
     ),
 
+  helpMeta: {
+    category: "info",
+    aliases: ["avatar", "pfp", "صورة"],
+    description: "عرض صورة عضو بجودة عالية مع روابط تحميل بصيغ متعددة",
+    options: [
+      { name: "العضو", description: "العضو (اتركه فاضي لعرض صورتك)", required: false },
+      { name: "النوع", description: "صورة البروفايل أو البانر", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["معلومات"],
+    examples: [
+      "/صورة",
+      "/صورة العضو:@أحمد",
+      "/صورة العضو:@أحمد النوع:🎨 البانر"
+    ],
+    notes: [
+      "يدعم 3 صيغ تحميل (PNG, JPG, WEBP) + GIF لو الصورة متحركة",
+      "يكتشف صورة السيرفر المخصصة لو العضو حاطها",
+      "الجودة 4096px"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

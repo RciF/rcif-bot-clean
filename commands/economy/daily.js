@@ -8,6 +8,26 @@ module.exports = {
     .setDescription("استلم مكافأتك اليومية")
     .setDMPermission(false),
 
+  helpMeta: {
+    category: "economy",
+    aliases: ["daily", "يومي"],
+    description: "استلم مكافأتك اليومية من الكوينز (متاحة كل 24 ساعة)",
+    options: [],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: [],
+      subscriptionTier: "silver"
+    },
+    cooldown: 86400,
+    relatedCommands: ["رصيد", "عمل", "متجر"],
+    examples: ["/يومي"],
+    notes: [
+      "المكافأة الأساسية + بونص عشوائي حتى +50%",
+      "كولداون 24 ساعة من آخر استلام",
+      "جزء من نظام الاقتصاد العالمي"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

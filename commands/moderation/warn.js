@@ -15,6 +15,32 @@ module.exports = {
       option.setName("السبب").setDescription("سبب التحذير").setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["warn", "تحذير"],
+    description: "إعطاء تحذير رسمي لعضو — يُسجَّل في قاعدة البيانات بشكل دائم",
+    options: [
+      { name: "العضو", description: "العضو المراد تحذيره", required: true },
+      { name: "السبب", description: "سبب التحذير (يُحفظ في السجل)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ModerateMembers"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["التحذيرات", "مسح_التحذيرات", "اسكت", "حظر"],
+    examples: [
+      "/تحذير العضو:@أحمد",
+      "/تحذير العضو:@أحمد السبب:مخالفة القوانين"
+    ],
+    notes: [
+      "كل تحذير يُسجَّل بتاريخه واسم المُحذِّر",
+      "اللون يتغير حسب عدد التحذيرات (🟢 عادي / 🟡 متوسط / 🔴 خطير)",
+      "العضو يستلم إشعار خاص بكامل التفاصيل"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

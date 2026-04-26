@@ -16,6 +16,31 @@ module.exports = {
         .setRequired(false)
     ),
 
+  helpMeta: {
+    category: "moderation",
+    aliases: ["setlog", "ضبط_لوق"],
+    description: "تحديد قناة اللوق لتسجيل أحداث الإشراف (الحظر، الطرد، الكتم، إلخ)",
+    options: [
+      { name: "القناة", description: "القناة المخصصة للوق (اتركها فاضية لإيقاف اللوق)", required: false }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["Administrator"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوق ضبط", "لوق حالة"],
+    examples: [
+      "/ضبط_لوق القناة:#mod-logs",
+      "/ضبط_لوق (لإيقاف اللوق)"
+    ],
+    notes: [
+      "هذا اللوق خاص بأوامر الإشراف فقط (حظر، طرد، كتم، إلخ)",
+      "للوق المتقدم بكل الأحداث استخدم /لوق ضبط (Silver+)",
+      "البوت يحتاج صلاحيات إرسال الرسائل في القناة المحددة"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

@@ -96,6 +96,32 @@ module.exports = {
         )
     ),
 
+  helpMeta: {
+    category: "admin",
+    aliases: ["config", "configure"],
+    description: "تفعيل أو تعطيل أنظمة السيرفر الرئيسية (AI / XP / الاقتصاد)",
+    options: [
+      { name: "النظام", description: "النظام المراد تعديله (AI / XP / الاقتصاد)", required: true },
+      { name: "الحالة", description: "تشغيل أو إيقاف", required: true }
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["Administrator"],
+      subscriptionTier: "free"
+    },
+    cooldown: 0,
+    relatedCommands: ["settings"],
+    examples: [
+      "/config النظام:🤖 الذكاء الاصطناعي الحالة:✅ تشغيل",
+      "/config النظام:⭐ نظام XP الحالة:❌ إيقاف"
+    ],
+    notes: [
+      "مخصص لمالك السيرفر أو صاحب الاشتراك المربوط فقط",
+      "بعض الأنظمة تحتاج خطة Silver أو أعلى",
+      "التغييرات فورية ولا تحتاج إعادة تشغيل"
+    ]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
