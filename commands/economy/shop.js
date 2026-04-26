@@ -121,27 +121,27 @@ module.exports = {
 
   helpMeta: {
     category: "economy",
-    aliases: ["shop", "store", "متجر", "المتجر"],
-    description: "تصفح المتجر — سيارات وعقارات وبنية تحتية بـ 6 فئات",
+    aliases: ["shop", "store", "متجر"],
+    description: "تصفح المتجر — سيارات، عقارات، بنية تحتية، وأدوات",
     options: [
-      { name: "الفئة", description: "عرض فئة محددة مباشرة (اختياري)", required: false }
+      { name: "النوع", description: "نوع المنتجات (سيارات/عقارات/أدوات/الكل)", required: false }
     ],
     requirements: {
       botRoleHierarchy: false,
       userPermissions: [],
-      subscriptionTier: "silver"
+      subscriptionTier: "gold"
     },
     cooldown: 0,
     relatedCommands: ["شراء", "بيع", "ممتلكاتي", "رصيد"],
     examples: [
       "/متجر",
-      "/متجر الفئة:🚗 سيارات اقتصادية",
-      "/متجر الفئة:🏠 عقارات"
+      "/متجر النوع:🚗 سيارات",
+      "/متجر النوع:🏠 عقارات"
     ],
     notes: [
-      "كل فئة فيها عناصر مرتبة من الأرخص للأغلى",
-      "بعض العناصر تحتاج شروط (تملك بيت، عدد سيارات، إلخ)",
-      "استخدم /شراء بعد ما تختار العنصر"
+      "الأسعار ثابتة عالمياً",
+      "يدعم التصفح بـ pagination للقوائم الطويلة",
+      "يعرض رصيدك الحالي عشان تعرف وش تقدر تشتري"
     ]
   },
 
