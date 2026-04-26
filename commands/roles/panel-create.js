@@ -19,6 +19,26 @@ module.exports = {
     .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط صورة صغيرة").setRequired(false))
     .addBooleanOption(o => o.setName("حصري").setDescription("رتبة واحدة فقط من اللوحة؟").setRequired(false)),
 
+  helpMeta: {
+    category: "roles",
+    description: "إنشاء لوحة رتب جديدة بالأزرار في قناة معينة",
+    examples: [
+      "/لوحة-رتب-إنشاء العنوان:اختر رتبتك الوصف:اضغط الزر للحصول على رتبتك",
+      "/لوحة-رتب-إنشاء العنوان:الاهتمامات اللون:🔵 أزرق حصري:✅ مفعّل"
+    ],
+    notes: [
+      "اللوحة تُنشأ فاضية — أضف الأزرار بـ /لوحة-رتب-إضافة",
+      "الوضع الحصري = العضو يقدر يأخذ رتبة واحدة فقط من اللوحة"
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ManageRoles"],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوحة-رتب-إضافة", "لوحة-رتب-تعديل", "لوحة-رتب-قائمة", "رتبة"]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

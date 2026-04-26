@@ -26,6 +26,26 @@ module.exports = {
     .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط ثمبنيل جديد").setRequired(false))
     .addBooleanOption(o => o.setName("حصري").setDescription("تغيير وضع الحصري").setRequired(false)),
 
+  helpMeta: {
+    category: "roles",
+    description: "تعديل لوحة رتب موجودة (العنوان، المحتوى، اللون)",
+    examples: [
+      "/لوحة-رتب-تعديل معرف_الرسالة:1234567890 العنوان:عنوان جديد",
+      "/لوحة-رتب-تعديل معرف_الرسالة:1234567890 اللون:أحمر حصري:✅ مفعّل"
+    ],
+    notes: [
+      "أي خيار تتركه فاضي يبقى على إعداده الحالي",
+      "اللوحة تتحدّث في القناة فوراً بعد التعديل"
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ManageRoles"],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوحة-رتب-إنشاء", "لوحة-رتب-قائمة"]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

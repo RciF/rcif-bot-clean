@@ -13,6 +13,23 @@ module.exports = {
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
 
+  helpMeta: {
+    category: "roles",
+    description: "عرض كل لوحات الرتب الموجودة في السيرفر",
+    examples: ["/لوحة-رتب-قائمة"],
+    notes: [
+      "يعرض: العنوان، ID الرسالة، القناة، عدد الأزرار، وضع الحصري",
+      "يعرض أول 10 لوحات فقط لو عندك أكثر"
+    ],
+    requirements: {
+      botRoleHierarchy: false,
+      userPermissions: ["ManageRoles"],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوحة-رتب-إنشاء", "لوحة-رتب-تعديل", "لوحة-رتب-مسح"]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

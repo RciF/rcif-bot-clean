@@ -17,6 +17,25 @@ module.exports = {
     .addStringOption(o => o.setName("معرف_الرسالة").setDescription("ID الرسالة").setRequired(true))
     .addRoleOption(o => o.setName("الرتبة").setDescription("الرتبة اللي تبي تحذفها").setRequired(true)),
 
+  helpMeta: {
+    category: "roles",
+    description: "حذف زر رتبة معين من لوحة (الزر فقط، اللوحة تبقى)",
+    examples: [
+      "/لوحة-رتب-حذف-زر معرف_الرسالة:1234567890 الرتبة:@Gamer"
+    ],
+    notes: [
+      "اللوحة تتحدّث فوراً بعد حذف الزر",
+      "الرتبة نفسها ما تتأثر — يحذف الزر فقط من اللوحة"
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ManageRoles"],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوحة-رتب-إضافة", "لوحة-رتب-قائمة"]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

@@ -24,6 +24,26 @@ module.exports = {
       .addChoices(...COLOR_CHOICES_NO_GOLD)
     ),
 
+  helpMeta: {
+    category: "roles",
+    description: "إضافة زر رتبة لوحة موجودة (حد أقصى 25 زر لكل لوحة)",
+    examples: [
+      "/لوحة-رتب-إضافة معرف_الرسالة:1234567890 الرتبة:@Gamer النص:🎮 لاعب",
+      "/لوحة-رتب-إضافة معرف_الرسالة:1234567890 الرتبة:@Anime النص:🌸 أنمي اللون:🟣 بنفسجي"
+    ],
+    notes: [
+      "الإيموجي يقدر يكون عادي أو من السيرفر",
+      "5 ألوان أزرار: أخضر، أحمر، أزرق، رمادي، Link"
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ManageRoles"],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوحة-رتب-إنشاء", "لوحة-رتب-حذف-زر"]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {

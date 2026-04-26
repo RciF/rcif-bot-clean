@@ -14,6 +14,25 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .addStringOption(o => o.setName("معرف_الرسالة").setDescription("ID الرسالة").setRequired(true)),
 
+  helpMeta: {
+    category: "roles",
+    description: "حذف لوحة رتب بالكامل من السيرفر (الرسالة + الإعدادات)",
+    examples: [
+      "/لوحة-رتب-مسح معرف_الرسالة:1234567890"
+    ],
+    notes: [
+      "العملية لا تُلغى — لا تستخدمها بدون تأكد",
+      "تحذف اللوحة + كل أزرارها + رسالة الـ Discord نفسها"
+    ],
+    requirements: {
+      botRoleHierarchy: true,
+      userPermissions: ["ManageRoles"],
+      subscriptionTier: "silver"
+    },
+    cooldown: 0,
+    relatedCommands: ["لوحة-رتب-قائمة", "لوحة-رتب-حذف-زر"]
+  },
+
   async execute(interaction) {
     try {
       if (!interaction.guild) {
