@@ -541,6 +541,51 @@ function getProgressStage(playerAssets) {
   return { stage: "🆕 مبتدئ", level: 0, emoji: "🆕" }
 }
 
+// ─── نظام مهارات العمل ───
+const WORK_COOLDOWN = 12 * 60 * 60 * 1000  // 12 ساعة (يحل محل القديم)
+
+const WORK_LEVELS = {
+  1: { title: "مبتدئ",    minPay: 50,   maxPay: 200,  xpRequired: 0,  emoji: "🆕" },
+  2: { title: "متدرب",    minPay: 150,  maxPay: 400,  xpRequired: 5,  emoji: "📋" },
+  3: { title: "محترف",    minPay: 300,  maxPay: 700,  xpRequired: 15, emoji: "⭐" },
+  4: { title: "خبير",     minPay: 600,  maxPay: 1200, xpRequired: 35, emoji: "🏆" },
+  5: { title: "CEO",      minPay: 1000, maxPay: 2000, xpRequired: 70, emoji: "👑" },
+}
+
+const WORK_JOBS = {
+  1: [
+    { title: "🧹 عامل نظافة",     desc: "نظّفت مبنى كامل" },
+    { title: "🛒 بائع",           desc: "بعت منتجات في المتجر" },
+    { title: "📦 عامل مستودع",    desc: "رتّبت البضائع في المستودع" },
+    { title: "🔒 حارس أمن",       desc: "حرست مبنى لمدة وردية كاملة" },
+  ],
+  2: [
+    { title: "🚕 سائق تاكسي",     desc: "وصّلت ركاب لوجهتهم" },
+    { title: "👨‍🍳 طبّاخ",          desc: "طبخت وجبات في المطعم" },
+    { title: "🔧 ميكانيكي",       desc: "صلّحت سيارة عميل" },
+    { title: "⚡ كهربائي",        desc: "ركّبت أسلاك كهربائية" },
+    { title: "🍕 توصيل طلبات",    desc: "وصّلت طلبات للعملاء" },
+  ],
+  3: [
+    { title: "💻 مبرمج",          desc: "برمجت موقع لعميل" },
+    { title: "🎨 مصمم",           desc: "صممت شعار لشركة" },
+    { title: "📸 مصوّر",          desc: "صوّرت حفلة زواج" },
+    { title: "📚 مدرّس",          desc: "درّست طلاب في المدرسة" },
+    { title: "🏥 ممرض",           desc: "ساعدت مرضى في المستشفى" },
+  ],
+  4: [
+    { title: "🎤 مذيع",           desc: "قدّمت برنامج إذاعي" },
+    { title: "🎮 مختبر ألعاب",    desc: "اختبرت لعبة جديدة قبل إطلاقها" },
+    { title: "✂️ حلّاق مشاهير",   desc: "قصّيت شعر نجم مشهور" },
+    { title: "🏗️ مقاول",          desc: "أشرفت على مشروع بناء ضخم" },
+  ],
+  5: [
+    { title: "👔 مدير تنفيذي",    desc: "أدرت اجتماع مجلس الإدارة" },
+    { title: "💼 مستشار أعمال",   desc: "قدّمت استشارة لشركة كبرى" },
+    { title: "🚀 مؤسس شركة",      desc: "أطلقت منتجاً جديداً في السوق" },
+    { title: "🏦 مستثمر",         desc: "أغلقت صفقة استثمارية ضخمة" },
+  ],
+}
 // ═══════════════════════════════════════════════════════════
 //  تصدير
 // ═══════════════════════════════════════════════════════════
@@ -552,6 +597,8 @@ module.exports = {
   WORK_COOLDOWN,
   WORK_MIN,
   WORK_MAX,
+  WORK_LEVELS,
+WORK_JOBS,
   HOUSE_CAR_LIMIT,
   PALACE_CAR_LIMIT,
   WORLD_CONTINENTS_REQUIRED,
