@@ -200,7 +200,15 @@ async function updateAllGuilds(client) {
     }
   }
 }
+// ═══════════════════════════════════════════════════════════
+//  ALIASES — لتوافق أوامر الإحصائيات
+// ═══════════════════════════════════════════════════════════
 
+function formatChannelName(statType, value) {
+  const statDef = STAT_TYPES[statType]
+  if (!statDef) return `📊 ${value}`
+  return statDef.format(value)
+}
 // ═══════════════════════════════════════════════════════════
 //  Exports
 // ═══════════════════════════════════════════════════════════
@@ -214,4 +222,13 @@ module.exports = {
   fetchStatValue,
   updateGuildStatsChannels,
   updateAllGuilds,
+
+  // ─── Aliases ───
+  getChannel:         (guildId, statType) => getGuildStats(guildId).then(rows => rows.find(r => r.stat_type === statType) || null),
+  getAllChannels:      getGuildStats,
+  saveChannel:        (guildId, channelId, statType) => addStatChannel(guildId, channelId, statType),
+  deleteChannel:      removeStatChannel,
+  deleteAllChannels:  clearGuildStats,
+  calculateStatValue: fetchStatValue,
+  formatChannelName,
 }
