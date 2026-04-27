@@ -7,7 +7,7 @@
 // ─── الثوابت ───
 const DAILY_REWARD = 500
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000
-const WORK_COOLDOWN = 60 * 60 * 1000
+const WORK_COOLDOWN = 12 * 60 * 60 * 1000
 const WORK_MIN = 50
 const WORK_MAX = 300
 const HOUSE_CAR_LIMIT = 5
@@ -542,7 +542,6 @@ function getProgressStage(playerAssets) {
 }
 
 // ─── نظام مهارات العمل ───
-const WORK_COOLDOWN = 12 * 60 * 60 * 1000  // 12 ساعة (يحل محل القديم)
 
 const WORK_LEVELS = {
   1: { title: "مبتدئ",    minPay: 50,   maxPay: 200,  xpRequired: 0,  emoji: "🆕" },
