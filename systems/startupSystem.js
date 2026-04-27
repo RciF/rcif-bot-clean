@@ -42,9 +42,12 @@ async function startupSystem() {
 
     logger.info("RUNNING_DATABASE_MIGRATIONS");
 
-    await migrationSystem.runMigrations();
+   await migrationSystem.runMigrations();
 
-    logger.success("DATABASE_MIGRATIONS_COMPLETED");
+  logger.success("DATABASE_MIGRATIONS_COMPLETED");
+
+  const addStreakMigration = require("../scripts/migrations/addStreak")
+  await addStreakMigration()
 
   } catch (error) {
 
