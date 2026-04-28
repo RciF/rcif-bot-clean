@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
 const databaseManager = require("../../utils/databaseManager")
+const fridaySaleSystem = require("../../systems/fridaySaleSystem")
 const { ALL_ITEMS, CAR_CATEGORIES, checkRequirement, checkCarCapacity, checkWorldDomination, formatPriceExact, formatPrice, getProgressStage, WORLD_CONTINENTS_REQUIRED } = require("../../config/economyConfig")
 
 module.exports = {
@@ -30,7 +31,7 @@ module.exports = {
     description: "شراء عنصر من المتجر (سيارة، عقار، بنية تحتية، أداة)",
     options: [
       { name: "العنصر", description: "اسم العنصر المراد شراؤه (يدعم Autocomplete)", required: true },
-      { name: "الكمية", description: "عدد القطع (افتراضي 1، حد أقصى 50)", required: false }
+      { name: "الكمية", description: "عدد القطع (افتراضي 1، حد أقصى 10)", required: false }
     ],
     requirements: {
       botRoleHierarchy: false,
@@ -44,9 +45,10 @@ module.exports = {
       "/شراء العنصر:💻 لابتوب الكمية:3"
     ],
     notes: [
-      "Autocomplete يعرض كل المنتجات المتاحة (تجاوز حد 25 choice)",
+      "Autocomplete يعرض كل المنتجات المتاحة",
       "البوت يفحص رصيدك قبل التنفيذ",
-      "العملية transaction آمن — لو فشلت، الفلوس ترجع لك"
+      "العملية transaction آمن — لو فشلت، الفلوس ترجع لك",
+      "كل جمعة فيه خصم تلقائي على عناصر عشوائية"
     ]
   },
 
@@ -87,7 +89,10 @@ module.exports = {
         return interaction.reply({ content: "❌ عنصر غير موجود. استخدم القائمة المقترحة.", ephemeral: true })
       }
 
-      const totalCost = item.price * quantity
+      // ✅ تحقق من خصم الجمعة
+      const discount = await fridaySaleSystem.getItemDiscount(itemId)
+      const discountedPrice = fridaySaleSystem.applyDiscount(item.price, discount)
+      const totalCost = discountedPrice * quantity
 
       await interaction.deferReply()
 
@@ -149,7 +154,6 @@ module.exports = {
         }
 
         if (CAR_CATEGORIES.includes(item.category)) {
-          // نحاكي إضافة الكمية المطلوبة عشان نتحقق من السعة
           const simulatedAssets = playerAssets.map(a => ({ ...a }))
           const existingCar = simulatedAssets.find(a => a.item_id === itemId)
           if (existingCar) {
@@ -207,7 +211,13 @@ module.exports = {
           .addFields(
             { name: "🏷️ العنصر", value: `${item.emoji} ${item.name}`, inline: true },
             { name: "📦 الكمية", value: `${quantity}`, inline: true },
-            { name: "💰 السعر", value: `**${formatPriceExact(totalCost)}** كوين`, inline: true },
+            {
+              name: "💰 السعر",
+              value: discount > 0
+                ? `~~${formatPriceExact(item.price * quantity)}~~ **${formatPriceExact(totalCost)}** كوين (-${discount}%) 🔥`
+                : `**${formatPriceExact(totalCost)}** كوين`,
+              inline: true
+            },
             { name: "💳 رصيدك المتبقي", value: `**${formatPriceExact(newBalance)}** كوين`, inline: true },
             { name: "📊 مرحلتك", value: `${stage.emoji} ${stage.stage}`, inline: true }
           )

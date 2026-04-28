@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js")
 const { CATEGORIES, CARS, PROPERTIES, INFRASTRUCTURE, ALL_ITEMS, formatPrice, formatPriceExact } = require("../../config/economyConfig")
+const fridaySaleSystem = require("../../systems/fridaySaleSystem")
 
 // تجميع العناصر حسب الفئة
 function getItemsByCategory(categoryId) {
@@ -13,7 +14,6 @@ function buildCategoryEmbed(categoryId, interaction) {
 
   if (!category || items.length === 0) return null
 
-  // ترتيب حسب السعر
   items.sort((a, b) => a.price - b.price)
 
   const embed = new EmbedBuilder()
@@ -51,13 +51,33 @@ function getCategoryColor(categoryId) {
 }
 
 // Embed الصفحة الرئيسية
-function buildMainEmbed(interaction) {
+async function buildMainEmbed(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0xf59e0b)
     .setTitle("🏪 المتجر")
     .setDescription("اختر فئة من القائمة عشان تشوف العناصر المتاحة")
     .setFooter({ text: `طلب من: ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
     .setTimestamp()
+
+  // ✅ عروض الجمعة
+  if (fridaySaleSystem.isFriday()) {
+    const sales = await fridaySaleSystem.getSales()
+
+    if (sales.length > 0) {
+      const salesText = sales.map(s => {
+        const item = ALL_ITEMS[s.item_id]
+        if (!item) return null
+        const discountedPrice = fridaySaleSystem.applyDiscount(item.price, s.discount)
+        return `${item.emoji} **${item.name}** — ~~${formatPrice(item.price)}~~ **${formatPrice(discountedPrice)}** كوين (-${s.discount}%)`
+      }).filter(Boolean).join("\n")
+
+      embed.addFields({
+        name: "🔥 عروض الجمعة — اليوم فقط!",
+        value: salesText,
+        inline: false
+      })
+    }
+  }
 
   // عرض ملخص كل فئة
   const sortedCategories = Object.entries(CATEGORIES).sort((a, b) => a[1].order - b[1].order)
@@ -140,7 +160,7 @@ module.exports = {
     ],
     notes: [
       "الأسعار ثابتة عالمياً",
-      "يدعم التصفح بـ pagination للقوائم الطويلة",
+      "كل جمعة فيه عروض عشوائية بخصم 10-40%",
       "يعرض رصيدك الحالي عشان تعرف وش تقدر تشتري"
     ]
   },
@@ -149,7 +169,6 @@ module.exports = {
     try {
       const categoryChoice = interaction.options.getString("الفئة")
 
-      // ✅ لو اختار فئة مباشرة — يعرضها
       if (categoryChoice) {
         const embed = buildCategoryEmbed(categoryChoice, interaction)
         if (!embed) {
@@ -158,8 +177,7 @@ module.exports = {
         return interaction.reply({ embeds: [embed] })
       }
 
-      // ✅ لو ما اختار — يعرض الصفحة الرئيسية مع قائمة اختيار
-      const mainEmbed = buildMainEmbed(interaction)
+      const mainEmbed = await buildMainEmbed(interaction)
       const menu = buildCategoryMenu()
 
       const response = await interaction.reply({
@@ -167,7 +185,6 @@ module.exports = {
         components: [menu]
       })
 
-      // ✅ انتظار اختيار المستخدم (60 ثانية)
       const collector = response.createMessageComponentCollector({
         filter: (i) => i.user.id === interaction.user.id,
         time: 60000

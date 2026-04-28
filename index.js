@@ -120,6 +120,10 @@ function pushCommand(filePath, commands) {
     logger.success("DISCORD_CLIENT_CONNECTED")
     subRoleSystem.init(client)
 
+    const fridaySaleSystem = require("./systems/fridaySaleSystem")
+    fridaySaleSystem.startScheduler()
+
+    // ══════════════════════════════════════
     // ══════════════════════════════════════
     //  ✅ نشر الأوامر تلقائياً عند بدء التشغيل
     // ══════════════════════════════════════
