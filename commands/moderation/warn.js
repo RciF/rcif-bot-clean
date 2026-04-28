@@ -76,10 +76,13 @@ module.exports = {
       await warningSystem.addWarning(interaction.guild.id, targetUser.id, interaction.user.id, reason)
 
       // ✅ جلب عدد التحذيرات بعد الإضافة
-      const allWarnings     = await warningSystem.getWarnings(interaction.guild.id, targetUser.id)
-      const totalWarnings   = allWarnings?.length || 1
-      const severityColor   = totalWarnings >= 5 ? 0xef4444 : totalWarnings >= 3 ? 0xf59e0b : 0x3b82f6
-      const severityLabel   = totalWarnings >= 5 ? "🔴 خطير" : totalWarnings >= 3 ? "🟡 متوسط" : "🟢 عادي"
+const allWarnings     = await warningSystem.getWarnings(interaction.guild.id, targetUser.id)
+const totalWarnings   = allWarnings?.length || 1
+const severityColor   = totalWarnings >= 5 ? 0xef4444 : totalWarnings >= 3 ? 0xf59e0b : 0x3b82f6
+const severityLabel   = totalWarnings >= 5 ? "🔴 خطير" : totalWarnings >= 3 ? "🟡 متوسط" : "🟢 عادي"
+
+// ✅ عقوبة تلقائية
+const punishment = await warningSystem.applyAutoPunishment(interaction.guild, member, totalWarnings)
 
       // ✅ DM للعضو
       let dmSent = false
@@ -109,8 +112,9 @@ module.exports = {
           { name: "⚡ مستوى الخطورة",     value: severityLabel,                                       inline: true  },
           { name: "📝 السبب",              value: reason,                                              inline: false },
           { name: "📊 إجمالي التحذيرات",  value: `${totalWarnings} تحذير`,                           inline: true  },
-          { name: "📩 إشعار خاص",         value: dmSent ? "✅ تم إرسال إشعار" : "❌ ما تم الإرسال",  inline: true  },
-          { name: "👮 بواسطة",            value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: false }
+          { name: "📩 إشعار خاص", value: dmSent ? "✅ تم إرسال إشعار" : "❌ ما تم الإرسال", inline: true },
+...(punishment ? [{ name: "⚖️ عقوبة تلقائية", value: `🔇 تم الكتم لمدة **${punishment.duration}**`, inline: true }] : []),
+{ name: "👮 بواسطة", value: `${interaction.user} (\`${interaction.user.username}\`)`, inline: false },
         )
         .setFooter({ text: `ID: ${targetUser.id}` })
         .setTimestamp()
