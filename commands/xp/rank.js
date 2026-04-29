@@ -47,9 +47,11 @@ module.exports = {
       }
 
       const targetUser = interaction.options.getUser("العضو") || interaction.user
-      const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null)
 
+      // ✅ deferReply أول شيء قبل أي await
       await interaction.deferReply()
+
+      const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null)
 
       // ✅ جلب بيانات XP
       const xpData = await levelSystem.getUserXPData(targetUser.id, interaction.guild.id)

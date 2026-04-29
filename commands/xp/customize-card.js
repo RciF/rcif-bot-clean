@@ -94,7 +94,7 @@ module.exports = {
   async execute(interaction) {
     try {
       if (!interaction.guild) {
-        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", flags: 64 })
       }
 
       const sub = interaction.options.getSubcommand()
@@ -104,7 +104,7 @@ module.exports = {
       //  حالة — عرض التخصيصات الحالية
       // ══════════════════════════════════════
       if (sub === "حالة") {
-        await interaction.deferReply({ ephemeral: true })
+        await interaction.deferReply({ flags: 64 })
 
         const premium = await cardCustomizationSystem.isPremium(userId)
         const custom  = await cardCustomizationSystem.getCustomization(userId)
@@ -211,11 +211,11 @@ module.exports = {
               .setFooter({ text: "التخصيص عالمي — يظهر في كل السيرفرات" })
               .setTimestamp()
           ],
-          ephemeral: true
+          flags: 64
         })
       }
 
-      await interaction.deferReply({ ephemeral: true })
+      await interaction.deferReply({ flags: 64 })
 
       // ══════════════════════════════════════
       //  لون — تغيير الثيم
@@ -324,7 +324,7 @@ module.exports = {
 
       const msg = "❌ حدث خطأ في تخصيص البطاقة."
       if (interaction.deferred) return interaction.editReply({ content: msg })
-      if (!interaction.replied) return interaction.reply({ content: msg, ephemeral: true })
+      if (!interaction.replied) return interaction.reply({ content: msg, flags: 64 })
     }
   }
 }
