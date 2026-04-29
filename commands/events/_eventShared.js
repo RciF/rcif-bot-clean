@@ -81,6 +81,16 @@ async function ensureTables() {
     );
   `)
 
+  // ── جدول إعدادات الفعاليات لكل سيرفر ──
+  await databaseSystem.query(`
+    CREATE TABLE IF NOT EXISTS event_settings (
+      guild_id         TEXT PRIMARY KEY,
+      manager_role_id  TEXT,
+      log_channel_id   TEXT,
+      updated_at       TIMESTAMP DEFAULT NOW()
+    );
+  `)
+
   await databaseSystem.query(`
     CREATE INDEX IF NOT EXISTS idx_guild_events_guild
     ON guild_events (guild_id, status);
@@ -93,12 +103,52 @@ async function ensureTables() {
 }
 
 // ══════════════════════════════════════
-//  PERMISSIONS
-//  يعتمد فقط على صلاحية Manage Server من Discord
-//  (الأدمن يملك كل الصلاحيات تلقائياً)
+//  SETTINGS — إعدادات الفعاليات
 // ══════════════════════════════════════
 
-function canManageEvents(interaction) {
+async function getEventSettings(guildId) {
+  return await databaseSystem.queryOne(
+    "SELECT * FROM event_settings WHERE guild_id = $1",
+    [guildId]
+  )
+}
+
+async function setManagerRole(guildId, roleId) {
+  await databaseSystem.query(`
+    INSERT INTO event_settings (guild_id, manager_role_id, updated_at)
+    VALUES ($1, $2, NOW())
+    ON CONFLICT (guild_id)
+    DO UPDATE SET manager_role_id = $2, updated_at = NOW()
+  `, [guildId, roleId])
+}
+
+async function setLogChannel(guildId, channelId) {
+  await databaseSystem.query(`
+    INSERT INTO event_settings (guild_id, log_channel_id, updated_at)
+    VALUES ($1, $2, NOW())
+    ON CONFLICT (guild_id)
+    DO UPDATE SET log_channel_id = $2, updated_at = NOW()
+  `, [guildId, channelId])
+}
+
+// ══════════════════════════════════════
+//  PERMISSIONS
+//  الأولوية: الأدمن → رتبة المدير من الداتابيز → ManageGuild
+// ══════════════════════════════════════
+
+async function canManageEvents(interaction) {
+  // الأدمن دايماً يقدر
+  if (interaction.member?.permissions?.has("Administrator")) return true
+
+  // تحقق من رتبة المدير في الداتابيز
+  try {
+    const settings = await getEventSettings(interaction.guild.id)
+    if (settings?.manager_role_id) {
+      return interaction.member?.roles?.cache?.has(settings.manager_role_id) || false
+    }
+  } catch {}
+
+  // fallback — ManageGuild لو ما في رتبة محددة
   return interaction.member?.permissions?.has("ManageGuild") || false
 }
 
@@ -454,6 +504,9 @@ module.exports = {
   EVENT_STATUS,
   ensureTables,
   canManageEvents,
+  getEventSettings,
+  setManagerRole,
+  setLogChannel,
   logEvent,
   createEvent,
   getEvent,
