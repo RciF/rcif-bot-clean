@@ -49,6 +49,8 @@ async function startupSystem() {
   const addStreakMigration = require("../scripts/migrations/addStreak")
   await addStreakMigration()
 
+  const addCardCustomizationMigration = require("../scripts/migrations/addCardCustomization")
+  await addCardCustomizationMigration()
   } catch (error) {
 
     logger.error("DATABASE_INITIALIZATION_FAILED", {

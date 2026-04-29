@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require("discord.js")
 const levelSystem = require("../../systems/levelSystem")
 const { generateRankCard } = require("../../systems/rankCardSystem")
+const cardCustomizationSystem = require("../../systems/cardCustomizationSystem")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -27,7 +28,7 @@ module.exports = {
       subscriptionTier: "silver"
     },
     cooldown: 0,
-    relatedCommands: ["متصدرين_xp"],
+    relatedCommands: ["متصدرين_xp", "تخصيص_بطاقة"],
     examples: [
       "/مستوى",
       "/مستوى العضو:@أحمد"
@@ -35,7 +36,7 @@ module.exports = {
     notes: [
       "يولد بطاقة صورة جميلة بالـ Canvas",
       "يعرض: المستوى، XP الحالي، XP المطلوب، التقدم %",
-      "🚀 قريباً: تخصيص البطاقة (لون، خلفية، شارات)"
+      "المشتركون يحصلون على بطاقة مخصصة بألوانهم وخلفيتهم"
     ]
   },
 
@@ -65,6 +66,9 @@ module.exports = {
         })
       }
 
+      // ✅ جلب التخصيص (لو موجود)
+      const customization = await cardCustomizationSystem.getCustomization(targetUser.id)
+
       // ✅ توليد الصورة
       try {
         const imageBuffer = await generateRankCard({
@@ -76,12 +80,23 @@ module.exports = {
           currentXP: xpData.currentXP,
           requiredXP: xpData.requiredXP,
           totalXP: xpData.totalXP,
-          progressPercent: xpData.progressPercent
+          progressPercent: xpData.progressPercent,
+          customization
         })
 
         const attachment = new AttachmentBuilder(imageBuffer, { name: "rank.png" })
 
-        return interaction.editReply({ files: [attachment] })
+        // ✅ لو العضو المستهدف غير المستخدم الحالي — ما نضيف زر التخصيص
+        const isOwnCard = targetUser.id === interaction.user.id
+        const isPremium = isOwnCard
+          ? await cardCustomizationSystem.isPremium(interaction.user.id)
+          : false
+
+        const content = (isOwnCard && !isPremium)
+          ? "💡 خصص بطاقتك بـ `/تخصيص_بطاقة` — **$2.99/شهر** أو **$18/سنة**"
+          : null
+
+        return interaction.editReply({ content, files: [attachment] })
 
       } catch (canvasError) {
         console.error("[RANK CARD ERROR]", canvasError.message)
@@ -94,9 +109,9 @@ module.exports = {
               .setTitle(`⭐ مستوى ${member?.displayName || targetUser.username}`)
               .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 128 }))
               .addFields(
-                { name: "🏆 الترتيب", value: `**#${xpData.rank}**`, inline: true },
-                { name: "⭐ المستوى", value: `**${xpData.level}**`, inline: true },
-                { name: "📊 التقدم", value: `**${xpData.progressPercent}%**`, inline: true },
+                { name: "🏆 الترتيب",   value: `**#${xpData.rank}**`,                         inline: true },
+                { name: "⭐ المستوى",   value: `**${xpData.level}**`,                          inline: true },
+                { name: "📊 التقدم",    value: `**${xpData.progressPercent}%**`,               inline: true },
                 { name: "✨ XP الحالي", value: `**${xpData.currentXP.toLocaleString("ar-SA")}** / **${xpData.requiredXP.toLocaleString("ar-SA")}**`, inline: false },
                 { name: "💫 إجمالي XP", value: `**${xpData.totalXP.toLocaleString("ar-SA")}** XP`, inline: true }
               )
