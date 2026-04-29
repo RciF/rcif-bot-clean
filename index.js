@@ -123,6 +123,9 @@ function pushCommand(filePath, commands) {
     const fridaySaleSystem = require("./systems/fridaySaleSystem")
     fridaySaleSystem.startScheduler()
 
+    const eventReminderSystem = require("./systems/eventReminderSystem")
+    eventReminderSystem.startScheduler(client)
+
     // ══════════════════════════════════════
     // ══════════════════════════════════════
     //  ✅ نشر الأوامر تلقائياً عند بدء التشغيل
