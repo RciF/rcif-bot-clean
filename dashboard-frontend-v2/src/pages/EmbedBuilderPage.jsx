@@ -7,7 +7,6 @@ import {
   Plus,
   X,
   Image as ImageIcon,
-  Hash,
   FolderOpen,
   Trash2,
 } from 'lucide-react';
@@ -28,6 +27,7 @@ import {
 import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { EmbedPreview } from '@/components/shared/EmbedPreview';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { mock } from '@/lib/mock';
 import { intToHexColor, hexToIntColor, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -62,6 +62,7 @@ export default function EmbedBuilderPage() {
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [templateName, setTemplateName] = useState('');
+  const [sendChannel, setSendChannel] = useState(null);
 
   useEffect(() => {
     mock.embedTemplates().then(setTemplates);
@@ -87,10 +88,7 @@ export default function EmbedBuilderPage() {
   };
 
   const removeField = (idx) => {
-    setEmbed((prev) => ({
-      ...prev,
-      fields: prev.fields.filter((_, i) => i !== idx),
-    }));
+    setEmbed((prev) => ({ ...prev, fields: prev.fields.filter((_, i) => i !== idx) }));
   };
 
   const updateField = (idx, key, value) => {
@@ -107,16 +105,15 @@ export default function EmbedBuilderPage() {
   };
 
   const handleSend = () => {
+    if (!sendChannel) return;
     setShowSendDialog(false);
+    setSendChannel(null);
     toast.success('تم إرسال الإيمبيد للقناة');
   };
 
   const handleSaveTemplate = () => {
     if (!templateName.trim()) return;
-    setTemplates((prev) => [
-      ...prev,
-      { id: Date.now(), name: templateName, data: embed },
-    ]);
+    setTemplates((prev) => [...prev, { id: Date.now(), name: templateName, data: embed }]);
     setTemplateName('');
     setShowSaveDialog(false);
     toast.success('تم حفظ القالب');
@@ -154,9 +151,7 @@ export default function EmbedBuilderPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* ── Editor (يسار) ── */}
         <div className="space-y-4 order-2 lg:order-1">
-          {/* Basic Fields */}
           <Card className="p-5 space-y-4">
             <h3 className="font-bold">المحتوى الأساسي</h3>
             <Separator />
@@ -197,7 +192,6 @@ export default function EmbedBuilderPage() {
             </div>
           </Card>
 
-          {/* Color */}
           <Card className="p-5">
             <h3 className="font-bold mb-3">اللون</h3>
             <div className="flex items-center gap-2 mb-3">
@@ -229,7 +223,6 @@ export default function EmbedBuilderPage() {
             </div>
           </Card>
 
-          {/* Author */}
           <Card className="p-5 space-y-3">
             <h3 className="font-bold">المؤلف (Author)</h3>
             <Separator />
@@ -246,7 +239,6 @@ export default function EmbedBuilderPage() {
             />
           </Card>
 
-          {/* Images */}
           <Card className="p-5 space-y-3">
             <div className="flex items-center gap-2">
               <ImageIcon className="w-4 h-4 text-muted-foreground" />
@@ -273,18 +265,10 @@ export default function EmbedBuilderPage() {
             </div>
           </Card>
 
-          {/* Fields */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3 gap-3">
-              <h3 className="font-bold">
-                الحقول ({embed.fields.length}/25)
-              </h3>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={addField}
-                disabled={embed.fields.length >= 25}
-              >
+              <h3 className="font-bold">الحقول ({embed.fields.length}/25)</h3>
+              <Button size="sm" variant="outline" onClick={addField} disabled={embed.fields.length >= 25}>
                 <Plus className="w-4 h-4" />
                 إضافة حقل
               </Button>
@@ -317,29 +301,20 @@ export default function EmbedBuilderPage() {
                     maxLength={1024}
                   />
                   <div className="flex items-center gap-2 text-xs">
-                    <Switch
-                      size="sm"
-                      checked={field.inline}
-                      onCheckedChange={(v) => updateField(idx, 'inline', v)}
-                    />
+                    <Switch size="sm" checked={field.inline} onCheckedChange={(v) => updateField(idx, 'inline', v)} />
                     <span className="text-muted-foreground">في نفس الصف (Inline)</span>
                   </div>
                 </div>
               ))}
 
               {embed.fields.length === 0 && (
-                <div className="text-center py-4 text-sm text-muted-foreground">
-                  ما فيه حقول بعد
-                </div>
+                <div className="text-center py-4 text-sm text-muted-foreground">ما فيه حقول بعد</div>
               )}
             </div>
           </Card>
 
-          {/* Actions */}
           <div className="flex gap-2">
-            <Button variant="outline" onClick={reset} className="flex-1">
-              إعادة تعيين
-            </Button>
+            <Button variant="outline" onClick={reset} className="flex-1">إعادة تعيين</Button>
             <Button variant="outline" onClick={() => setShowSaveDialog(true)} className="flex-1">
               <Save className="w-4 h-4" />
               حفظ كقالب
@@ -347,7 +322,6 @@ export default function EmbedBuilderPage() {
           </div>
         </div>
 
-        {/* ── Preview (يمين) ── */}
         <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start space-y-4">
           <Card className="p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -355,9 +329,6 @@ export default function EmbedBuilderPage() {
               <h3 className="font-bold text-sm">معاينة مباشرة</h3>
             </div>
             <EmbedPreview embed={embed} username="Lyn" avatarLetter="L" />
-            <p className="text-xs text-muted-foreground mt-3 text-center">
-              هذا شكل الإيمبيد في ديسكورد
-            </p>
           </Card>
         </div>
       </div>
@@ -372,34 +343,19 @@ export default function EmbedBuilderPage() {
 
           {!templates ? (
             <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 rounded-xl" />
-              ))}
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
             </div>
           ) : templates.length === 0 ? (
-            <EmptyState
-              icon={<FolderOpen />}
-              title="لا توجد قوالب"
-              description="احفظ إيمبيداتك المتكررة كقوالب لاستخدامها لاحقاً"
-              size="sm"
-            />
+            <EmptyState icon={<FolderOpen />} title="لا توجد قوالب" size="sm" />
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {templates.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-border/80 transition-colors"
-                >
+                <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl border border-border">
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{
-                      background: intToHexColor(t.data.color || 0x9b59b6) + '20',
-                    }}
+                    style={{ background: intToHexColor(t.data.color || 0x9b59b6) + '20' }}
                   >
-                    <Sparkles
-                      className="w-5 h-5"
-                      style={{ color: intToHexColor(t.data.color || 0x9b59b6) }}
-                    />
+                    <Sparkles className="w-5 h-5" style={{ color: intToHexColor(t.data.color || 0x9b59b6) }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{t.name}</div>
@@ -407,9 +363,7 @@ export default function EmbedBuilderPage() {
                       {t.data.title || t.data.description?.slice(0, 50) || 'بدون عنوان'}
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => loadTemplate(t)}>
-                    تحميل
-                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => loadTemplate(t)}>تحميل</Button>
                   <button
                     onClick={() => deleteTemplate(t.id)}
                     className="w-9 h-9 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex items-center justify-center transition-colors flex-shrink-0"
@@ -430,15 +384,15 @@ export default function EmbedBuilderPage() {
             <DialogTitle>إرسال الإيمبيد</DialogTitle>
             <DialogDescription>اختر القناة اللي بتنشر فيها</DialogDescription>
           </DialogHeader>
-          <div className="border-2 border-dashed border-border rounded-xl p-4 text-center text-xs text-muted-foreground my-2">
-            <Hash className="w-6 h-6 mx-auto mb-2" />
-            ChannelPicker قيد البناء
-          </div>
+          <ChannelPicker
+            value={sendChannel}
+            onChange={setSendChannel}
+            types={[0, 5]}
+            placeholder="اختر قناة..."
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendDialog(false)} className="flex-1">
-              إلغاء
-            </Button>
-            <Button onClick={handleSend} className="flex-1">
+            <Button variant="outline" onClick={() => setShowSendDialog(false)} className="flex-1">إلغاء</Button>
+            <Button onClick={handleSend} disabled={!sendChannel} className="flex-1">
               <Send className="w-4 h-4" />
               إرسال
             </Button>
@@ -461,9 +415,7 @@ export default function EmbedBuilderPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleSaveTemplate()}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveDialog(false)} className="flex-1">
-              إلغاء
-            </Button>
+            <Button variant="outline" onClick={() => setShowSaveDialog(false)} className="flex-1">إلغاء</Button>
             <Button onClick={handleSaveTemplate} disabled={!templateName.trim()} className="flex-1">
               <Save className="w-4 h-4" />
               حفظ

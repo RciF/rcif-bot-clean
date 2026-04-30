@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/Select';
+import { EmojiPicker } from '@/components/shared/EmojiPicker';
 import { intToHexColor, hexToIntColor } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -22,8 +23,6 @@ const BUTTON_STYLES = [
 ];
 
 export function TicketsDesignerTab({ data, updateField, setData }) {
-  const [editingButtonId, setEditingButtonId] = useState(null);
-
   const updatePanel = (path, value) => updateField(`panel.${path}`, value);
 
   const addButton = () => {
@@ -39,7 +38,6 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
       ...prev,
       panel: { ...prev.panel, buttons: [...prev.panel.buttons, newButton] },
     }));
-    setEditingButtonId(newButton.id);
   };
 
   const removeButton = (id) => {
@@ -64,9 +62,8 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* ── Editor (يسار) ── */}
+      {/* Editor */}
       <div className="space-y-4 order-2 lg:order-1">
-        {/* Embed Editor */}
         <Card className="p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center">
@@ -120,37 +117,33 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
           </div>
         </Card>
 
-        {/* Buttons Editor */}
         <Card className="p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h3 className="font-bold">الأزرار ({data.panel?.buttons?.length || 0}/5)</h3>
-            <Button
-              size="sm"
-              onClick={addButton}
-              disabled={data.panel?.buttons?.length >= 5}
-            >
+            <Button size="sm" onClick={addButton} disabled={data.panel?.buttons?.length >= 5}>
               <Plus className="w-4 h-4" />
               إضافة زر
             </Button>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {data.panel?.buttons?.map((btn) => (
-              <div key={btn.id} className="rounded-xl border border-border p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Input
-                    value={btn.emoji}
-                    onChange={(e) => updateButton(btn.id, 'emoji', e.target.value)}
-                    className="w-14 text-center text-lg"
-                    maxLength={4}
-                  />
-                  <Input
-                    value={btn.label}
-                    onChange={(e) => updateButton(btn.id, 'label', e.target.value)}
-                    className="flex-1"
-                    placeholder="نص الزر"
-                    maxLength={80}
-                  />
+              <div key={btn.id} className="rounded-xl border border-border p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 grid grid-cols-[auto_1fr] gap-2">
+                    <div className="w-32">
+                      <EmojiPicker
+                        value={btn.emoji}
+                        onChange={(v) => updateButton(btn.id, 'emoji', v)}
+                      />
+                    </div>
+                    <Input
+                      value={btn.label}
+                      onChange={(e) => updateButton(btn.id, 'label', e.target.value)}
+                      placeholder="نص الزر"
+                      maxLength={80}
+                    />
+                  </div>
                   <button
                     onClick={() => removeButton(btn.id)}
                     className="w-9 h-9 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex items-center justify-center transition-colors flex-shrink-0"
@@ -159,10 +152,7 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
                   </button>
                 </div>
 
-                <Select
-                  value={btn.style}
-                  onValueChange={(v) => updateButton(btn.id, 'style', v)}
-                >
+                <Select value={btn.style} onValueChange={(v) => updateButton(btn.id, 'style', v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -170,10 +160,7 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
                     {BUTTON_STYLES.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
                         <div className="flex items-center gap-2">
-                          <div
-                            className="w-3 h-3 rounded"
-                            style={{ background: s.color }}
-                          />
+                          <div className="w-3 h-3 rounded" style={{ background: s.color }} />
                           {s.label}
                         </div>
                       </SelectItem>
@@ -191,14 +178,13 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
           </div>
 
           <Separator className="my-4" />
-
           <Button variant="default" className="w-full" disabled>
             نشر اللوحة في القناة (قيد البناء)
           </Button>
         </Card>
       </div>
 
-      {/* ── Preview (يمين) ── */}
+      {/* Preview */}
       <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
         <Card className="p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -206,7 +192,6 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
             <h3 className="font-bold text-sm">معاينة مباشرة</h3>
           </div>
 
-          {/* Discord Embed Preview */}
           <div className="rounded-lg bg-[#36393f] p-4 text-white">
             <div className="flex gap-3">
               <div className="w-10 h-10 rounded-full bg-violet-500 flex items-center justify-center text-white font-bold flex-shrink-0">
@@ -215,29 +200,19 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="font-semibold text-violet-300">Lyn</span>
-                  <span className="text-xs bg-violet-500 text-white px-1.5 py-0.5 rounded">
-                    BOT
-                  </span>
+                  <span className="text-xs bg-violet-500 text-white px-1.5 py-0.5 rounded">BOT</span>
                 </div>
 
-                {/* Embed */}
                 <div
                   className="rounded border-s-4 bg-[#2f3136] p-3"
-                  style={{
-                    borderInlineStartColor: intToHexColor(data.panel?.color || 0x9b59b6),
-                  }}
+                  style={{ borderInlineStartColor: intToHexColor(data.panel?.color || 0x9b59b6) }}
                 >
-                  {data.panel?.title && (
-                    <div className="font-bold text-base mb-1">{data.panel.title}</div>
-                  )}
+                  {data.panel?.title && <div className="font-bold text-base mb-1">{data.panel.title}</div>}
                   {data.panel?.description && (
-                    <div className="text-sm text-gray-300 whitespace-pre-wrap">
-                      {data.panel.description}
-                    </div>
+                    <div className="text-sm text-gray-300 whitespace-pre-wrap">{data.panel.description}</div>
                   )}
                 </div>
 
-                {/* Buttons */}
                 {data.panel?.buttons?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {data.panel.buttons.map((btn) => (
@@ -255,10 +230,6 @@ export function TicketsDesignerTab({ data, updateField, setData }) {
               </div>
             </div>
           </div>
-
-          <p className="text-xs text-muted-foreground mt-3 text-center">
-            هذا شكل اللوحة في ديسكورد
-          </p>
         </Card>
       </div>
     </div>

@@ -1,7 +1,5 @@
 import {
   ScrollText,
-  MessageSquare,
-  Users,
   Hash,
   Volume2,
   Crown,
@@ -19,6 +17,7 @@ import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { SaveBar } from '@/components/shared/SaveBar';
 import { PlanLockBanner, PlanLockModal } from '@/components/shared/PlanLockOverlay';
+import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { useGuildSettings } from '@/hooks/useGuildSettings';
 import { usePlanGate } from '@/hooks/usePlanGate';
 import { mock } from '@/lib/mock';
@@ -90,10 +89,8 @@ export default function LogsPage() {
   }
 
   if (!data) return null;
-
   const handleSave = planGate.gateAction(save);
 
-  // Toggle event
   const toggleEvent = (key) => {
     const newEnabled = !data.events[key].enabled;
     setData((prev) => ({
@@ -109,7 +106,13 @@ export default function LogsPage() {
     }));
   };
 
-  // Toggle all events in a group
+  const updateEventChannel = (key, channelId) => {
+    setData((prev) => ({
+      ...prev,
+      events: { ...prev.events, [key]: { ...prev.events[key], channel: channelId } },
+    }));
+  };
+
   const toggleGroup = (events, enable) => {
     setData((prev) => ({
       ...prev,
@@ -127,7 +130,6 @@ export default function LogsPage() {
     }));
   };
 
-  // Count enabled
   const enabledCount = Object.values(data.events).filter((e) => e.enabled).length;
   const totalCount = Object.keys(data.events).length;
 
@@ -149,7 +151,6 @@ export default function LogsPage() {
         />
       )}
 
-      {/* Master Card */}
       <Card className="p-5 mb-4">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-start gap-3 flex-1">
@@ -197,20 +198,16 @@ export default function LogsPage() {
           {data.useSingleChannel && (
             <div className="animate-lyn-fade-up">
               <label className="text-sm font-medium mb-2 block">القناة الموحدة</label>
-              <div className="border-2 border-dashed border-border rounded-xl p-3 text-center text-xs text-muted-foreground">
-                ChannelPicker قيد البناء
-                {data.masterChannel && (
-                  <span className="ms-2 px-2 py-0.5 rounded bg-violet-500/10 text-violet-500">
-                    #{data.masterChannel}
-                  </span>
-                )}
-              </div>
+              <ChannelPicker
+                value={data.masterChannel}
+                onChange={(v) => updateField('masterChannel', v)}
+                types={[0, 5]}
+              />
             </div>
           )}
         </div>
       </Card>
 
-      {/* Events Groups */}
       <div className={cn('space-y-4', !data.enabled && 'opacity-50 pointer-events-none')}>
         {EVENT_GROUPS.map((group) => {
           const groupEnabledCount = group.events.filter((ev) => data.events[ev.key]?.enabled).length;
@@ -220,19 +217,13 @@ export default function LogsPage() {
             <Card key={group.label} className="p-5">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      'w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center',
-                      group.color,
-                    )}
-                  >
+                  <div className={cn('w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center', group.color)}>
                     <ScrollText className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h3 className="font-bold">{group.label}</h3>
                     <div className="text-xs text-muted-foreground">
-                      <span className="num">{groupEnabledCount}</span> من{' '}
-                      <span className="num">{group.events.length}</span>
+                      <span className="num">{groupEnabledCount}</span> من <span className="num">{group.events.length}</span>
                     </div>
                   </div>
                 </div>
@@ -245,42 +236,32 @@ export default function LogsPage() {
                 </button>
               </div>
 
-              <div className="space-y-1">
-                {group.events.map((ev, idx) => {
+              <div className="space-y-2">
+                {group.events.map((ev) => {
                   const Icon = ev.icon;
                   const eventData = data.events[ev.key] || { enabled: false };
                   return (
-                    <div key={ev.key}>
-                      {idx > 0 && <Separator />}
-                      <div className="flex items-center justify-between gap-3 py-3">
+                    <div key={ev.key} className="rounded-xl border border-border p-3">
+                      <div className="flex items-center justify-between gap-3 mb-3">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div
-                            className={cn(
-                              'w-9 h-9 rounded-lg bg-muted flex items-center justify-center flex-shrink-0',
-                              ev.color,
-                            )}
-                          >
+                          <div className={cn('w-9 h-9 rounded-lg bg-muted flex items-center justify-center flex-shrink-0', ev.color)}>
                             <Icon className="w-4 h-4" />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium">{ev.label}</div>
-                            {eventData.enabled && eventData.channel && !data.useSingleChannel && (
-                              <div className="text-xs text-muted-foreground">
-                                #قناة {eventData.channel}
-                              </div>
-                            )}
-                            {eventData.enabled && !eventData.channel && (
-                              <div className="text-xs text-amber-500">
-                                ⚠️ ما فيه قناة محددة
-                              </div>
-                            )}
-                          </div>
+                          <div className="text-sm font-medium">{ev.label}</div>
                         </div>
-                        <Switch
-                          checked={eventData.enabled}
-                          onCheckedChange={() => toggleEvent(ev.key)}
-                        />
+                        <Switch checked={eventData.enabled} onCheckedChange={() => toggleEvent(ev.key)} />
                       </div>
+
+                      {eventData.enabled && !data.useSingleChannel && (
+                        <div className="animate-lyn-fade-up">
+                          <ChannelPicker
+                            value={eventData.channel}
+                            onChange={(v) => updateEventChannel(ev.key, v)}
+                            types={[0, 5]}
+                            placeholder="اختر قناة..."
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}

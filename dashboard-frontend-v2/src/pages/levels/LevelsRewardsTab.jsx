@@ -3,6 +3,7 @@ import { Trophy, Plus, X, Award } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { RolePicker } from '@/components/shared/RolePicker';
 import { EmptyState } from '@/components/shared/EmptyState';
 
 export function LevelsRewardsTab({ data, setData }) {
@@ -31,9 +32,17 @@ export function LevelsRewardsTab({ data, setData }) {
     }));
   };
 
+  const updateRewardRole = (level, roleId) => {
+    setData((prev) => ({
+      ...prev,
+      roleRewards: (prev.roleRewards || []).map((r) =>
+        r.level === level ? { ...r, roleId } : r,
+      ),
+    }));
+  };
+
   return (
     <div className="space-y-4">
-      {/* Add New Reward */}
       <Card className="p-5">
         <div className="flex items-start gap-3 mb-4">
           <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center flex-shrink-0">
@@ -65,36 +74,35 @@ export function LevelsRewardsTab({ data, setData }) {
         </div>
       </Card>
 
-      {/* Rewards List */}
       <Card className="p-5">
         <h3 className="font-bold mb-4">المكافآت الحالية</h3>
 
         {data.roleRewards?.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {data.roleRewards.map((reward) => (
               <div
                 key={reward.level}
-                className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-border/80 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-xl border border-border"
               >
-                <div className="w-10 h-10 rounded-lg lyn-gradient flex items-center justify-center flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl lyn-gradient flex items-center justify-center flex-shrink-0">
                   <Trophy className="w-5 h-5 text-white" />
                 </div>
 
-                <div className="flex-1">
-                  <div className="font-medium text-sm">
-                    المستوى <span className="num lyn-text-gradient font-bold">{reward.level}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium mb-2">
+                    عند الوصول للمستوى{' '}
+                    <span className="num lyn-text-gradient font-bold">{reward.level}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {reward.roleId
-                      ? `رتبة ID: ${reward.roleId}`
-                      : '⚠️ لم يتم اختيار رتبة (RolePicker قيد البناء)'}
-                  </div>
+                  <RolePicker
+                    value={reward.roleId}
+                    onChange={(v) => updateRewardRole(reward.level, v)}
+                    placeholder="اختر الرتبة..."
+                  />
                 </div>
 
                 <button
                   onClick={() => removeReward(reward.level)}
-                  className="w-8 h-8 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex items-center justify-center transition-colors"
-                  aria-label="حذف"
+                  className="w-9 h-9 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex items-center justify-center transition-colors flex-shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
