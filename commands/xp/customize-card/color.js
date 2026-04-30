@@ -1,26 +1,17 @@
-// ══════════════════════════════════════════════════════════════════
-//  /تخصيص_بطاقة لون — تغيير لون ثيم البطاقة
-// ══════════════════════════════════════════════════════════════════
-
 const { EmbedBuilder } = require("discord.js")
-const cardCustomizationSystem = require("../../../systems/cardCustomizationSystem")
-const { COLORS, requirePremium } = require("./_shared")
+const { COLORS, premiumEmbed, cardCustomizationSystem } = require("./_shared")
 
 module.exports = async function handleColor(interaction) {
-  const isPremium = await requirePremium(interaction)
-  if (!isPremium) return
-
   await interaction.deferReply({ flags: 64 })
+
+  const isPremium = await cardCustomizationSystem.isPremium(interaction.user.id)
+  if (!isPremium) return interaction.editReply({ embeds: [premiumEmbed()] })
 
   const theme = interaction.options.getString("الثيم")
   const saved = await cardCustomizationSystem.saveCustomization(interaction.user.id, { theme_color: theme })
-
-  if (!saved) {
-    return interaction.editReply({ content: "❌ فشل الحفظ، حاول مرة ثانية." })
-  }
+  if (!saved) return interaction.editReply({ content: "❌ فشل الحفظ، حاول مرة ثانية." })
 
   const themeData = cardCustomizationSystem.getTheme(theme)
-
   return interaction.editReply({
     embeds: [
       new EmbedBuilder()

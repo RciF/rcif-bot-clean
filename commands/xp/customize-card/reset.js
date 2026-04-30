@@ -1,16 +1,11 @@
-// ══════════════════════════════════════════════════════════════════
-//  /تخصيص_بطاقة إعادة_تعيين — إعادة البطاقة للشكل الافتراضي
-// ══════════════════════════════════════════════════════════════════
-
 const { EmbedBuilder } = require("discord.js")
-const cardCustomizationSystem = require("../../../systems/cardCustomizationSystem")
-const { COLORS, requirePremium } = require("./_shared")
+const { COLORS, premiumEmbed, cardCustomizationSystem } = require("./_shared")
 
 module.exports = async function handleReset(interaction) {
-  const isPremium = await requirePremium(interaction)
-  if (!isPremium) return
-
   await interaction.deferReply({ flags: 64 })
+
+  const isPremium = await cardCustomizationSystem.isPremium(interaction.user.id)
+  if (!isPremium) return interaction.editReply({ embeds: [premiumEmbed()] })
 
   await cardCustomizationSystem.resetCustomization(interaction.user.id)
 

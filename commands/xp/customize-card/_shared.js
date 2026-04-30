@@ -5,6 +5,7 @@
 // ══════════════════════════════════════════════════════════════════
 
 const cardCustomizationSystem = require("../../../systems/cardCustomizationSystem")
+const { EmbedBuilder } = require("discord.js")
 
 // ── ألوان الثيمات ──
 const THEME_CHOICES = [
@@ -29,36 +30,24 @@ const COLORS = {
   premium: 0xf59e0b,
 }
 
-// ── التحقق من Premium ──
-async function requirePremium(interaction) {
-  const premium = await cardCustomizationSystem.isPremium(interaction.user.id)
-
-  if (!premium) {
-    const { EmbedBuilder } = require("discord.js")
-    await interaction.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(COLORS.premium)
-          .setTitle("👑 يحتاج اشتراك شخصي")
-          .setDescription("تخصيص البطاقة متاح للمشتركين فقط")
-          .addFields(
-            { name: "💳 الأسعار",     value: "**$2.99/شهر** أو **$18/سنة**",       inline: true },
-            { name: "✨ المميزات",    value: "خلفية مخصصة\nلون ثيم\nصورة شخصية\nشارة Premium", inline: true },
-            { name: "📩 كيف أشترك؟", value: "تواصل مع إدارة البوت",               inline: false }
-          )
-          .setFooter({ text: "التخصيص عالمي — يظهر في كل السيرفرات" })
-          .setTimestamp()
-      ],
-      flags: 64
-    })
-    return false
-  }
-
-  return true
+// ── embed رسالة Premium (بعد deferReply) ──
+function premiumEmbed() {
+  return new EmbedBuilder()
+    .setColor(COLORS.premium)
+    .setTitle("👑 يحتاج اشتراك شخصي")
+    .setDescription("تخصيص البطاقة متاح للمشتركين فقط")
+    .addFields(
+      { name: "💳 الأسعار",     value: "**$2.99/شهر** أو **$18/سنة**",                      inline: true },
+      { name: "✨ المميزات",    value: "خلفية مخصصة\nلون ثيم\nصورة شخصية\nشارة Premium",    inline: true },
+      { name: "📩 كيف أشترك؟", value: "تواصل مع إدارة البوت",                               inline: false }
+    )
+    .setFooter({ text: "التخصيص عالمي — يظهر في كل السيرفرات" })
+    .setTimestamp()
 }
 
 module.exports = {
   THEME_CHOICES,
   COLORS,
-  requirePremium
+  premiumEmbed,
+  cardCustomizationSystem
 }
