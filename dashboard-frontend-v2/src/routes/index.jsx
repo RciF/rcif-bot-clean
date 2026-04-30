@@ -12,6 +12,11 @@ import ProtectionPage from '@/pages/ProtectionPage';
 import LevelsPage from '@/pages/LevelsPage';
 import EconomyPage from '@/pages/EconomyPage';
 import TicketsPage from '@/pages/TicketsPage';
+import WelcomePage from '@/pages/WelcomePage';
+import LogsPage from '@/pages/LogsPage';
+import ModerationPage from '@/pages/ModerationPage';
+import ReactionRolesPage from '@/pages/ReactionRolesPage';
+import EmbedBuilderPage from '@/pages/EmbedBuilderPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 
@@ -41,6 +46,11 @@ const router = createBrowserRouter([
           { path: 'levels', element: <LevelsPage /> },
           { path: 'economy', element: <EconomyPage /> },
           { path: 'tickets', element: <TicketsPage /> },
+          { path: 'welcome', element: <WelcomePage /> },
+          { path: 'logs', element: <LogsPage /> },
+          { path: 'moderation', element: <ModerationPage /> },
+          { path: 'reaction-roles', element: <ReactionRolesPage /> },
+          { path: 'embed', element: <EmbedBuilderPage /> },
           { path: 'settings', element: <ComingSoonPage title="الإعدادات" /> },
         ],
       },

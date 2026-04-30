@@ -15,21 +15,54 @@ import {
   X,
   Moon,
   Sun,
+  PartyPopper,
+  ScrollText,
+  Gavel,
+  ToggleRight,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 
-const navItems = [
-  { to: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
-  { to: '/dashboard/servers', label: 'السيرفرات', icon: Server },
-  { to: '/dashboard/ai', label: 'إعدادات AI', icon: Bot },
-  { to: '/dashboard/protection', label: 'الحماية', icon: Shield },
-  { to: '/dashboard/levels', label: 'المستويات', icon: TrendingUp },
-  { to: '/dashboard/economy', label: 'الاقتصاد', icon: Coins },
-  { to: '/dashboard/tickets', label: 'التذاكر', icon: Ticket },
-  { to: '/dashboard/settings', label: 'الإعدادات', icon: Settings },
+const navSections = [
+  {
+    label: 'الرئيسية',
+    items: [
+      { to: '/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, end: true },
+      { to: '/dashboard/servers', label: 'السيرفرات', icon: Server },
+    ],
+  },
+  {
+    label: 'إدارة السيرفر',
+    items: [
+      { to: '/dashboard/welcome', label: 'الترحيب', icon: PartyPopper },
+      { to: '/dashboard/protection', label: 'الحماية', icon: Shield },
+      { to: '/dashboard/logs', label: 'السجلات', icon: ScrollText },
+      { to: '/dashboard/moderation', label: 'الإشراف', icon: Gavel },
+    ],
+  },
+  {
+    label: 'التفاعل',
+    items: [
+      { to: '/dashboard/tickets', label: 'التذاكر', icon: Ticket },
+      { to: '/dashboard/reaction-roles', label: 'لوحات الرتب', icon: ToggleRight },
+      { to: '/dashboard/levels', label: 'المستويات', icon: TrendingUp },
+      { to: '/dashboard/economy', label: 'الاقتصاد', icon: Coins },
+    ],
+  },
+  {
+    label: 'المتقدم',
+    items: [
+      { to: '/dashboard/ai', label: 'الذكاء الاصطناعي', icon: Bot },
+      { to: '/dashboard/embed', label: 'منشئ الإيمبيد', icon: Sparkles },
+    ],
+  },
+  {
+    label: 'الإعدادات',
+    items: [{ to: '/dashboard/settings', label: 'إعدادات عامة', icon: Settings }],
+  },
 ];
 
 export default function DashboardLayout() {
@@ -48,14 +81,13 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Sidebar */}
       <aside
         className={cn(
-          'fixed lg:sticky top-0 right-0 h-screen w-72 bg-sidebar border-l border-sidebar-border z-40 transition-transform duration-300',
-          sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+          'fixed lg:sticky top-0 right-0 h-screen w-72 bg-sidebar border-l border-sidebar-border z-40 transition-transform duration-300 flex flex-col',
+          sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0',
         )}
       >
-        <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border">
+        <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl lyn-gradient flex items-center justify-center">
               <span className="text-white font-bold">L</span>
@@ -70,30 +102,38 @@ export default function DashboardLayout() {
           </button>
         </div>
 
-        <nav className="p-4 space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/dashboard'}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
-                  isActive
-                    ? 'lyn-gradient text-white lyn-glow'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                )
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </NavLink>
+        <nav className="flex-1 overflow-y-auto p-4 space-y-5">
+          {navSections.map((section) => (
+            <div key={section.label}>
+              <div className="text-[10px] font-bold text-sidebar-foreground/50 uppercase tracking-widest px-3 mb-2">
+                {section.label}
+              </div>
+              <div className="space-y-1">
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
+                        isActive
+                          ? 'lyn-gradient text-white lyn-glow'
+                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                      )
+                    }
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
-        {/* User & Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border space-y-3">
+        <div className="p-4 border-t border-sidebar-border space-y-3 flex-shrink-0">
           {user && (
             <div className="flex items-center gap-3 px-2">
               <div className="w-9 h-9 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-semibold">

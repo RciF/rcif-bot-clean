@@ -86,10 +86,7 @@ const protectionSettings = async () => {
       maxBans: 5,
       action: 'ban',
     },
-    whitelist: {
-      roles: ['2007'],
-      members: [],
-    },
+    whitelist: { roles: ['2007'], members: [] },
     logChannel: '1005',
     isLocked: false,
     lockdownStartedAt: null,
@@ -110,9 +107,7 @@ const xpSettings = async () => {
     multiplier: 1,
     disabledChannels: [],
     disabledRoles: [],
-    multipliers: [
-      { roleId: '2005', multiplier: 2 },
-    ],
+    multipliers: [{ roleId: '2005', multiplier: 2 }],
     roleRewards: [
       { level: 5, roleId: '2002' },
       { level: 10, roleId: '2003' },
@@ -120,7 +115,7 @@ const xpSettings = async () => {
     ],
     levelUpMessage: {
       enabled: true,
-      channel: null, // null = نفس القناة
+      channel: null,
       template: '🎉 مبروك {user}! وصلت للمستوى {level}',
     },
   };
@@ -190,10 +185,7 @@ const ticketsSettings = async () => {
     categoryChannel: '1008',
     staffRole: '2006',
     autoArchiveHours: 48,
-    transcripts: {
-      enabled: true,
-      channel: '1005',
-    },
+    transcripts: { enabled: true, channel: '1005' },
     welcomeMessage: 'أهلاً {user}! الستاف راح يجي قريباً.',
     panel: {
       title: '🎫 لوحة التذاكر',
@@ -222,7 +214,192 @@ const activeTickets = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  Discord Resources (channels, roles, etc)
+//  Welcome Settings (الجديد)
+// ════════════════════════════════════════════════════════════
+
+const welcomeSettings = async () => {
+  await sleep(400);
+  return {
+    enabled: true,
+    welcomeChannel: '1003',
+    leaveChannel: '1003',
+    type: 'embed', // 'text' | 'embed'
+    text: {
+      content: 'أهلاً {user} في {server}! 🎉 صرت العضو رقم {count}',
+    },
+    embed: {
+      title: 'مرحباً {user}! 👋',
+      description:
+        'أهلاً وسهلاً في **{server}**\n\n• اقرأ القوانين في القنوات المخصصة\n• تعرّف على الأعضاء\n• استمتع بإقامتك معنا!',
+      color: 0x9b59b6,
+      footer: 'العضو رقم {count}',
+      thumbnail: 'avatar',
+      image: '',
+    },
+    leaveEnabled: true,
+    leaveMessage: {
+      type: 'text',
+      content: '👋 وداعاً {username}، كنت معنا {duration}',
+    },
+    cardEnabled: false,
+    cardBackground: 'default',
+    mentionUser: true,
+  };
+};
+
+// ════════════════════════════════════════════════════════════
+//  Logs Settings (الجديد)
+// ════════════════════════════════════════════════════════════
+
+const logsSettings = async () => {
+  await sleep(400);
+  return {
+    enabled: true,
+    masterChannel: '1005',
+    useSingleChannel: false,
+    events: {
+      messageDelete: { enabled: true, channel: '1005' },
+      messageEdit: { enabled: true, channel: '1005' },
+      memberJoin: { enabled: true, channel: '1005' },
+      memberLeave: { enabled: true, channel: '1005' },
+      memberBan: { enabled: true, channel: '1005' },
+      memberKick: { enabled: true, channel: '1005' },
+      memberRoleAdd: { enabled: false, channel: null },
+      memberRoleRemove: { enabled: false, channel: null },
+      roleCreate: { enabled: false, channel: null },
+      roleDelete: { enabled: true, channel: '1005' },
+      channelCreate: { enabled: false, channel: null },
+      channelDelete: { enabled: true, channel: '1005' },
+      voiceJoin: { enabled: false, channel: null },
+      voiceLeave: { enabled: false, channel: null },
+      voiceMove: { enabled: false, channel: null },
+    },
+  };
+};
+
+// ════════════════════════════════════════════════════════════
+//  Moderation (الجديد)
+// ════════════════════════════════════════════════════════════
+
+const moderationWarnings = async () => {
+  await sleep(400);
+  return Array.from({ length: 12 }, (_, i) => ({
+    id: i + 1,
+    userId: `${4000000 + i}`,
+    username: `Member${i + 1}`,
+    count: Math.floor(Math.random() * 5) + 1,
+    lastWarning: new Date(Date.now() - i * 1000 * 60 * 60 * 24).toISOString(),
+    lastReason: ['سبام', 'كلام غير لائق', 'تجاهل التحذيرات', 'مخالفة القوانين'][i % 4],
+    moderatorId: '2007',
+    moderatorName: 'Admin',
+  }));
+};
+
+const moderationBans = async () => {
+  await sleep(400);
+  return Array.from({ length: 8 }, (_, i) => ({
+    id: i + 1,
+    userId: `${5000000 + i}`,
+    username: `Banned${i + 1}`,
+    reason: ['سبام متكرر', 'سب وشتم', 'محاولة nuke', 'إعلانات'][i % 4],
+    bannedAt: new Date(Date.now() - i * 1000 * 60 * 60 * 24 * 2).toISOString(),
+    moderatorName: 'Admin',
+  }));
+};
+
+const moderationMutes = async () => {
+  await sleep(400);
+  return Array.from({ length: 5 }, (_, i) => ({
+    id: i + 1,
+    userId: `${6000000 + i}`,
+    username: `Muted${i + 1}`,
+    reason: ['سبام', 'كلام غير لائق'][i % 2],
+    mutedAt: new Date(Date.now() - i * 1000 * 60 * 30).toISOString(),
+    expiresAt: new Date(Date.now() + (i + 1) * 1000 * 60 * 60).toISOString(),
+    moderatorName: 'Mod',
+  }));
+};
+
+// ════════════════════════════════════════════════════════════
+//  Reaction Roles (الجديد)
+// ════════════════════════════════════════════════════════════
+
+const rolePanels = async () => {
+  await sleep(400);
+  return [
+    {
+      id: 'panel-1',
+      messageId: 'msg-1001',
+      title: 'اختر اهتماماتك',
+      description: 'اضغط على الأزرار للحصول على الرتب',
+      channelId: '1001',
+      channelName: 'عام',
+      color: 0x9b59b6,
+      exclusive: false,
+      buttons: [
+        { roleId: '2003', label: 'جيمر', emoji: '🎮', style: 'primary' },
+        { roleId: '2004', label: 'مطور', emoji: '💻', style: 'success' },
+        { roleId: '2005', label: 'فنان', emoji: '🎨', style: 'secondary' },
+      ],
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    },
+    {
+      id: 'panel-2',
+      messageId: 'msg-1002',
+      title: 'الإشعارات',
+      description: 'فعّل الرتب اللي تبيها للإشعارات',
+      channelId: '1004',
+      channelName: 'الإعلانات',
+      color: 0xe91e63,
+      exclusive: false,
+      buttons: [
+        { roleId: '2002', label: 'إعلانات عامة', emoji: '📢', style: 'primary' },
+        { roleId: '2003', label: 'فعاليات', emoji: '🎉', style: 'success' },
+      ],
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 120).toISOString(),
+    },
+  ];
+};
+
+// ════════════════════════════════════════════════════════════
+//  Embed Templates (الجديد)
+// ════════════════════════════════════════════════════════════
+
+const embedTemplates = async () => {
+  await sleep(300);
+  return [
+    {
+      id: 1,
+      name: 'إعلان رسمي',
+      data: {
+        title: '📢 إعلان مهم',
+        description: 'محتوى الإعلان هنا...',
+        color: 0xe74c3c,
+      },
+    },
+    {
+      id: 2,
+      name: 'ترحيب',
+      data: {
+        title: 'أهلاً وسهلاً!',
+        description: 'مرحباً بك في سيرفرنا',
+        color: 0x9b59b6,
+      },
+    },
+    {
+      id: 3,
+      name: 'فعالية',
+      data: {
+        title: '🎉 فعالية جديدة',
+        description: 'انضم لنا في...',
+        color: 0xf39c12,
+      },
+    },
+  ];
+};
+
+// ════════════════════════════════════════════════════════════
+//  Discord Resources
 // ════════════════════════════════════════════════════════════
 
 const guildChannels = async () => {
@@ -250,7 +427,7 @@ const guildInfo = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  Generic Save (لكل الإعدادات)
+//  Generic Save
 // ════════════════════════════════════════════════════════════
 
 const saveSettings = async (section, data) => {
@@ -274,6 +451,13 @@ export const mock = {
   economyTopRich,
   ticketsSettings,
   activeTickets,
+  welcomeSettings,
+  logsSettings,
+  moderationWarnings,
+  moderationBans,
+  moderationMutes,
+  rolePanels,
+  embedTemplates,
 
   // Resources
   guildChannels,
