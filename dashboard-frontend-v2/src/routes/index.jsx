@@ -8,6 +8,10 @@ import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import DashboardPage from '@/pages/DashboardPage';
 import ServersPage from '@/pages/ServersPage';
 import AISettingsPage from '@/pages/AISettingsPage';
+import ProtectionPage from '@/pages/ProtectionPage';
+import LevelsPage from '@/pages/LevelsPage';
+import EconomyPage from '@/pages/EconomyPage';
+import TicketsPage from '@/pages/TicketsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 
@@ -16,19 +20,12 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     errorElement: <NotFoundPage />,
     children: [
-      // Public
       { path: '/', element: <HomePage /> },
-
-      // Auth
       {
         element: <AuthLayout />,
-        children: [
-          { path: 'login', element: <LoginPage /> },
-        ],
+        children: [{ path: 'login', element: <LoginPage /> }],
       },
       { path: 'auth/callback', element: <AuthCallbackPage /> },
-
-      // Protected dashboard
       {
         path: 'dashboard',
         element: (
@@ -40,15 +37,13 @@ const router = createBrowserRouter([
           { index: true, element: <DashboardPage /> },
           { path: 'servers', element: <ServersPage /> },
           { path: 'ai', element: <AISettingsPage /> },
-          { path: 'protection', element: <ComingSoonPage title="الحماية" /> },
-          { path: 'levels', element: <ComingSoonPage title="المستويات" /> },
-          { path: 'economy', element: <ComingSoonPage title="الاقتصاد" /> },
-          { path: 'tickets', element: <ComingSoonPage title="التذاكر" /> },
+          { path: 'protection', element: <ProtectionPage /> },
+          { path: 'levels', element: <LevelsPage /> },
+          { path: 'economy', element: <EconomyPage /> },
+          { path: 'tickets', element: <TicketsPage /> },
           { path: 'settings', element: <ComingSoonPage title="الإعدادات" /> },
         ],
       },
-
-      // 404
       { path: '*', element: <NotFoundPage /> },
     ],
   },
@@ -61,9 +56,7 @@ function ComingSoonPage({ title }) {
         <span className="text-3xl">🚀</span>
       </div>
       <h1 className="text-3xl font-bold mb-3 lyn-text-gradient">{title}</h1>
-      <p className="text-muted-foreground">
-        هذه الصفحة قيد التطوير وستكون متاحة قريباً
-      </p>
+      <p className="text-muted-foreground">هذه الصفحة قيد التطوير وستكون متاحة قريباً</p>
     </div>
   );
 }
