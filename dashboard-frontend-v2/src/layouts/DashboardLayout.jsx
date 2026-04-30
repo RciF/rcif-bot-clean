@@ -27,6 +27,7 @@ import {
   CreditCard,
   Terminal,
   CalendarDays,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
@@ -68,6 +69,7 @@ const navSections = [
     items: [
       { to: '/dashboard/ai', label: 'الذكاء الاصطناعي', icon: Bot },
       { to: '/dashboard/embed', label: 'منشئ الإيمبيد', icon: Sparkles },
+      { to: '/dashboard/scheduler', label: 'المُجدوِل', icon: Clock },
       { to: '/dashboard/templates', label: 'القوالب', icon: Layers },
     ],
   },
@@ -110,10 +112,7 @@ export default function DashboardLayout() {
             </div>
             <span className="font-bold text-lg lyn-text-gradient">Lyn Bot</span>
           </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 hover:bg-sidebar-accent rounded-lg"
-          >
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 hover:bg-sidebar-accent rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -24,6 +24,7 @@ import AuditLogPage from '@/pages/AuditLogPage';
 import TemplatesPage from '@/pages/TemplatesPage';
 import SubscriptionPage from '@/pages/SubscriptionPage';
 import CommandsPage from '@/pages/CommandsPage';
+import SchedulerPage from '@/pages/SchedulerPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
           { path: 'commands', element: <CommandsPage /> },
           { path: 'subscription', element: <SubscriptionPage /> },
           { path: 'events', element: <EventsPage /> },
+          { path: 'scheduler', element: <SchedulerPage /> },
           { path: 'ai', element: <AISettingsPage /> },
           { path: 'protection', element: <ProtectionPage /> },
           { path: 'levels', element: <LevelsPage /> },

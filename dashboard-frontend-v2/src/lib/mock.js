@@ -12,13 +12,15 @@ const MOCK_CHANNELS = [
   { id: '1001', name: 'عام', type: 0, position: 0 },
   { id: '1002', name: 'دردشة', type: 0, position: 1 },
   { id: '1003', name: 'الترحيب', type: 0, position: 2 },
-  { id: '1004', name: 'الإعلانات', type: 0, position: 3 },
+  { id: '1004', name: 'الإعلانات', type: 5, position: 3 },
   { id: '1005', name: 'السجلات', type: 0, position: 4 },
   { id: '1006', name: 'الموسيقى', type: 2, position: 5 },
   { id: '1007', name: 'الفعاليات', type: 0, position: 6 },
   { id: '1008', name: 'التذاكر', type: 0, position: 7 },
   { id: '1009', name: 'الدعم', type: 0, position: 8 },
   { id: '1010', name: 'النقاشات', type: 0, position: 9 },
+  { id: '1011', name: 'صوت-عام', type: 2, position: 10 },
+  { id: '1012', name: 'صوت-جيمنج', type: 2, position: 11 },
 ];
 
 const MOCK_ROLES = [
@@ -73,7 +75,7 @@ const protectionSettings = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  XP / Levels Settings
+//  XP / Levels
 // ════════════════════════════════════════════════════════════
 
 const xpSettings = async () => {
@@ -110,7 +112,7 @@ const xpLeaderboard = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  Economy Settings
+//  Economy
 // ════════════════════════════════════════════════════════════
 
 const economySettings = async () => {
@@ -149,7 +151,7 @@ const economyTopRich = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  Tickets Settings
+//  Tickets
 // ════════════════════════════════════════════════════════════
 
 const ticketsSettings = async () => {
@@ -189,7 +191,7 @@ const activeTickets = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  Welcome Settings
+//  Welcome
 // ════════════════════════════════════════════════════════════
 
 const welcomeSettings = async () => {
@@ -202,7 +204,7 @@ const welcomeSettings = async () => {
     text: { content: 'أهلاً {user} في {server}! 🎉 صرت العضو رقم {count}' },
     embed: {
       title: 'مرحباً {user}! 👋',
-      description: 'أهلاً وسهلاً في **{server}**\n\n• اقرأ القوانين في القنوات المخصصة\n• تعرّف على الأعضاء\n• استمتع بإقامتك معنا!',
+      description: 'أهلاً وسهلاً في **{server}**\n\n• اقرأ القوانين\n• تعرّف على الأعضاء\n• استمتع بإقامتك معنا!',
       color: 0x9b59b6,
       footer: 'العضو رقم {count}',
       thumbnail: 'avatar',
@@ -217,7 +219,7 @@ const welcomeSettings = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  Logs Settings
+//  Logs
 // ════════════════════════════════════════════════════════════
 
 const logsSettings = async () => {
@@ -344,10 +346,9 @@ const embedTemplates = async () => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  ▼ Week 4 ▼
+//  Week 4 — Overview / Stats / Members / Events
 // ════════════════════════════════════════════════════════════
 
-// Overview / Health Score
 const overviewData = async () => {
   await sleep(500);
   return {
@@ -367,33 +368,9 @@ const overviewData = async () => {
       modActions7d: { value: 14, change: -30, period: '7 أيام' },
     },
     suggestions: [
-      {
-        id: 's1',
-        title: 'Anti-Nuke غير مفعّل',
-        description: 'حماية من تخريب السيرفر',
-        action: 'فعّل الحماية',
-        link: '/dashboard/protection',
-        severity: 'high',
-        icon: 'shield',
-      },
-      {
-        id: 's2',
-        title: '30% من قنواتك بدون لوق',
-        description: 'فعّل اللوق لتتبع كل النشاطات',
-        action: 'إعداد السجلات',
-        link: '/dashboard/logs',
-        severity: 'medium',
-        icon: 'logs',
-      },
-      {
-        id: 's3',
-        title: 'ما عندك لوحة رتب',
-        description: 'الأعضاء يقدرون يختارون رتبهم',
-        action: 'إنشاء لوحة',
-        link: '/dashboard/reaction-roles',
-        severity: 'low',
-        icon: 'roles',
-      },
+      { id: 's1', title: 'Anti-Nuke غير مفعّل', description: 'حماية من تخريب السيرفر', action: 'فعّل الحماية', link: '/dashboard/protection', severity: 'high', icon: 'shield' },
+      { id: 's2', title: '30% من قنواتك بدون لوق', description: 'فعّل اللوق لتتبع كل النشاطات', action: 'إعداد السجلات', link: '/dashboard/logs', severity: 'medium', icon: 'logs' },
+      { id: 's3', title: 'ما عندك لوحة رتب', description: 'الأعضاء يقدرون يختارون رتبهم', action: 'إنشاء لوحة', link: '/dashboard/reaction-roles', severity: 'low', icon: 'roles' },
     ],
     recentActivity: [
       { type: 'member.join', user: 'Ahmed123', text: 'انضم للسيرفر', time: new Date(Date.now() - 1000 * 60 * 2).toISOString() },
@@ -409,7 +386,6 @@ const overviewData = async () => {
   };
 };
 
-// Stats
 const statsData = async (period = '7d') => {
   await sleep(500);
   const points = period === '24h' ? 24 : period === '7d' ? 7 : 30;
@@ -454,7 +430,6 @@ const statsData = async (period = '7d') => {
   };
 };
 
-// Members Hub
 const membersList = async () => {
   await sleep(500);
   return Array.from({ length: 30 }, (_, i) => ({
@@ -474,54 +449,19 @@ const membersList = async () => {
   }));
 };
 
-// Events
 const eventsList = async () => {
   await sleep(400);
   return [
-    {
-      id: 1,
-      title: 'بطولة الجيمنج',
-      description: 'بطولة في لعبة فالورانت — جوائز قيمة',
-      image: null,
-      startsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString(),
-      maxParticipants: 50,
-      registered: 23,
-      channel: '1007',
-      reminderHours: 2,
-      status: 'upcoming',
-    },
-    {
-      id: 2,
-      title: 'لقاء الكلام الصوتي',
-      description: 'لقاء أسبوعي في قناة الصوت',
-      image: null,
-      startsAt: new Date(Date.now() + 1000 * 60 * 60 * 12).toISOString(),
-      maxParticipants: 100,
-      registered: 67,
-      channel: '1006',
-      reminderHours: 1,
-      status: 'upcoming',
-    },
-    {
-      id: 3,
-      title: 'مسابقة الميمز',
-      description: 'مسابقة في القناة',
-      image: null,
-      startsAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-      maxParticipants: 30,
-      registered: 30,
-      channel: '1010',
-      reminderHours: 1,
-      status: 'ended',
-    },
+    { id: 1, title: 'بطولة الجيمنج', description: 'بطولة في لعبة فالورانت — جوائز قيمة', image: null, startsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString(), maxParticipants: 50, registered: 23, channel: '1007', reminderHours: 2, status: 'upcoming' },
+    { id: 2, title: 'لقاء الكلام الصوتي', description: 'لقاء أسبوعي في قناة الصوت', image: null, startsAt: new Date(Date.now() + 1000 * 60 * 60 * 12).toISOString(), maxParticipants: 100, registered: 67, channel: '1006', reminderHours: 1, status: 'upcoming' },
+    { id: 3, title: 'مسابقة الميمز', description: 'مسابقة في القناة', image: null, startsAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), maxParticipants: 30, registered: 30, channel: '1010', reminderHours: 1, status: 'ended' },
   ];
 };
 
 // ════════════════════════════════════════════════════════════
-//  ▼ Week 5 ▼
+//  Week 5 — Audit / Templates / Subscription / Commands
 // ════════════════════════════════════════════════════════════
 
-// Audit Log
 const auditLog = async () => {
   await sleep(400);
   const actions = [
@@ -544,64 +484,23 @@ const auditLog = async () => {
       userId: '529320108032786433',
       username: 'Saud',
       target: ['قناة #welcome', 'Anti-Spam', 'دور @VIP', 'لوحة رتب'][i % 4],
-      changes: {
-        before: { enabled: i % 2 === 0 },
-        after: { enabled: i % 2 !== 0 },
-      },
+      changes: { before: { enabled: i % 2 === 0 }, after: { enabled: i % 2 !== 0 } },
       reversible: i % 3 !== 0,
       createdAt: new Date(Date.now() - i * 1000 * 60 * 60 * 3).toISOString(),
     };
   });
 };
 
-// Templates
 const presetTemplates = async () => {
   await sleep(300);
   return [
-    {
-      id: 'gaming',
-      name: 'سيرفر الجيمنج',
-      icon: '🎮',
-      gradient: 'from-violet-500 to-purple-600',
-      description: 'إعدادات جاهزة لسيرفرات الألعاب — رتب، فعاليات، اقتصاد',
-      changes: ['ترحيب جيمنج', 'حماية متوسطة', 'XP عالي', 'لوحات رتب الألعاب'],
-      systemsAffected: ['welcome', 'protection', 'xp', 'roles'],
-      popular: true,
-    },
-    {
-      id: 'community',
-      name: 'مجتمع عام',
-      icon: '🌍',
-      gradient: 'from-emerald-500 to-cyan-500',
-      description: 'لمجتمعات الأصدقاء والنقاش العام',
-      changes: ['ترحيب دافئ', 'حماية أساسية', 'XP متوازن', 'تذاكر دعم'],
-      systemsAffected: ['welcome', 'protection', 'xp', 'tickets'],
-      popular: true,
-    },
-    {
-      id: 'educational',
-      name: 'سيرفر تعليمي',
-      icon: '📚',
-      gradient: 'from-blue-500 to-indigo-600',
-      description: 'للمدرسين والطلاب والكورسات',
-      changes: ['AI تعليمي', 'لوق متقدم', 'منع السبام', 'فعاليات'],
-      systemsAffected: ['ai', 'logs', 'protection', 'events'],
-      popular: false,
-    },
-    {
-      id: 'streaming',
-      name: 'سيرفر منشئ المحتوى',
-      icon: '🎬',
-      gradient: 'from-pink-500 to-rose-600',
-      description: 'لمنشئي المحتوى والمتابعين',
-      changes: ['ترحيب VIP', 'إعلانات بثوث', 'لوحات إشعارات', 'مكافآت'],
-      systemsAffected: ['welcome', 'roles', 'economy'],
-      popular: false,
-    },
+    { id: 'gaming', name: 'سيرفر الجيمنج', icon: '🎮', gradient: 'from-violet-500 to-purple-600', description: 'إعدادات جاهزة لسيرفرات الألعاب — رتب، فعاليات، اقتصاد', changes: ['ترحيب جيمنج', 'حماية متوسطة', 'XP عالي', 'لوحات رتب الألعاب'], systemsAffected: ['welcome', 'protection', 'xp', 'roles'], popular: true },
+    { id: 'community', name: 'مجتمع عام', icon: '🌍', gradient: 'from-emerald-500 to-cyan-500', description: 'لمجتمعات الأصدقاء والنقاش العام', changes: ['ترحيب دافئ', 'حماية أساسية', 'XP متوازن', 'تذاكر دعم'], systemsAffected: ['welcome', 'protection', 'xp', 'tickets'], popular: true },
+    { id: 'educational', name: 'سيرفر تعليمي', icon: '📚', gradient: 'from-blue-500 to-indigo-600', description: 'للمدرسين والطلاب والكورسات', changes: ['AI تعليمي', 'لوق متقدم', 'منع السبام', 'فعاليات'], systemsAffected: ['ai', 'logs', 'protection', 'events'], popular: false },
+    { id: 'streaming', name: 'سيرفر منشئ المحتوى', icon: '🎬', gradient: 'from-pink-500 to-rose-600', description: 'لمنشئي المحتوى والمتابعين', changes: ['ترحيب VIP', 'إعلانات بثوث', 'لوحات إشعارات', 'مكافآت'], systemsAffected: ['welcome', 'roles', 'economy'], popular: false },
   ];
 };
 
-// Subscription
 const subscriptionInfo = async () => {
   await sleep(400);
   return {
@@ -618,7 +517,6 @@ const subscriptionInfo = async () => {
   };
 };
 
-// Commands list
 const commandsList = async () => {
   await sleep(400);
   const cats = [
@@ -651,6 +549,68 @@ const commandsList = async () => {
     }
   }
   return { categories: cats, commands };
+};
+
+// ════════════════════════════════════════════════════════════
+//  Week 6 — Scheduled Tasks
+// ════════════════════════════════════════════════════════════
+
+const scheduledTasks = async () => {
+  await sleep(400);
+  return [
+    {
+      id: 1,
+      name: 'إعلان أسبوعي',
+      type: 'embed',
+      channel: '1004',
+      schedule: { type: 'recurring', frequency: 'weekly', dayOfWeek: 5, time: '20:00' },
+      enabled: true,
+      lastRunAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 6).toISOString(),
+      nextRunAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
+      payload: { title: 'موعدنا الأسبوعي', description: 'لقاء الفريق كل خميس', color: 0x9b59b6 },
+      runCount: 12,
+      successCount: 12,
+    },
+    {
+      id: 2,
+      name: 'تذكير قوانين السيرفر',
+      type: 'message',
+      channel: '1001',
+      schedule: { type: 'recurring', frequency: 'daily', time: '09:00' },
+      enabled: true,
+      lastRunAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+      nextRunAt: new Date(Date.now() + 1000 * 60 * 60 * 16).toISOString(),
+      payload: { content: '📋 تذكير: راجعوا قوانين السيرفر' },
+      runCount: 30,
+      successCount: 30,
+    },
+    {
+      id: 3,
+      name: 'إعلان فعالية يوم رأس السنة',
+      type: 'embed',
+      channel: '1004',
+      schedule: { type: 'once', runAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString() },
+      enabled: true,
+      lastRunAt: null,
+      nextRunAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
+      payload: { title: '🎊 احتفال رأس السنة!', description: 'انضم لنا...', color: 0xf39c12 },
+      runCount: 0,
+      successCount: 0,
+    },
+    {
+      id: 4,
+      name: 'إحصائيات شهرية',
+      type: 'embed',
+      channel: '1005',
+      schedule: { type: 'recurring', frequency: 'monthly', dayOfMonth: 1, time: '00:00' },
+      enabled: false,
+      lastRunAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 31).toISOString(),
+      nextRunAt: null,
+      payload: { title: 'تقرير الشهر', description: 'إحصائيات...', color: 0x3498db },
+      runCount: 3,
+      successCount: 2,
+    },
+  ];
 };
 
 // ════════════════════════════════════════════════════════════
@@ -688,7 +648,6 @@ const saveSettings = async (section, data) => {
 // ════════════════════════════════════════════════════════════
 
 export const mock = {
-  // Settings
   aiSettings,
   protectionSettings,
   xpSettings,
@@ -705,25 +664,18 @@ export const mock = {
   moderationMutes,
   rolePanels,
   embedTemplates,
-
-  // Week 4
   overviewData,
   statsData,
   membersList,
   eventsList,
-
-  // Week 5
   auditLog,
   presetTemplates,
   subscriptionInfo,
   commandsList,
-
-  // Resources
+  scheduledTasks,
   guildChannels,
   guildRoles,
   guildInfo,
-
-  // Generic
   saveSettings,
 };
 

@@ -12,6 +12,7 @@ import { SaveBar } from '@/components/shared/SaveBar';
 import { PlanLockBanner, PlanLockModal } from '@/components/shared/PlanLockOverlay';
 import { EmbedPreview } from '@/components/shared/EmbedPreview';
 import { VariablesHelper } from '@/components/shared/VariablesHelper';
+import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { useGuildSettings } from '@/hooks/useGuildSettings';
 import { usePlanGate } from '@/hooks/usePlanGate';
 import { mock } from '@/lib/mock';
@@ -66,9 +67,7 @@ export default function WelcomePage() {
   if (!data) return null;
 
   const handleSave = planGate.gateAction(save);
-  const handleTest = () => {
-    toast.success('تم إرسال رسالة اختبار للقناة');
-  };
+  const handleTest = () => toast.success('تم إرسال رسالة اختبار للقناة');
 
   return (
     <>
@@ -94,7 +93,6 @@ export default function WelcomePage() {
         />
       )}
 
-      {/* Master Toggle */}
       <Card className="p-5 mb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 flex-1">
@@ -158,16 +156,15 @@ export default function WelcomePage() {
   );
 }
 
-// ════════════════════════════════════════════════════════════
+// ────────────────────────────────────────────────────────────
 //  Welcome Tab
-// ════════════════════════════════════════════════════════════
+// ────────────────────────────────────────────────────────────
 
 function WelcomeTab({ data, updateField }) {
   const isEmbed = data.type === 'embed';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Editor */}
       <div className="space-y-4">
         <Card className="p-5">
           <div className="mb-4">
@@ -178,14 +175,12 @@ function WelcomeTab({ data, updateField }) {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block">قناة الترحيب</label>
-              <div className="border-2 border-dashed border-border rounded-xl p-3 text-center text-xs text-muted-foreground">
-                ChannelPicker قيد البناء
-                {data.welcomeChannel && (
-                  <span className="ms-2 px-2 py-0.5 rounded bg-violet-500/10 text-violet-500">
-                    #{data.welcomeChannel}
-                  </span>
-                )}
-              </div>
+              <ChannelPicker
+                value={data.welcomeChannel}
+                onChange={(v) => updateField('welcomeChannel', v)}
+                types={[0, 5]}
+                placeholder="اختر قناة الترحيب..."
+              />
             </div>
 
             <div>
@@ -232,7 +227,6 @@ function WelcomeTab({ data, updateField }) {
           </div>
         </Card>
 
-        {/* Content Editor */}
         {!isEmbed ? (
           <Card className="p-5">
             <h3 className="font-bold mb-3">نص الرسالة</h3>
@@ -247,67 +241,64 @@ function WelcomeTab({ data, updateField }) {
             <VariablesHelper variables={VARIABLES} />
           </Card>
         ) : (
-          <>
-            <Card className="p-5 space-y-4">
-              <h3 className="font-bold">محتوى الإيمبيد</h3>
-              <Separator />
+          <Card className="p-5 space-y-4">
+            <h3 className="font-bold">محتوى الإيمبيد</h3>
+            <Separator />
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">العنوان</label>
+            <div>
+              <label className="text-sm font-medium mb-2 block">العنوان</label>
+              <Input
+                value={data.embed?.title || ''}
+                onChange={(e) => updateField('embed.title', e.target.value)}
+                placeholder="مرحباً {user}! 👋"
+                maxLength={256}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">الوصف</label>
+              <textarea
+                value={data.embed?.description || ''}
+                onChange={(e) => updateField('embed.description', e.target.value)}
+                placeholder="أهلاً وسهلاً في **{server}**"
+                rows={4}
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm resize-y"
+                maxLength={4000}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Footer</label>
+              <Input
+                value={data.embed?.footer || ''}
+                onChange={(e) => updateField('embed.footer', e.target.value)}
+                placeholder="العضو رقم {count}"
+                maxLength={2048}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">لون الإيمبيد</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={intToHexColor(data.embed?.color || 0x9b59b6)}
+                  onChange={(e) => updateField('embed.color', hexToIntColor(e.target.value))}
+                  className="w-12 h-10 rounded-lg border border-border cursor-pointer"
+                />
                 <Input
-                  value={data.embed?.title || ''}
-                  onChange={(e) => updateField('embed.title', e.target.value)}
-                  placeholder="مرحباً {user}! 👋"
-                  maxLength={256}
+                  value={intToHexColor(data.embed?.color || 0x9b59b6)}
+                  onChange={(e) => updateField('embed.color', hexToIntColor(e.target.value))}
+                  className="flex-1 num"
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">الوصف</label>
-                <textarea
-                  value={data.embed?.description || ''}
-                  onChange={(e) => updateField('embed.description', e.target.value)}
-                  placeholder="أهلاً وسهلاً في **{server}**"
-                  rows={4}
-                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm resize-y"
-                  maxLength={4000}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">Footer</label>
-                <Input
-                  value={data.embed?.footer || ''}
-                  onChange={(e) => updateField('embed.footer', e.target.value)}
-                  placeholder="العضو رقم {count}"
-                  maxLength={2048}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">لون الإيمبيد</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={intToHexColor(data.embed?.color || 0x9b59b6)}
-                    onChange={(e) => updateField('embed.color', hexToIntColor(e.target.value))}
-                    className="w-12 h-10 rounded-lg border border-border cursor-pointer"
-                  />
-                  <Input
-                    value={intToHexColor(data.embed?.color || 0x9b59b6)}
-                    onChange={(e) => updateField('embed.color', hexToIntColor(e.target.value))}
-                    className="flex-1 num"
-                  />
-                </div>
-              </div>
-
-              <VariablesHelper variables={VARIABLES} />
-            </Card>
-          </>
+            <VariablesHelper variables={VARIABLES} />
+          </Card>
         )}
       </div>
 
-      {/* Preview */}
       <div className="lg:sticky lg:top-4 lg:self-start">
         <Card className="p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -332,9 +323,9 @@ function WelcomeTab({ data, updateField }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════
+// ────────────────────────────────────────────────────────────
 //  Leave Tab
-// ════════════════════════════════════════════════════════════
+// ────────────────────────────────────────────────────────────
 
 function LeaveTab({ data, updateField }) {
   return (
@@ -343,9 +334,7 @@ function LeaveTab({ data, updateField }) {
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <h3 className="font-bold mb-1">رسائل الوداع</h3>
-            <p className="text-sm text-muted-foreground">
-              إرسال رسالة لما يغادر عضو السيرفر
-            </p>
+            <p className="text-sm text-muted-foreground">إرسال رسالة لما يغادر عضو السيرفر</p>
           </div>
           <Switch
             checked={data.leaveEnabled}
@@ -355,19 +344,17 @@ function LeaveTab({ data, updateField }) {
         </div>
 
         {data.leaveEnabled && (
-          <div className={cn('space-y-4 animate-lyn-fade-up', !data.leaveEnabled && 'opacity-50')}>
+          <div className="space-y-4 animate-lyn-fade-up">
             <Separator />
 
             <div>
               <label className="text-sm font-medium mb-2 block">قناة الوداع</label>
-              <div className="border-2 border-dashed border-border rounded-xl p-3 text-center text-xs text-muted-foreground">
-                ChannelPicker قيد البناء
-                {data.leaveChannel && (
-                  <span className="ms-2 px-2 py-0.5 rounded bg-violet-500/10 text-violet-500">
-                    #{data.leaveChannel}
-                  </span>
-                )}
-              </div>
+              <ChannelPicker
+                value={data.leaveChannel}
+                onChange={(v) => updateField('leaveChannel', v)}
+                types={[0, 5]}
+                placeholder="اختر قناة الوداع..."
+              />
             </div>
 
             <div>
@@ -386,7 +373,6 @@ function LeaveTab({ data, updateField }) {
         )}
       </Card>
 
-      {/* Preview */}
       {data.leaveEnabled && (
         <Card className="p-5">
           <div className="flex items-center gap-2 mb-4">
