@@ -20,6 +20,13 @@ import {
   Gavel,
   ToggleRight,
   Sparkles,
+  BarChart3,
+  Users,
+  History,
+  Layers,
+  CreditCard,
+  Terminal,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
@@ -30,7 +37,9 @@ const navSections = [
   {
     label: 'الرئيسية',
     items: [
-      { to: '/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, end: true },
+      { to: '/dashboard', label: 'نظرة عامة', icon: LayoutDashboard, end: true },
+      { to: '/dashboard/stats', label: 'الإحصائيات', icon: BarChart3 },
+      { to: '/dashboard/audit', label: 'سجل الأنشطة', icon: History },
       { to: '/dashboard/servers', label: 'السيرفرات', icon: Server },
     ],
   },
@@ -41,6 +50,7 @@ const navSections = [
       { to: '/dashboard/protection', label: 'الحماية', icon: Shield },
       { to: '/dashboard/logs', label: 'السجلات', icon: ScrollText },
       { to: '/dashboard/moderation', label: 'الإشراف', icon: Gavel },
+      { to: '/dashboard/members', label: 'الأعضاء', icon: Users },
     ],
   },
   {
@@ -50,6 +60,7 @@ const navSections = [
       { to: '/dashboard/reaction-roles', label: 'لوحات الرتب', icon: ToggleRight },
       { to: '/dashboard/levels', label: 'المستويات', icon: TrendingUp },
       { to: '/dashboard/economy', label: 'الاقتصاد', icon: Coins },
+      { to: '/dashboard/events', label: 'الفعاليات', icon: CalendarDays },
     ],
   },
   {
@@ -57,11 +68,16 @@ const navSections = [
     items: [
       { to: '/dashboard/ai', label: 'الذكاء الاصطناعي', icon: Bot },
       { to: '/dashboard/embed', label: 'منشئ الإيمبيد', icon: Sparkles },
+      { to: '/dashboard/templates', label: 'القوالب', icon: Layers },
     ],
   },
   {
     label: 'الإعدادات',
-    items: [{ to: '/dashboard/settings', label: 'إعدادات عامة', icon: Settings }],
+    items: [
+      { to: '/dashboard/commands', label: 'الأوامر', icon: Terminal },
+      { to: '/dashboard/subscription', label: 'الاشتراك', icon: CreditCard },
+      { to: '/dashboard/settings', label: 'إعدادات عامة', icon: Settings },
+    ],
   },
 ];
 
@@ -158,27 +174,17 @@ export default function DashboardLayout() {
       </aside>
 
       {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          className="lg:hidden fixed inset-0 bg-black/50 z-30"
-        />
+        <div onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-30" />
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-20">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 hover:bg-accent rounded-lg"
-          >
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 hover:bg-accent rounded-lg">
             <Menu className="w-5 h-5" />
           </button>
 
           <div className="flex items-center gap-2 mr-auto">
-            <button
-              onClick={toggleTheme}
-              className="p-2 hover:bg-accent rounded-lg transition-colors"
-              aria-label="تبديل الثيم"
-            >
+            <button onClick={toggleTheme} className="p-2 hover:bg-accent rounded-lg transition-colors" aria-label="تبديل الثيم">
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button className="p-2 hover:bg-accent rounded-lg relative">
