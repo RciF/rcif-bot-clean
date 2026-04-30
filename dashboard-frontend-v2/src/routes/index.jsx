@@ -7,6 +7,7 @@ import LoginPage from '@/pages/LoginPage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import DashboardPage from '@/pages/DashboardPage';
 import ServersPage from '@/pages/ServersPage';
+import AISettingsPage from '@/pages/AISettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 
@@ -38,7 +39,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'servers', element: <ServersPage /> },
-          { path: 'ai', element: <ComingSoonPage title="إعدادات AI" /> },
+          { path: 'ai', element: <AISettingsPage /> },
           { path: 'protection', element: <ComingSoonPage title="الحماية" /> },
           { path: 'levels', element: <ComingSoonPage title="المستويات" /> },
           { path: 'economy', element: <ComingSoonPage title="الاقتصاد" /> },
