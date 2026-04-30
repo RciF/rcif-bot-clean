@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js")
 const databaseSystem = require("../../systems/databaseSystem")
+const statsSystem = require("../../systems/statsSystem")
 const logger = require("../../systems/loggerSystem")
 
 async function getWelcomeSettings(guildId) {
@@ -19,6 +20,11 @@ module.exports = {
   async execute(member, client) {
     try {
       if (!member.guild) return
+
+      // 📊 تسجيل snapshot للإحصائيات
+      try {
+        await statsSystem.recordSnapshot(member.guild.id, member.guild.memberCount, 0, 1)
+      } catch {}
 
       const settings = await getWelcomeSettings(member.guild.id)
       if (!settings || !settings.enabled) return

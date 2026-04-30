@@ -6,6 +6,7 @@ const startupSystem = require("./systems/startupSystem")
 const { startApiServer } = require("./systems/apiServerSystem")
 const logger = require("./systems/loggerSystem")
 const subRoleSystem = require("./systems/subscriptionRoleSystem")
+const scheduler = require("./systems/schedulerSystem")
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 
 if (!DISCORD_TOKEN) {
@@ -20,6 +21,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.GuildPresences,
   ],
 })
 
@@ -38,11 +40,6 @@ try {
 
 // ══════════════════════════════════════════════════════════════════
 //  COLLECT COMMANDS FOR AUTO-DEPLOY
-//  يدعم:
-//  1) commands/<category>/<command>.js          (ملف مستقل)
-//  2) commands/<category>/<command>/index.js    (مجلد فرعي)
-//  3) commands/<category>/index.js              (category-as-command)
-//  4) الملفات اللي تبدأ بـ _ تُتجاهل
 // ══════════════════════════════════════════════════════════════════
 function collectCommandsForDeploy() {
   const path = require("path")
@@ -56,14 +53,12 @@ function collectCommandsForDeploy() {
     const categoryPath = path.join(commandsPath, category)
     if (!fs.lstatSync(categoryPath).isDirectory()) continue
 
-    // CASE A: index.js في جذر القسم
     const categoryIndexPath = path.join(categoryPath, "index.js")
     if (fs.existsSync(categoryIndexPath)) {
       pushCommand(categoryIndexPath, commands)
       continue
     }
 
-    // CASE B: القسم فيه عدة أوامر
     const entries = fs.readdirSync(categoryPath)
 
     for (const entry of entries) {
@@ -127,18 +122,16 @@ function pushCommand(filePath, commands) {
     eventReminderSystem.startScheduler(client)
 
     // ══════════════════════════════════════
-    // ══════════════════════════════════════
-    //  ✅ نشر الأوامر تلقائياً عند بدء التشغيل
+    //  ✅ نشر الأوامر تلقائياً
     // ══════════════════════════════════════
     try {
       const { REST, Routes } = require("discord.js")
 
       const DEPLOY_MODE = process.env.DEPLOY_MODE || "guild"
-      const GUILD_ID = process.env.GUILD_ID
-      const CLIENT_ID = process.env.CLIENT_ID
+      const GUILD_ID    = process.env.GUILD_ID
+      const CLIENT_ID   = process.env.CLIENT_ID
 
       const commands = collectCommandsForDeploy()
-
       const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN)
 
       if (DEPLOY_MODE === "guild" && GUILD_ID) {
@@ -159,14 +152,26 @@ function pushCommand(filePath, commands) {
       logger.error("AUTO_DEPLOY_COMMANDS_FAILED", { error: err.message })
     }
 
-    const { updateAllGuilds } = require("./systems/statsSystem")
-    setInterval(async () => {
-      try {
-        await updateAllGuilds(client)
-      } catch (err) {
-        logger.error("STATS_AUTO_UPDATE_FAILED", { error: err.message })
-      }
-    }, 10 * 60 * 1000)
+    // ══════════════════════════════════════
+    //  ✅ Scheduler — كل الـ cron jobs هنا
+    // ══════════════════════════════════════
+    const { updateAllGuilds, ensureTables } = require("./systems/statsSystem")
+
+    // إنشاء الجداول عند البدء
+    try {
+      await ensureTables()
+      logger.success("STATS_TABLES_READY")
+    } catch (err) {
+      logger.error("STATS_TABLES_FAILED", { error: err.message })
+    }
+
+    // تحديث لوحات الإحصائيات كل 10 دقائق
+    scheduler.register(
+      "stats-panel-update",
+      10 * 60 * 1000,
+      () => updateAllGuilds(client),
+      false // لا تشتغل فوراً — انتظر حتى يتحمل الكلاينت بالكامل
+    )
 
   } catch (error) {
     logger.error("SYSTEM_STARTUP_FAILED", {
