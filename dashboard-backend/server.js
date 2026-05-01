@@ -357,30 +357,104 @@ app.get("/api/health", async (req,res) => {
 // ══════════════════════════════════════
 //  AUTH
 // ══════════════════════════════════════
-app.get("/api/auth/callback", async (req,res) => {
-  const { code } = req.query
-  if(!code) return res.status(400).json({ error:"No code" })
+/**
+ * SERVER.JS — AUTH CALLBACK PATCH
+ *
+ * المشكلة: الباك اند يستخدم REDIRECT_URI ثابت من env،
+ * لكن الـ frontend الجديد يأتي من localhost:5173 والقديم من 3000،
+ * فلازم نخلي الـ frontend يبعث الـ redirect_uri مع الطلب.
+ *
+ * ابحث في dashboard-backend/server.js عن:
+ *
+ *   app.get("/api/auth/callback", async (req, res) => {
+ *     const code = req.query.code
+ *     ...
+ *   })
+ *
+ * واستبدل البلوك بهذا:
+ */
+
+// ══════════════════════════════════════
+//  ✅ الجديد — استبدل البلوك القديم به
+// ══════════════════════════════════════
+
+app.get("/api/auth/callback", async (req, res) => {
+  const code = req.query.code
+  // ✅ NEW: نقبل redirect_uri من الـ frontend كـ query param
+  // لو ما أرسله، نستخدم الافتراضي من env
+  const redirectUri = req.query.redirect_uri || CONFIG.REDIRECT_URI
+
+  if (!code) return res.status(400).json({ error: "No code" })
+
+  // ✅ NEW: قائمة Redirect URIs المسموحة (لازم تطابق Discord Developer Portal)
+  const allowedRedirectUris = [
+    "http://localhost:3000/callback",
+    "http://localhost:5173/callback",
+    "https://rcif-dashboard.onrender.com/callback",
+    CONFIG.REDIRECT_URI,
+  ].filter(Boolean)
+
+  if (!allowedRedirectUris.includes(redirectUri)) {
+    console.warn(`[AUTH] Rejected redirect_uri: ${redirectUri}`)
+    return res.status(400).json({ error: "Invalid redirect_uri" })
+  }
+
   try {
     const tr = await fetch("https://discord.com/api/oauth2/token", {
-      method:"POST", headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id:CONFIG.CLIENT_ID, client_secret:CONFIG.CLIENT_SECRET,
-        grant_type:"authorization_code", code, redirect_uri:CONFIG.REDIRECT_URI
-      })
+        client_id: CONFIG.CLIENT_ID,
+        client_secret: CONFIG.CLIENT_SECRET,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri, // ✅ استخدم نفس الـ URI اللي أرسله الـ frontend
+      }),
     })
+
     const td = await tr.json()
-    if(!tr.ok || !td.access_token) return res.status(400).json({ error:"Token exchange failed" })
+    if (!tr.ok || !td.access_token) {
+      console.error("[AUTH] Discord token exchange failed:", td)
+      return res.status(400).json({
+        error: "Token exchange failed",
+        details: td.error_description || td.error,
+      })
+    }
+
     const [user, allGuilds] = await Promise.all([
-      fetchDiscordJSON("https://discord.com/api/users/@me", { headers:{ Authorization:`Bearer ${td.access_token}` } }),
-      fetchDiscordJSON("https://discord.com/api/users/@me/guilds", { headers:{ Authorization:`Bearer ${td.access_token}` } })
+      fetchDiscordJSON("https://discord.com/api/users/@me", {
+        headers: { Authorization: `Bearer ${td.access_token}` },
+      }),
+      fetchDiscordJSON("https://discord.com/api/users/@me/guilds", {
+        headers: { Authorization: `Bearer ${td.access_token}` },
+      }),
     ])
-    const adminGuilds = allGuilds.filter(g => (BigInt(g.permissions) & 8n) === 8n)
-    const userData = { id:user.id, username:user.global_name||user.username, avatar:getUserAvatar(user) }
-    const guildsData = adminGuilds.map(g => ({ id:g.id, name:g.name, icon:g.icon, permissions:g.permissions.toString() }))
-    res.json({ token:createSession(userData,guildsData), user:userData, guilds:guildsData })
-  } catch(err) {
-    console.error("AUTH ERROR:", err.payload||err.message)
-    res.status(500).json({ error:"Authentication failed" })
+
+    const adminGuilds = allGuilds.filter(
+      (g) => (BigInt(g.permissions) & 8n) === 8n,
+    )
+
+    const userData = {
+      id: user.id,
+      username: user.global_name || user.username,
+      avatar: getUserAvatar(user),
+    }
+
+    const guildsData = adminGuilds.map((g) => ({
+      id: g.id,
+      name: g.name,
+      icon: g.icon,
+      permissions: g.permissions.toString(),
+    }))
+
+    res.json({
+      token: createSession(userData, guildsData),
+      user: userData,
+      guilds: guildsData,
+    })
+  } catch (err) {
+    console.error("AUTH ERROR:", err.payload || err.message)
+    res.status(500).json({ error: "Authentication failed" })
   }
 })
 

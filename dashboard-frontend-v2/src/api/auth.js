@@ -1,23 +1,27 @@
 import { apiClient } from './client';
+import { env } from '@/config/env';
 
 /**
- * Auth API — متطابق مع dashboard-backend/server.js الحالي
+ * Auth API — متطابق مع dashboard-backend/server.js المحدّث
  *
- * ⚠️ ملاحظة: الـ Backend الحالي يستخدم:
- *   - GET /api/auth/callback?code=XXX  (مو POST!)
- *   - يرجع {user, guilds, token}  (مو {user, token} فقط)
+ * ⚠️ مهم: نرسل redirect_uri مع الطلب لأن Discord يتطلب
+ * إن الـ redirect_uri في تبادل الـ token = نفس الـ URI في طلب OAuth الأصلي
  */
 export const authApi = {
   /**
    * تبادل code من Discord OAuth بـ session
    * @param {string} code - من Discord بعد الـ redirect
    */
-  loginWithDiscord: (code) =>
-    apiClient.get(`/api/auth/callback?code=${encodeURIComponent(code)}`),
+  loginWithDiscord: (code) => {
+    const params = new URLSearchParams({
+      code,
+      redirect_uri: env.DISCORD_REDIRECT_URI,
+    });
+    return apiClient.get(`/api/auth/callback?${params.toString()}`);
+  },
 
   /**
-   * جلب معلومات المستخدم الحالي
-   * (الـ backend الحالي ما عنده هذا endpoint - نستخدم ما هو محفوظ في localStorage)
+   * جلب معلومات المستخدم الحالي من localStorage
    */
   getMe: async () => {
     const userStr = localStorage.getItem('lyn-user');
@@ -30,7 +34,7 @@ export const authApi = {
   },
 
   /**
-   * تسجيل الخروج (ما فيه endpoint رسمي في الباك اند، نمسح localStorage)
+   * تسجيل الخروج
    */
   logout: async () => {
     localStorage.removeItem('lyn-auth-token');
