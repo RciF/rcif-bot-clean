@@ -1,73 +1,68 @@
-import axios from 'axios';
-import { toast } from 'sonner';
-import { env } from '@/config/env';
+import axios from "axios"
+import { env } from "@/config/env"
 
 /**
- * Axios instance with interceptors
+ * API Client — axios instance مع interceptors
+ *
+ * - يحط الـ JWT token تلقائياً
+ * - يتعامل مع 401 (يطلع المستخدم لـ /login)
+ * - يرجع response.data مباشرة
  */
-export const apiClient = axios.create({
+
+const client = axios.create({
   baseURL: env.API_URL,
-  timeout: 15000,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  },
-});
+  timeout: 30000,
+  headers: { "Content-Type": "application/json" },
+})
 
-// Request interceptor — attach auth token
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('lyn-auth-token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+// ── Request: حط الـ token ──
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem("lyn-auth-token")
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
 
-// Response interceptor — handle errors globally
-apiClient.interceptors.response.use(
+// ── Response: حول data + معالج errors ──
+client.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const status = error.response?.status;
-    const message = error.response?.data?.message || error.message;
+    // 401 Unauthorized - الجلسة انتهت
+    if (error.response?.status === 401) {
+      const code = error.response.data?.code
+      if (code === "INVALID_TOKEN" || code === "NO_TOKEN") {
+        localStorage.removeItem("lyn-auth-token")
+        localStorage.removeItem("lyn-user")
+        localStorage.removeItem("lyn-guilds")
 
-    // Don't show toast for cancelled requests
-    if (axios.isCancel(error)) return Promise.reject(error);
-
-    switch (status) {
-      case 401:
-        localStorage.removeItem('lyn-auth-token');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+        // تجنّب redirect loop لو نحن في صفحة login بالفعل
+        if (!window.location.pathname.startsWith("/login")) {
+          window.location.href = "/login"
         }
-        break;
-      case 403:
-        toast.error('ليس لديك صلاحية للوصول إلى هذه الصفحة');
-        break;
-      case 404:
-        toast.error('المورد غير موجود');
-        break;
-      case 429:
-        toast.error('تجاوزت الحد المسموح من الطلبات، حاول لاحقاً');
-        break;
-      case 500:
-      case 502:
-      case 503:
-        toast.error('خطأ في الخادم، حاول مرة أخرى لاحقاً');
-        break;
-      default:
-        if (!error.response) {
-          toast.error('فشل الاتصال بالخادم');
-        } else if (status >= 400) {
-          toast.error(message);
-        }
+      }
     }
 
-    return Promise.reject(error);
-  }
-);
+    // أرجع الخطأ بصيغة موحدة
+    const errorData = {
+      message:
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "حدث خطأ غير متوقع",
+      code: error.response?.data?.code || "NETWORK_ERROR",
+      status: error.response?.status,
+      details: error.response?.data?.details,
+    }
 
-export default apiClient;
+    return Promise.reject(errorData)
+  },
+)
+
+export const apiClient = {
+  get: (url, config) => client.get(url, config),
+  post: (url, data, config) => client.post(url, data, config),
+  put: (url, data, config) => client.put(url, data, config),
+  patch: (url, data, config) => client.patch(url, data, config),
+  delete: (url, config) => client.delete(url, config),
+}

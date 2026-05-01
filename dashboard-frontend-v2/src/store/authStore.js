@@ -1,13 +1,13 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { authApi } from '@/api/auth';
-import { env, isOwner } from '@/config/env';
+import { create } from "zustand"
+import { persist } from "zustand/middleware"
+import { authApi } from "@/api"
+import { isOwner } from "@/config/env"
 
 /**
- * Auth Store — متطابق مع response الـ backend الفعلي
+ * Auth Store — متصل بـ API الحقيقي
  *
- * Backend response:
- *   { token: "...", user: {id, username, avatar}, guilds: [...] }
+ * Backend response format:
+ *   { success, token, user: {id, username, avatar, isOwner}, guilds: [...] }
  */
 export const useAuthStore = create(
   persist(
@@ -20,32 +20,26 @@ export const useAuthStore = create(
       isLoading: false,
       error: null,
 
-      // ── Actions ──
-
-      /**
-       * تسجيل الدخول بـ Discord OAuth
-       * @param {string} code - من Discord بعد الـ redirect
-       */
+      // ── Login ──
       login: async (code) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null })
         try {
-          const data = await authApi.loginWithDiscord(code);
+          const data = await authApi.loginWithDiscord(code)
 
-          // تحقق من response
           if (!data?.token || !data?.user) {
-            throw new Error('استجابة غير صالحة من الخادم');
+            throw new Error("استجابة غير صالحة من الخادم")
           }
 
-          // تحديد إذا كان owner
+          // الباك اند يرجع isOwner، لكن نتأكد منها محلياً
           const userWithFlags = {
             ...data.user,
-            isOwner: isOwner(data.user.id),
-          };
+            isOwner: data.user.isOwner ?? isOwner(data.user.id),
+          }
 
           // حفظ في localStorage
-          localStorage.setItem('lyn-auth-token', data.token);
-          localStorage.setItem('lyn-user', JSON.stringify(userWithFlags));
-          localStorage.setItem('lyn-guilds', JSON.stringify(data.guilds || []));
+          localStorage.setItem("lyn-auth-token", data.token)
+          localStorage.setItem("lyn-user", JSON.stringify(userWithFlags))
+          localStorage.setItem("lyn-guilds", JSON.stringify(data.guilds || []))
 
           set({
             user: userWithFlags,
@@ -53,124 +47,117 @@ export const useAuthStore = create(
             token: data.token,
             isAuthenticated: true,
             isLoading: false,
-          });
-          return { success: true };
+          })
+
+          return { success: true }
         } catch (err) {
-          const errorMsg =
-            err.response?.data?.error ||
-            err.message ||
-            'فشل تسجيل الدخول';
-          set({
-            error: errorMsg,
-            isLoading: false,
-          });
-          return { success: false, error: errorMsg };
+          const errorMsg = err.message || "فشل تسجيل الدخول"
+          set({ error: errorMsg, isLoading: false })
+          return { success: false, error: errorMsg }
         }
       },
 
-      /**
-       * جلب بيانات المستخدم من localStorage (مو من API)
-       * لأن الـ backend الحالي ما عنده /api/auth/me
-       */
+      // ── Fetch Me (للتحقق من صحة الـ token) ──
       fetchMe: async () => {
-        const token = localStorage.getItem('lyn-auth-token');
-        const userStr = localStorage.getItem('lyn-user');
-        const guildsStr = localStorage.getItem('lyn-guilds');
-
-        if (!token || !userStr) {
-          set({ isAuthenticated: false, user: null, guilds: [] });
-          return;
+        const token = localStorage.getItem("lyn-auth-token")
+        if (!token) {
+          set({ isAuthenticated: false, user: null, guilds: [] })
+          return
         }
 
         try {
-          const user = JSON.parse(userStr);
-          const guilds = guildsStr ? JSON.parse(guildsStr) : [];
+          const data = await authApi.getMe()
+          const userWithFlags = {
+            ...data.user,
+            isOwner: data.user.isOwner ?? isOwner(data.user.id),
+          }
+
+          // تحديث localStorage بأحدث البيانات
+          localStorage.setItem("lyn-user", JSON.stringify(userWithFlags))
+          localStorage.setItem("lyn-guilds", JSON.stringify(data.guilds || []))
 
           set({
-            user: { ...user, isOwner: isOwner(user.id) },
-            guilds,
+            user: userWithFlags,
+            guilds: data.guilds || [],
             token,
             isAuthenticated: true,
             isLoading: false,
-          });
-        } catch {
-          // مسح كل شي لو الـ JSON فاسد
-          localStorage.removeItem('lyn-auth-token');
-          localStorage.removeItem('lyn-user');
-          localStorage.removeItem('lyn-guilds');
+          })
+        } catch (err) {
+          // الـ token غير صالح → امسح كل شي
+          console.warn("[AUTH] fetchMe failed:", err.message)
+          localStorage.removeItem("lyn-auth-token")
+          localStorage.removeItem("lyn-user")
+          localStorage.removeItem("lyn-guilds")
           set({
             user: null,
             guilds: [],
             token: null,
             isAuthenticated: false,
             isLoading: false,
-          });
+          })
         }
       },
 
-      /**
-       * تسجيل الخروج
-       */
+      // ── Logout ──
       logout: async () => {
         try {
-          await authApi.logout();
+          await authApi.logout()
         } catch {
-          // تجاهل الأخطاء
+          // تجاهل
         }
-        localStorage.removeItem('lyn-auth-token');
-        localStorage.removeItem('lyn-user');
-        localStorage.removeItem('lyn-guilds');
+        localStorage.removeItem("lyn-auth-token")
+        localStorage.removeItem("lyn-user")
+        localStorage.removeItem("lyn-guilds")
         set({
           user: null,
           guilds: [],
           token: null,
           isAuthenticated: false,
           error: null,
-        });
+        })
       },
 
-      /**
-       * Mock login للتطوير
-       */
+      // ── Mock login (للتطوير) ──
       mockLogin: () => {
         const mockUser = {
-          id: env.OWNER_ID || '529320108032786433',
-          username: 'Saud',
+          id: "529320108032786433",
+          username: "Saud (DEV)",
           avatar: null,
           isOwner: true,
-        };
+        }
         const mockGuilds = [
           {
-            id: 'mock-guild-1',
-            name: 'سيرفر التطوير',
+            id: "mock-guild-1",
+            name: "سيرفر التطوير",
             icon: null,
-            permissions: '8',
+            permissions: "8",
           },
-        ];
-        const mockToken = 'mock-token-dev';
+        ]
+        const mockToken = "mock-token-dev"
 
-        localStorage.setItem('lyn-auth-token', mockToken);
-        localStorage.setItem('lyn-user', JSON.stringify(mockUser));
-        localStorage.setItem('lyn-guilds', JSON.stringify(mockGuilds));
+        localStorage.setItem("lyn-auth-token", mockToken)
+        localStorage.setItem("lyn-user", JSON.stringify(mockUser))
+        localStorage.setItem("lyn-guilds", JSON.stringify(mockGuilds))
 
         set({
           user: mockUser,
           guilds: mockGuilds,
           token: mockToken,
           isAuthenticated: true,
-        });
+        })
       },
 
       clearError: () => set({ error: null }),
     }),
     {
-      name: 'lyn-auth-storage',
+      name: "lyn-auth-storage",
       partialize: (state) => ({
         user: state.user,
         guilds: state.guilds,
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
-    }
-  )
-);
+    },
+  ),
+)
