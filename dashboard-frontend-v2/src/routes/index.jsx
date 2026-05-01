@@ -38,7 +38,13 @@ const router = createBrowserRouter([
         element: <AuthLayout />,
         children: [{ path: 'login', element: <LoginPage /> }],
       },
+
+      // ── دعم كلا المسارين لـ OAuth callback ──
+      // /callback: المسار اللي مسجل في Discord حالياً (والـ Redirect URI)
+      // /auth/callback: مسار احتياطي للمستقبل
+      { path: 'callback', element: <AuthCallbackPage /> },
       { path: 'auth/callback', element: <AuthCallbackPage /> },
+
       {
         path: 'dashboard',
         element: (

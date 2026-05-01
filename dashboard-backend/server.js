@@ -17,11 +17,27 @@ const CONFIG = {
   PORT:         process.env.PORT          || 4000,
 }
 
-const allowedOrigins = ["http://localhost:3000","http://127.0.0.1:3000",CONFIG.FRONTEND_URL].filter(Boolean)
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://rcif-dashboard.onrender.com",
+  CONFIG.FRONTEND_URL,
+].filter(Boolean)
+
 app.use(cors({
-  origin:(origin,cb)=>(!origin||allowedOrigins.includes(origin))?cb(null,true):cb(null,false),
-  credentials:true
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true)
+    if (allowedOrigins.includes(origin)) return cb(null, true)
+    console.warn(`[CORS BLOCKED] ${origin}`)
+    return cb(new Error(`CORS: ${origin} not allowed`), false)
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 }))
+
 app.use(express.json())
 
 const pool = new Pool({

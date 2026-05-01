@@ -4,28 +4,35 @@
  */
 
 export const env = {
-  // API
+  // ── API ──
   API_URL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
 
-  // Discord OAuth
+  // ── Discord OAuth ──
   DISCORD_CLIENT_ID: import.meta.env.VITE_DISCORD_CLIENT_ID || '',
   DISCORD_REDIRECT_URI:
     import.meta.env.VITE_DISCORD_REDIRECT_URI ||
-    `${window.location.origin}/auth/callback`,
+    `${window.location.origin}/callback`,
 
-  // Bot info
+  // ── Bot info ──
   BOT_NAME: import.meta.env.VITE_BOT_NAME || 'Lyn',
   BOT_INVITE_URL: import.meta.env.VITE_BOT_INVITE_URL || '',
 
-  // Feature flags
+  // ── Owner (للتمييز بين المالك والمستخدمين العاديين) ──
+  OWNER_ID: import.meta.env.VITE_OWNER_ID || '',
+
+  // ── Feature flags ──
   ENABLE_DARK_MODE: import.meta.env.VITE_ENABLE_DARK_MODE !== 'false',
   ENABLE_ANALYTICS: import.meta.env.VITE_ENABLE_ANALYTICS === 'true',
 
-  // Mode
+  // ── Mode ──
   IS_DEV: import.meta.env.DEV,
   IS_PROD: import.meta.env.PROD,
 };
 
+/**
+ * رابط OAuth المُولّد لتسجيل الدخول
+ * يستخدم scopes: identify (الاسم) + guilds (السيرفرات) + email
+ */
 export const DISCORD_OAUTH_URL = (() => {
   if (!env.DISCORD_CLIENT_ID) return '';
   const params = new URLSearchParams({
@@ -36,3 +43,10 @@ export const DISCORD_OAUTH_URL = (() => {
   });
   return `https://discord.com/api/oauth2/authorize?${params}`;
 })();
+
+/**
+ * helper لمعرفة هل المستخدم هو المالك
+ */
+export const isOwner = (userId) => {
+  return env.OWNER_ID && String(userId) === String(env.OWNER_ID);
+};
