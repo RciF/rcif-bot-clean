@@ -1,17 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, X, Check, ChevronDown, ShieldCheck } from 'lucide-react';
-import { Input } from '@/components/ui/Input';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { mock } from '@/lib/mock';
+import { Search, X, Check, ChevronDown, ShieldCheck, Loader2 } from 'lucide-react';
+import { useGuildResources } from '@/hooks/useGuildResources';
 import { intToHexColor, cn } from '@/lib/utils';
-
-/**
- * RolePicker — اختيار رتبة (single أو multiple)
- *
- * @example
- *   <RolePicker value={roleId} onChange={setRoleId} />
- *   <RolePicker value={roles} onChange={setRoles} multiple excludeManaged />
- */
 
 export function RolePicker({
   value,
@@ -25,12 +15,9 @@ export function RolePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [roles, setRoles] = useState(null);
   const containerRef = useRef(null);
 
-  useEffect(() => {
-    mock.guildRoles().then(setRoles);
-  }, []);
+  const { roles, isLoading } = useGuildResources({ types: ['roles'] });
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -43,20 +30,18 @@ export function RolePicker({
   }, [open]);
 
   const filtered = useMemo(() => {
-    if (!roles) return [];
-    let list = roles;
+    let list = roles || [];
     if (excludeManaged) list = list.filter((r) => !r.managed);
     if (excludeEveryone) list = list.filter((r) => r.name !== '@everyone');
-    if (search) list = list.filter((r) => r.name.includes(search));
-    return list.sort((a, b) => b.position - a.position);
+    if (search) list = list.filter((r) => r.name?.toLowerCase().includes(search.toLowerCase()));
+    return [...list].sort((a, b) => (b.position || 0) - (a.position || 0));
   }, [roles, search, excludeManaged, excludeEveryone]);
 
-  const selectedIds = multiple ? value || [] : value ? [value] : [];
-
-  const selectedRoles = useMemo(() => {
-    if (!roles) return [];
-    return roles.filter((r) => selectedIds.includes(r.id));
-  }, [roles, selectedIds]);
+  const selectedIds = multiple ? (value || []) : (value ? [value] : []);
+  const selectedRoles = useMemo(
+    () => (roles || []).filter((r) => selectedIds.includes(r.id)),
+    [roles, selectedIds],
+  );
 
   const toggleSelect = (role) => {
     if (multiple) {
@@ -70,124 +55,102 @@ export function RolePicker({
     }
   };
 
-  const removeRole = (e, id) => {
+  const removeSelected = (id, e) => {
     e.stopPropagation();
-    if (multiple) {
-      onChange(selectedIds.filter((i) => i !== id));
-    } else {
-      onChange(null);
-    }
+    if (multiple) onChange(selectedIds.filter((sid) => sid !== id));
+    else onChange(null);
   };
+
+  const selectedRole = !multiple && value ? (roles || []).find((r) => r.id === value) : null;
 
   return (
     <div ref={containerRef} className={cn('relative', className)}>
       <button
         type="button"
-        onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
         className={cn(
-          'w-full min-h-10 flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm transition-colors',
-          'hover:border-border/80',
-          'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background',
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          open && 'border-primary ring-2 ring-primary/20',
+          'w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background text-sm transition-colors text-right',
+          'hover:border-primary/50 focus:outline-none focus:border-primary/50',
+          disabled && 'opacity-50 cursor-not-allowed',
+          open && 'border-primary/50',
         )}
       >
-        <div className="flex-1 flex flex-wrap gap-1.5 items-center text-start">
-          {selectedRoles.length === 0 ? (
-            <span className="text-muted-foreground">{placeholder}</span>
-          ) : multiple ? (
-            selectedRoles.map((r) => (
-              <span
-                key={r.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium"
-                style={{
-                  background: intToHexColor(r.color) + '20',
-                  color: intToHexColor(r.color),
-                }}
-              >
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: intToHexColor(r.color) }}
-                />
-                @{r.name}
-                <button
-                  type="button"
-                  onClick={(e) => removeRole(e, r.id)}
-                  className="hover:bg-black/10 rounded-full p-0.5 ms-0.5"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            ))
-          ) : (
-            <span className="inline-flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ background: intToHexColor(selectedRoles[0].color) }}
-              />
-              <span className="font-medium" style={{ color: intToHexColor(selectedRoles[0].color) }}>
-                @{selectedRoles[0].name}
-              </span>
-            </span>
-          )}
-        </div>
-        <ChevronDown
-          className={cn(
-            'w-4 h-4 text-muted-foreground transition-transform flex-shrink-0',
-            open && 'rotate-180',
-          )}
-        />
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+        ) : multiple ? (
+          <div className="flex flex-wrap gap-1 flex-1">
+            {selectedRoles.length > 0 ? (
+              selectedRoles.map((role) => {
+                const color = role.color ? intToHexColor(role.color) : '#99aab5';
+                return (
+                  <span key={role.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs" style={{ backgroundColor: `${color}20`, color }}>
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                    {role.name}
+                    <button type="button" onClick={(e) => removeSelected(role.id, e)} className="hover:opacity-70">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                );
+              })
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-1">
+            {selectedRole ? (
+              <>
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: selectedRole.color ? intToHexColor(selectedRole.color) : '#99aab5' }} />
+                <span>{selectedRole.name}</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">{placeholder}</span>
+            )}
+          </div>
+        )}
+        <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform flex-shrink-0', open && 'rotate-180')} />
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full mt-1 inset-x-0 rounded-xl border border-border bg-popover shadow-lg overflow-hidden animate-lyn-fade-up">
+        <div className="absolute top-full mt-1 w-full z-50 rounded-xl border border-border bg-popover shadow-lg overflow-hidden animate-lyn-fade-up">
           <div className="p-2 border-b border-border">
             <div className="relative">
-              <Search className="absolute end-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
+              <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="بحث في الرتب..."
-                className="pe-8 h-8 text-sm"
+                placeholder="بحث..."
+                className="w-full pr-8 pl-3 py-1.5 text-sm bg-transparent focus:outline-none"
                 autoFocus
               />
             </div>
           </div>
-
-          <div className="max-h-64 overflow-y-auto p-1">
-            {!roles ? (
-              <div className="space-y-1 p-1">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-8 rounded-lg" />
-                ))}
+          <div className="max-h-52 overflow-y-auto p-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               </div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-6 text-sm text-muted-foreground">لا توجد نتائج</div>
+              <div className="text-center py-4 text-sm text-muted-foreground">لا يوجد رتب</div>
             ) : (
-              filtered.map((r) => {
-                const isSelected = selectedIds.includes(r.id);
+              filtered.map((role) => {
+                const color = role.color ? intToHexColor(role.color) : '#99aab5';
+                const isSelected = selectedIds.includes(role.id);
                 return (
                   <button
-                    key={r.id}
+                    key={role.id}
                     type="button"
-                    onClick={() => toggleSelect(r)}
+                    onClick={() => toggleSelect(role)}
                     className={cn(
-                      'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors text-start',
+                      'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right',
                       isSelected ? 'bg-primary/10' : 'hover:bg-accent',
                     )}
                   >
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ background: intToHexColor(r.color) }}
-                    />
-                    <span
-                      className="flex-1 truncate"
-                      style={{ color: r.color !== 0 ? intToHexColor(r.color) : undefined }}
-                    >
-                      @{r.name}
-                    </span>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                    <span className="flex-1 truncate" style={{ color: isSelected ? color : undefined }}>{role.name}</span>
+                    {isSelected && <Check className="w-4 h-4 flex-shrink-0 text-primary" />}
                   </button>
                 );
               })

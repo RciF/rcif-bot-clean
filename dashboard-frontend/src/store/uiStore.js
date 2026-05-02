@@ -5,15 +5,8 @@ export const useUIStore = create(
   persist(
     (set) => ({
       sidebarCollapsed: false,
-      currentServerId: null,
-
-      toggleSidebar: () =>
-        set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-
-      setCurrentServer: (serverId) => set({ currentServerId: serverId }),
+      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
     }),
-    {
-      name: 'lyn-ui-storage',
-    }
-  )
+    { name: 'lyn-ui-storage' },
+  ),
 );
