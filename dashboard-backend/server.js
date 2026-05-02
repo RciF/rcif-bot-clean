@@ -99,6 +99,45 @@ app.get("/api/health", async (req, res) => {
   })
 })
 
+// ════════════════════════════════════════════════════════════
+//  GET /api/bot/guilds
+//  قائمة IDs السيرفرات اللي البوت موجود فيها
+//  (بدون auth — عامة — مع caching)
+// ════════════════════════════════════════════════════════════
+
+let botGuildsCache = { data: null, fetchedAt: 0 }
+const BOT_GUILDS_TTL = 60 * 1000 // دقيقة
+
+app.get("/api/bot/guilds", async (req, res) => {
+  try {
+    // استخدم الكاش لو ما انتهى
+    if (botGuildsCache.data && Date.now() - botGuildsCache.fetchedAt < BOT_GUILDS_TTL) {
+      return res.json(botGuildsCache.data)
+    }
+
+    const response = await fetch("https://discord.com/api/users/@me/guilds", {
+      headers: {
+        Authorization: `Bot ${env.BOT_TOKEN}`,
+        "User-Agent": "DiscordBot/1.0",
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Discord API ${response.status}`)
+    }
+
+    const guilds = await response.json()
+    const ids = Array.isArray(guilds) ? guilds.map((g) => g.id) : []
+
+    botGuildsCache = { data: ids, fetchedAt: Date.now() }
+    res.json(ids)
+  } catch (err) {
+    console.error("[BOT_GUILDS]", err.message)
+    // لو فشل → رجّع الكاش القديم أو مصفوفة فارغة
+    res.json(botGuildsCache.data || [])
+  }
+})
+
 // ── Auth ──
 app.use("/api/auth", authRoutes)
 

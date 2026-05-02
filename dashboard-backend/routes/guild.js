@@ -17,6 +17,7 @@ const { asyncHandler } = require("../middleware/error")
 const { requireAuth, requireGuildAdmin } = require("../middleware/auth")
 const discord = require("../utils/discord")
 const { getGuildPlan } = require("../services/guildPlan")
+const env = require("../config/env")
 
 const router = express.Router({ mergeParams: true })
 
@@ -62,7 +63,6 @@ router.get(
     const { guildId } = req.params
     const channels = await discord.fetchGuildChannels(guildId)
 
-    // ترتيب حسب الـ position
     const sorted = channels
       .map((c) => ({
         id: c.id,
@@ -91,7 +91,6 @@ router.get(
     const { guildId } = req.params
     const roles = await discord.fetchGuildRoles(guildId)
 
-    // ترتيب حسب position (الأعلى أولاً)
     const sorted = roles
       .map((r) => ({
         id: r.id,
@@ -140,7 +139,6 @@ router.get(
       pending: m.pending,
     }))
 
-    // فلترة بالبحث (لو موجود)
     if (search) {
       const q = search.toLowerCase()
       mapped = mapped.filter(
@@ -181,7 +179,7 @@ router.get(
 
 // ════════════════════════════════════════════════════════════
 //  GET /api/guild/:guildId/plan
-//  خطة السيرفر (يستخدم قبل تطبيق ميزات Premium)
+//  ✅ يرجع plan_id (مو plan فقط)
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -190,8 +188,8 @@ router.get(
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
     const { guildId } = req.params
-    const plan = await getGuildPlan(guildId)
-    res.json({ plan })
+    const plan_id = await getGuildPlan(guildId)
+    res.json({ plan_id })
   }),
 )
 
