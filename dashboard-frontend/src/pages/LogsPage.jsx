@@ -1,87 +1,69 @@
-import {
-  ScrollText,
-  Hash,
-  Volume2,
-  Crown,
-  Trash2,
-  Edit3,
-  UserPlus,
-  UserMinus,
-  Hammer,
-  Ban,
-} from 'lucide-react';
+import { ScrollText, Volume2, MessageSquare, Users, Shield, Hash } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
-import { Separator } from '@/components/ui/Separator';
 import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
+import { Separator } from '@/components/ui/Separator';
 import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { SaveBar } from '@/components/shared/SaveBar';
 import { PlanLockBanner, PlanLockModal } from '@/components/shared/PlanLockOverlay';
 import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { useGuildSettings } from '@/hooks/useGuildSettings';
 import { usePlanGate } from '@/hooks/usePlanGate';
-import { mock } from '@/lib/mock';
 import { PLAN_TIERS } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 
 const EVENT_GROUPS = [
   {
     label: 'الرسائل',
-    color: 'from-violet-500 to-pink-500',
+    color: 'from-blue-500 to-cyan-500',
     events: [
-      { key: 'messageDelete', label: 'حذف رسالة', icon: Trash2, color: 'text-destructive' },
-      { key: 'messageEdit', label: 'تعديل رسالة', icon: Edit3, color: 'text-amber-500' },
+      { key: 'messageDelete', label: 'حذف رسالة',   icon: MessageSquare, color: 'text-blue-500' },
+      { key: 'messageEdit',   label: 'تعديل رسالة',  icon: MessageSquare, color: 'text-cyan-500' },
     ],
   },
   {
     label: 'الأعضاء',
-    color: 'from-emerald-500 to-cyan-500',
+    color: 'from-emerald-500 to-green-500',
     events: [
-      { key: 'memberJoin', label: 'دخول عضو', icon: UserPlus, color: 'text-emerald-500' },
-      { key: 'memberLeave', label: 'خروج عضو', icon: UserMinus, color: 'text-amber-500' },
-      { key: 'memberBan', label: 'حظر عضو', icon: Hammer, color: 'text-destructive' },
-      { key: 'memberKick', label: 'طرد عضو', icon: Ban, color: 'text-orange-500' },
-      { key: 'memberRoleAdd', label: 'إعطاء رتبة', icon: UserPlus, color: 'text-emerald-500' },
-      { key: 'memberRoleRemove', label: 'سحب رتبة', icon: UserMinus, color: 'text-amber-500' },
+      { key: 'memberJoin',       label: 'انضمام عضو',    icon: Users, color: 'text-emerald-500' },
+      { key: 'memberLeave',      label: 'مغادرة عضو',    icon: Users, color: 'text-red-500'     },
+      { key: 'memberBan',        label: 'حظر عضو',       icon: Shield, color: 'text-red-500'    },
+      { key: 'memberKick',       label: 'طرد عضو',       icon: Shield, color: 'text-orange-500' },
+      { key: 'memberRoleAdd',    label: 'إضافة رتبة',    icon: Users, color: 'text-violet-500'  },
+      { key: 'memberRoleRemove', label: 'إزالة رتبة',    icon: Users, color: 'text-pink-500'    },
     ],
   },
   {
     label: 'الرتب والقنوات',
-    color: 'from-amber-500 to-orange-500',
+    color: 'from-violet-500 to-purple-500',
     events: [
-      { key: 'roleCreate', label: 'إنشاء رتبة', icon: Crown, color: 'text-emerald-500' },
-      { key: 'roleDelete', label: 'حذف رتبة', icon: Trash2, color: 'text-destructive' },
-      { key: 'channelCreate', label: 'إنشاء قناة', icon: Hash, color: 'text-emerald-500' },
-      { key: 'channelDelete', label: 'حذف قناة', icon: Trash2, color: 'text-destructive' },
+      { key: 'roleCreate',    label: 'إنشاء رتبة',  icon: Shield, color: 'text-violet-500' },
+      { key: 'roleDelete',    label: 'حذف رتبة',    icon: Shield, color: 'text-red-500'    },
+      { key: 'channelCreate', label: 'إنشاء قناة',  icon: Hash,   color: 'text-emerald-500'},
+      { key: 'channelDelete', label: 'حذف قناة',    icon: Hash,   color: 'text-red-500'    },
     ],
   },
   {
     label: 'الصوت',
-    color: 'from-blue-500 to-indigo-500',
+    color: 'from-amber-500 to-orange-500',
     events: [
-      { key: 'voiceJoin', label: 'دخول قناة صوت', icon: Volume2, color: 'text-emerald-500' },
-      { key: 'voiceLeave', label: 'خروج من صوت', icon: Volume2, color: 'text-amber-500' },
-      { key: 'voiceMove', label: 'تنقل بين القنوات', icon: Volume2, color: 'text-blue-500' },
+      { key: 'voiceJoin',  label: 'انضمام للصوت',    icon: Volume2, color: 'text-emerald-500' },
+      { key: 'voiceLeave', label: 'مغادرة الصوت',    icon: Volume2, color: 'text-red-500'     },
+      { key: 'voiceMove',  label: 'تنقل بين القنوات', icon: Volume2, color: 'text-blue-500'    },
     ],
   },
 ];
 
 export default function LogsPage() {
   const { data, setData, updateField, isLoading, isSaving, isDirty, save, reset } =
-    useGuildSettings({ section: 'logs', fetcher: mock.logsSettings });
+    useGuildSettings({ section: 'logs' });
 
   const planGate = usePlanGate('logs', PLAN_TIERS.SILVER);
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-start gap-4 pb-6 mb-6 border-b border-border">
-          <Skeleton className="w-12 h-12 rounded-2xl" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-64" />
-          </div>
-        </div>
+        <Skeleton className="h-20 rounded-2xl" />
         <SkeletonCard />
         <SkeletonCard />
       </div>
@@ -89,18 +71,19 @@ export default function LogsPage() {
   }
 
   if (!data) return null;
+
   const handleSave = planGate.gateAction(save);
 
   const toggleEvent = (key) => {
-    const newEnabled = !data.events[key].enabled;
+    const newEnabled = !data.events?.[key]?.enabled;
     setData((prev) => ({
       ...prev,
       events: {
         ...prev.events,
         [key]: {
-          ...prev.events[key],
+          ...prev.events?.[key],
           enabled: newEnabled,
-          channel: newEnabled && !prev.events[key].channel ? prev.masterChannel : prev.events[key].channel,
+          channel: newEnabled && !prev.events?.[key]?.channel ? prev.masterChannel : prev.events?.[key]?.channel,
         },
       },
     }));
@@ -109,7 +92,7 @@ export default function LogsPage() {
   const updateEventChannel = (key, channelId) => {
     setData((prev) => ({
       ...prev,
-      events: { ...prev.events, [key]: { ...prev.events[key], channel: channelId } },
+      events: { ...prev.events, [key]: { ...prev.events?.[key], channel: channelId } },
     }));
   };
 
@@ -120,9 +103,9 @@ export default function LogsPage() {
         ...prev.events,
         ...events.reduce((acc, ev) => {
           acc[ev.key] = {
-            ...prev.events[ev.key],
+            ...prev.events?.[ev.key],
             enabled: enable,
-            channel: enable && !prev.events[ev.key].channel ? prev.masterChannel : prev.events[ev.key].channel,
+            channel: enable && !prev.events?.[ev.key]?.channel ? prev.masterChannel : prev.events?.[ev.key]?.channel,
           };
           return acc;
         }, {}),
@@ -130,8 +113,8 @@ export default function LogsPage() {
     }));
   };
 
-  const enabledCount = Object.values(data.events).filter((e) => e.enabled).length;
-  const totalCount = Object.keys(data.events).length;
+  const enabledCount = Object.values(data.events || {}).filter((e) => e.enabled).length;
+  const totalCount   = Object.keys(data.events || {}).length;
 
   return (
     <>
@@ -151,18 +134,12 @@ export default function LogsPage() {
         />
       )}
 
+      {/* Master toggle */}
       <Card className="p-5 mb-4">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-start gap-3 flex-1">
-            <div
-              className={cn(
-                'w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0',
-                data.enabled ? 'lyn-gradient lyn-glow' : 'bg-muted',
-              )}
-            >
-              <ScrollText
-                className={cn('w-5 h-5', data.enabled ? 'text-white' : 'text-muted-foreground')}
-              />
+            <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0', data.enabled ? 'lyn-gradient lyn-glow' : 'bg-muted')}>
+              <ScrollText className={cn('w-5 h-5', data.enabled ? 'text-white' : 'text-muted-foreground')} />
             </div>
             <div className="flex-1">
               <h3 className="font-bold mb-1">تفعيل نظام السجلات</h3>
@@ -172,11 +149,7 @@ export default function LogsPage() {
               </p>
             </div>
           </div>
-          <Switch
-            checked={data.enabled}
-            onCheckedChange={(v) => updateField('enabled', v)}
-            size="lg"
-          />
+          <Switch checked={data.enabled} onCheckedChange={(v) => updateField('enabled', v)} size="lg" />
         </div>
 
         <Separator />
@@ -185,14 +158,9 @@ export default function LogsPage() {
           <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-muted/40">
             <div>
               <div className="text-sm font-medium">قناة موحدة لكل اللوقات</div>
-              <div className="text-xs text-muted-foreground">
-                كل الأحداث تذهب لقناة واحدة بدل قنوات منفصلة
-              </div>
+              <div className="text-xs text-muted-foreground">كل الأحداث تذهب لقناة واحدة</div>
             </div>
-            <Switch
-              checked={data.useSingleChannel}
-              onCheckedChange={(v) => updateField('useSingleChannel', v)}
-            />
+            <Switch checked={data.useSingleChannel} onCheckedChange={(v) => updateField('useSingleChannel', v)} />
           </div>
 
           {data.useSingleChannel && (
@@ -208,9 +176,10 @@ export default function LogsPage() {
         </div>
       </Card>
 
+      {/* Event groups */}
       <div className={cn('space-y-4', !data.enabled && 'opacity-50 pointer-events-none')}>
         {EVENT_GROUPS.map((group) => {
-          const groupEnabledCount = group.events.filter((ev) => data.events[ev.key]?.enabled).length;
+          const groupEnabledCount = group.events.filter((ev) => data.events?.[ev.key]?.enabled).length;
           const allEnabled = groupEnabledCount === group.events.length;
 
           return (
@@ -227,7 +196,6 @@ export default function LogsPage() {
                     </div>
                   </div>
                 </div>
-
                 <button
                   onClick={() => toggleGroup(group.events, !allEnabled)}
                   className="text-xs font-medium px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
@@ -239,7 +207,7 @@ export default function LogsPage() {
               <div className="space-y-2">
                 {group.events.map((ev) => {
                   const Icon = ev.icon;
-                  const eventData = data.events[ev.key] || { enabled: false };
+                  const eventData = data.events?.[ev.key] || { enabled: false };
                   return (
                     <div key={ev.key} className="rounded-xl border border-border p-3">
                       <div className="flex items-center justify-between gap-3 mb-3">
@@ -271,14 +239,7 @@ export default function LogsPage() {
         })}
       </div>
 
-      <SaveBar
-        isDirty={isDirty}
-        isSaving={isSaving}
-        onSave={handleSave}
-        onReset={reset}
-        locked={planGate.isLocked}
-        onLockedClick={planGate.openLockModal}
-      />
+      <SaveBar isDirty={isDirty} isSaving={isSaving} onSave={handleSave} onReset={reset} locked={planGate.isLocked} onLockedClick={planGate.openLockModal} />
       <PlanLockModal {...planGate.lockModalProps} />
     </>
   );

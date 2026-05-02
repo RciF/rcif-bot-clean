@@ -1,84 +1,62 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Server,
-  Settings,
-  Bot,
-  Shield,
-  TrendingUp,
-  Coins,
-  Ticket,
-  Bell,
-  LogOut,
-  Menu,
-  X,
-  Moon,
-  Sun,
-  PartyPopper,
-  ScrollText,
-  Gavel,
-  ToggleRight,
-  Sparkles,
-  BarChart3,
-  Users,
-  History,
-  Layers,
-  CreditCard,
-  Terminal,
-  CalendarDays,
-  Clock,
+  LayoutDashboard, Server, Settings, Bot, Shield, TrendingUp, Coins,
+  Ticket, Bell, LogOut, Menu, X, Moon, Sun, PartyPopper, ScrollText,
+  Gavel, ToggleRight, Sparkles, BarChart3, Users, History, Layers,
+  CreditCard, Terminal, CalendarDays, Clock, ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { useAuthStore } from '@/store/authStore';
+import { useGuildStore } from '@/store/guildStore';
 import { toast } from 'sonner';
 
 const navSections = [
   {
     label: 'الرئيسية',
     items: [
-      { to: '/dashboard', label: 'نظرة عامة', icon: LayoutDashboard, end: true },
-      { to: '/dashboard/stats', label: 'الإحصائيات', icon: BarChart3 },
-      { to: '/dashboard/audit', label: 'سجل الأنشطة', icon: History },
-      { to: '/dashboard/servers', label: 'السيرفرات', icon: Server },
+      { to: '/dashboard',         label: 'نظرة عامة',     icon: LayoutDashboard, end: true },
+      { to: '/dashboard/stats',   label: 'الإحصائيات',    icon: BarChart3 },
+      { to: '/dashboard/audit',   label: 'سجل الأنشطة',   icon: History },
+      { to: '/dashboard/servers', label: 'تغيير السيرفر', icon: Server },
     ],
   },
   {
     label: 'إدارة السيرفر',
     items: [
-      { to: '/dashboard/welcome', label: 'الترحيب', icon: PartyPopper },
+      { to: '/dashboard/welcome',    label: 'الترحيب', icon: PartyPopper },
       { to: '/dashboard/protection', label: 'الحماية', icon: Shield },
-      { to: '/dashboard/logs', label: 'السجلات', icon: ScrollText },
+      { to: '/dashboard/logs',       label: 'السجلات', icon: ScrollText },
       { to: '/dashboard/moderation', label: 'الإشراف', icon: Gavel },
-      { to: '/dashboard/members', label: 'الأعضاء', icon: Users },
+      { to: '/dashboard/members',    label: 'الأعضاء', icon: Users },
     ],
   },
   {
     label: 'التفاعل',
     items: [
-      { to: '/dashboard/tickets', label: 'التذاكر', icon: Ticket },
+      { to: '/dashboard/tickets',        label: 'التذاكر',      icon: Ticket },
       { to: '/dashboard/reaction-roles', label: 'لوحات الرتب', icon: ToggleRight },
-      { to: '/dashboard/levels', label: 'المستويات', icon: TrendingUp },
-      { to: '/dashboard/economy', label: 'الاقتصاد', icon: Coins },
-      { to: '/dashboard/events', label: 'الفعاليات', icon: CalendarDays },
+      { to: '/dashboard/levels',         label: 'المستويات',    icon: TrendingUp },
+      { to: '/dashboard/economy',        label: 'الاقتصاد',     icon: Coins },
+      { to: '/dashboard/events',         label: 'الفعاليات',    icon: CalendarDays },
     ],
   },
   {
     label: 'المتقدم',
     items: [
-      { to: '/dashboard/ai', label: 'الذكاء الاصطناعي', icon: Bot },
-      { to: '/dashboard/embed', label: 'منشئ الإيمبيد', icon: Sparkles },
-      { to: '/dashboard/scheduler', label: 'المُجدوِل', icon: Clock },
-      { to: '/dashboard/templates', label: 'القوالب', icon: Layers },
+      { to: '/dashboard/ai',        label: 'الذكاء الاصطناعي', icon: Bot },
+      { to: '/dashboard/embed',     label: 'منشئ الإيمبيد',    icon: Sparkles },
+      { to: '/dashboard/scheduler', label: 'المُجدوِل',         icon: Clock },
+      { to: '/dashboard/templates', label: 'القوالب',           icon: Layers },
     ],
   },
   {
     label: 'الإعدادات',
     items: [
-      { to: '/dashboard/commands', label: 'الأوامر', icon: Terminal },
-      { to: '/dashboard/subscription', label: 'الاشتراك', icon: CreditCard },
-      { to: '/dashboard/settings', label: 'إعدادات عامة', icon: Settings },
+      { to: '/dashboard/commands',     label: 'الأوامر',   icon: Terminal },
+      { to: '/dashboard/subscription', label: 'الاشتراك',  icon: CreditCard },
+      { to: '/dashboard/settings',     label: 'إعدادات',   icon: Settings },
     ],
   },
 ];
@@ -88,6 +66,7 @@ export default function DashboardLayout() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const { selectedGuild } = useGuildStore();
 
   const handleLogout = async () => {
     await logout();
@@ -97,14 +76,20 @@ export default function DashboardLayout() {
 
   const userInitial = user?.username?.[0]?.toUpperCase() || 'م';
 
+  const guildIconUrl = selectedGuild?.icon
+    ? `https://cdn.discordapp.com/icons/${selectedGuild.id}/${selectedGuild.icon}.png?size=64`
+    : null;
+
   return (
     <div className="min-h-screen flex bg-background">
+      {/* ── Sidebar ── */}
       <aside
         className={cn(
           'fixed lg:sticky top-0 right-0 h-screen w-72 bg-sidebar border-l border-sidebar-border z-40 transition-transform duration-300 flex flex-col',
           sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0',
         )}
       >
+        {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl lyn-gradient flex items-center justify-center">
@@ -117,6 +102,28 @@ export default function DashboardLayout() {
           </button>
         </div>
 
+        {/* Guild indicator */}
+        {selectedGuild && (
+          <button
+            onClick={() => navigate('/dashboard/servers')}
+            className="flex items-center gap-3 px-4 py-3 mx-3 mt-3 rounded-xl hover:bg-sidebar-accent transition-colors border border-sidebar-border"
+          >
+            {guildIconUrl ? (
+              <img src={guildIconUrl} alt={selectedGuild.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-8 h-8 rounded-lg lyn-gradient flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                {selectedGuild.name?.[0]}
+              </div>
+            )}
+            <div className="flex-1 min-w-0 text-right">
+              <div className="text-sm font-semibold truncate">{selectedGuild.name}</div>
+              <div className="text-xs text-muted-foreground">السيرفر الحالي</div>
+            </div>
+            <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          </button>
+        )}
+
+        {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-5">
           {navSections.map((section) => (
             <div key={section.label}>
@@ -148,6 +155,7 @@ export default function DashboardLayout() {
           ))}
         </nav>
 
+        {/* Footer */}
         <div className="p-4 border-t border-sidebar-border space-y-3 flex-shrink-0">
           {user && (
             <div className="flex items-center gap-3 px-2">
@@ -156,9 +164,7 @@ export default function DashboardLayout() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm truncate">{user.username}</div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {user.isOwner ? 'المالك' : 'مطوّر'}
-                </div>
+                <div className="text-xs text-muted-foreground">{user.isOwner ? 'المالك' : 'مسؤول'}</div>
               </div>
             </div>
           )}
@@ -172,15 +178,22 @@ export default function DashboardLayout() {
         </div>
       </aside>
 
-      {sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-30" />
-      )}
+      {/* Overlay mobile */}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-30" />}
 
+      {/* ── Main ── */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-20">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 hover:bg-accent rounded-lg">
             <Menu className="w-5 h-5" />
           </button>
+
+          {/* اسم السيرفر في الـ topbar للموبايل */}
+          {selectedGuild && (
+            <div className="flex items-center gap-2 lg:hidden">
+              <span className="text-sm font-semibold truncate max-w-32">{selectedGuild.name}</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 mr-auto">
             <button onClick={toggleTheme} className="p-2 hover:bg-accent rounded-lg transition-colors" aria-label="تبديل الثيم">
