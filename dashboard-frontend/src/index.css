@@ -1,9 +1,5 @@
-@import "tailwindcss";
-
-/* ════════════════════════════════════════════════════════════
-   IBM Plex Sans Arabic — Modern & Professional Arabic Font
-   ════════════════════════════════════════════════════════════ */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
 
 /* ════════════════════════════════════════════════════════════
    Custom Variants for Tailwind v4
