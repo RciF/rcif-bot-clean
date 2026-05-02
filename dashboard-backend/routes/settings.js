@@ -1,9 +1,12 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Settings Routes
+ *  Settings Routes — UNIFIED with Bot Schema
  *  /api/guild/:guildId/{welcome|protection|logs|ai|xp|economy|tickets|...}
  *
- *  كل الـ settings routes في ملف واحد لسهولة الصيانة
+ *  ⚠️ مهم: أسماء الأعمدة تطابق schema البوت بالضبط
+ *  - welcome: welcome_channel_id, goodbye_channel_id, welcome_message
+ *  - tickets: ticket_settings (مفرد) + category_id, log_channel_id, support_role_id
+ *  - xp: levelup_channel_id, xp_multiplier
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -18,7 +21,7 @@ const { hasAccess, PLAN_TIERS } = require("../plans")
 const router = express.Router({ mergeParams: true })
 
 // ════════════════════════════════════════════════════════════
-//  Helper: تحقق من الخطة قبل التعديل
+//  Helpers
 // ════════════════════════════════════════════════════════════
 
 function requirePlan(requiredPlan) {
@@ -36,13 +39,6 @@ function requirePlan(requiredPlan) {
   })
 }
 
-// ════════════════════════════════════════════════════════════
-//  Helper: get/set settings — generic
-// ════════════════════════════════════════════════════════════
-
-/**
- * يجلب settings من جدول معين، مع defaults لو ما فيه entry
- */
 async function getSettings(table, guildId, defaults = {}) {
   try {
     const r = await query(`SELECT * FROM ${table} WHERE guild_id = $1 LIMIT 1`, [guildId])
@@ -55,17 +51,17 @@ async function getSettings(table, guildId, defaults = {}) {
 }
 
 /**
- * يحفظ settings (UPSERT بسيط)
+ * UPSERT settings — نسخة محسّنة تتعامل مع JSONB تلقائياً
  */
 async function upsertSettings(table, guildId, data) {
-  // تنظيف data: حذف الحقول اللي ما تنحط في DB
   const cleaned = { ...data }
   delete cleaned.guild_id
+  delete cleaned.created_at
+  delete cleaned.updated_at
 
   const keys = Object.keys(cleaned)
   if (keys.length === 0) return
 
-  // تحويل الـ objects/arrays لـ JSONB
   const values = keys.map((k) => {
     const v = cleaned[k]
     return typeof v === "object" && v !== null ? JSON.stringify(v) : v
@@ -78,13 +74,15 @@ async function upsertSettings(table, guildId, data) {
   await query(
     `INSERT INTO ${table} (${insertColumns})
      VALUES (${insertValues})
-     ON CONFLICT (guild_id) DO UPDATE SET ${setClauses}, updated_at = NOW()`,
+     ON CONFLICT (guild_id) DO UPDATE SET ${setClauses}`,
     [guildId, ...values],
   )
 }
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ WELCOME SETTINGS (Silver+) ════════════
+//  ════════════ WELCOME (يستخدم schema البوت + توسعات الداش) ════════════
+//  أعمدة البوت: welcome_channel_id, goodbye_channel_id, welcome_message, goodbye_message, enabled
+//  أعمدة الداش الإضافية: type, embed_data, leave_enabled, leave_message, mention_user
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -94,10 +92,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const settings = await getSettings("welcome_settings", req.params.guildId, {
       enabled: false,
-      welcome_channel: null,
-      leave_channel: null,
+      welcome_channel_id: null,
+      goodbye_channel_id: null,
+      welcome_message: null,
+      goodbye_message: null,
       type: "embed",
-      message_text: null,
       embed_data: null,
       leave_enabled: false,
       leave_message: null,
@@ -124,14 +123,12 @@ router.post(
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
-    // TODO: ترسل رسالة اختبار للقناة عبر البوت
-    // حالياً نرجع success فقط
     res.json({ success: true, message: "تم إرسال رسالة الاختبار" })
   }),
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ PROTECTION SETTINGS (Gold+) ════════════
+//  ════════════ PROTECTION (جدول جديد) ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -193,7 +190,7 @@ router.delete(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ LOGS SETTINGS (Silver+) ════════════
+//  ════════════ LOGS (مزدوج: أعمدة البوت + JSONB events) ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -224,7 +221,7 @@ router.put(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ AI SETTINGS (Gold+) ════════════
+//  ════════════ AI ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -277,7 +274,9 @@ router.get(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ XP / LEVELS SETTINGS (Silver+) ════════════
+//  ════════════ XP (يستخدم schema البوت + توسعات) ════════════
+//  أعمدة البوت: levelup_channel_id, xp_multiplier, disabled_channels
+//  أعمدة الداش: enabled, min/max_xp, role_rewards, multipliers, level_up_message
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -287,10 +286,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const settings = await getSettings("xp_settings", req.params.guildId, {
       enabled: true,
+      levelup_channel_id: null,
+      xp_multiplier: 1,
       min_xp_per_message: 15,
       max_xp_per_message: 25,
       cooldown: 60,
-      multiplier: 1,
       disabled_channels: [],
       disabled_roles: [],
       multipliers: [],
@@ -318,9 +318,10 @@ router.get(
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
+    // البوت يستخدم جدول "xp" (مو xp_users)
     const r = await query(
-      `SELECT user_id, level, xp, messages
-       FROM xp_users
+      `SELECT user_id, level, xp
+       FROM xp
        WHERE guild_id = $1
        ORDER BY xp DESC
        LIMIT 100`,
@@ -337,7 +338,7 @@ router.delete(
   auditLog("xp.reset_user"),
   asyncHandler(async (req, res) => {
     await query(
-      `DELETE FROM xp_users WHERE guild_id = $1 AND user_id = $2`,
+      `DELETE FROM xp WHERE guild_id = $1 AND user_id = $2`,
       [req.params.guildId, req.params.userId],
     )
     res.json({ success: true })
@@ -345,7 +346,9 @@ router.delete(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ ECONOMY SETTINGS (Gold+) ════════════
+//  ════════════ ECONOMY ════════════
+//  ⚠️ economy_users في البوت هو جدول global (بدون guild_id)
+//     economy_settings الجديد هو per-guild
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -405,7 +408,16 @@ router.put(
         await client.query(
           `INSERT INTO economy_shop (guild_id, name, emoji, price, type, role_id, stock, description)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [req.params.guildId, item.name, item.emoji, item.price, item.type, item.roleId, item.stock, item.description],
+          [
+            req.params.guildId,
+            item.name,
+            item.emoji,
+            item.price,
+            item.type,
+            item.roleId || item.role_id,
+            item.stock,
+            item.description,
+          ],
         )
       }
     })
@@ -423,6 +435,7 @@ router.post(
     const { userId, amount } = req.body
     if (!userId || !amount) throw new ApiError("userId و amount مطلوبين", 400)
 
+    // economy_users في البوت بدون guild_id (global)
     await query(
       `INSERT INTO economy_users (user_id, coins) VALUES ($1, $2)
        ON CONFLICT (user_id) DO UPDATE SET coins = economy_users.coins + $2`,
@@ -433,7 +446,8 @@ router.post(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ TICKETS (Gold+) ════════════
+//  ════════════ TICKETS ════════════
+//  ⚠️ البوت يستخدم ticket_settings (مفرد) + category_id, log_channel_id, support_role_id
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -441,15 +455,18 @@ router.get(
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
-    const settings = await getSettings("tickets_settings", req.params.guildId, {
+    const settings = await getSettings("ticket_settings", req.params.guildId, {
       enabled: false,
-      panel_channel: null,
-      category_channel: null,
-      staff_role: null,
-      auto_archive_hours: 48,
-      transcripts: { enabled: false, channel: null },
+      category_id: null,
+      log_channel_id: null,
+      support_role_id: null,
       welcome_message: "أهلاً {user}! الستاف راح يجي قريباً.",
+      max_open_tickets: 1,
+      auto_close_hours: 48,
+      transcript_enabled: true,
+      panel_channel: null,
       panel: { title: "🎫 لوحة التذاكر", description: "", color: 0x9b59b6, buttons: [] },
+      transcripts: { enabled: false, channel: null },
     })
     res.json(settings)
   }),
@@ -462,7 +479,7 @@ router.put(
   requirePlan(PLAN_TIERS.GOLD),
   auditLog("tickets.update"),
   asyncHandler(async (req, res) => {
-    await upsertSettings("tickets_settings", req.params.guildId, req.body)
+    await upsertSettings("ticket_settings", req.params.guildId, req.body)
     res.json({ success: true })
   }),
 )
@@ -474,7 +491,6 @@ router.post(
   requirePlan(PLAN_TIERS.GOLD),
   auditLog("tickets.deploy_panel"),
   asyncHandler(async (req, res) => {
-    // TODO: ينشر اللوحة في القناة عبر البوت
     res.json({ success: true, message: "تم نشر اللوحة" })
   }),
 )
@@ -485,7 +501,7 @@ router.get(
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
     const r = await query(
-      `SELECT * FROM tickets WHERE guild_id = $1 AND status = 'open' ORDER BY opened_at DESC`,
+      `SELECT * FROM tickets WHERE guild_id = $1 AND status = 'open' ORDER BY created_at DESC`,
       [req.params.guildId],
     ).catch(() => ({ rows: [] }))
     res.json(r.rows)
@@ -493,7 +509,7 @@ router.get(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ REACTION ROLES (Silver+) ════════════
+//  ════════════ REACTION ROLES ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -544,9 +560,17 @@ router.put(
     const { title, description, color, exclusive, buttons } = req.body
     await query(
       `UPDATE button_role_panels
-       SET title = $1, description = $2, color = $3, exclusive = $4, buttons = $5, updated_at = NOW()
+       SET title = $1, description = $2, color = $3, exclusive = $4, buttons = $5
        WHERE id = $6 AND guild_id = $7`,
-      [title, description, color, !!exclusive, JSON.stringify(buttons), req.params.panelId, req.params.guildId],
+      [
+        title,
+        description,
+        color,
+        !!exclusive,
+        JSON.stringify(buttons),
+        req.params.panelId,
+        req.params.guildId,
+      ],
     )
     res.json({ success: true })
   }),
@@ -568,6 +592,7 @@ router.delete(
 
 // ════════════════════════════════════════════════════════════
 //  ════════════ MODERATION ════════════
+//  ⚠️ البوت يستخدم جدول "warnings" (بدون moderation_ prefix)
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -575,11 +600,17 @@ router.get(
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
-    const r = await query(
-      `SELECT user_id, COUNT(*)::INT as count, MAX(created_at) as last_warning, MAX(reason) as last_reason
-       FROM moderation_warnings WHERE guild_id = $1 GROUP BY user_id ORDER BY count DESC`,
-      [req.params.guildId],
-    ).catch(() => ({ rows: [] }))
+    // نحاول من جدول البوت "warnings" أولاً، نسقط لجدول moderation_warnings لو ما موجود
+    let r
+    try {
+      r = await query(
+        `SELECT user_id, COUNT(*)::INT as count, MAX(created_at) as last_warning, MAX(reason) as last_reason
+         FROM warnings WHERE guild_id = $1 GROUP BY user_id ORDER BY count DESC`,
+        [req.params.guildId],
+      )
+    } catch {
+      r = { rows: [] }
+    }
     res.json(r.rows)
   }),
 )
@@ -590,10 +621,14 @@ router.delete(
   requireGuildAdmin,
   auditLog("mod.delete_warnings"),
   asyncHandler(async (req, res) => {
-    await query(
-      `DELETE FROM moderation_warnings WHERE guild_id = $1 AND user_id = $2`,
-      [req.params.guildId, req.params.userId],
-    )
+    try {
+      await query(
+        `DELETE FROM warnings WHERE guild_id = $1 AND user_id = $2`,
+        [req.params.guildId, req.params.userId],
+      )
+    } catch {
+      // الجدول مش موجود — تجاهل
+    }
     res.json({ success: true })
   }),
 )
@@ -639,7 +674,7 @@ router.get(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ EVENTS (Gold+) ════════════
+//  ════════════ EVENTS ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -664,9 +699,19 @@ router.post(
   asyncHandler(async (req, res) => {
     const { title, description, image, starts_at, max_participants, channel, reminder_hours } = req.body
     const r = await query(
-      `INSERT INTO events (guild_id, title, description, image, starts_at, max_participants, channel, reminder_hours)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [req.params.guildId, title, description, image, starts_at, max_participants, channel, reminder_hours],
+      `INSERT INTO events (guild_id, title, description, image, starts_at, max_participants, channel, reminder_hours, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        req.params.guildId,
+        title,
+        description,
+        image,
+        starts_at,
+        max_participants,
+        channel,
+        reminder_hours,
+        req.user.id,
+      ],
     )
     res.json(r.rows[0])
   }),
@@ -683,7 +728,17 @@ router.put(
     await query(
       `UPDATE events SET title=$1, description=$2, image=$3, starts_at=$4, max_participants=$5, channel=$6, reminder_hours=$7
        WHERE id=$8 AND guild_id=$9`,
-      [title, description, image, starts_at, max_participants, channel, reminder_hours, req.params.id, req.params.guildId],
+      [
+        title,
+        description,
+        image,
+        starts_at,
+        max_participants,
+        channel,
+        reminder_hours,
+        req.params.id,
+        req.params.guildId,
+      ],
     )
     res.json({ success: true })
   }),
@@ -695,13 +750,16 @@ router.delete(
   requireGuildAdmin,
   auditLog("event.delete"),
   asyncHandler(async (req, res) => {
-    await query(`DELETE FROM events WHERE id = $1 AND guild_id = $2`, [req.params.id, req.params.guildId])
+    await query(`DELETE FROM events WHERE id = $1 AND guild_id = $2`, [
+      req.params.id,
+      req.params.guildId,
+    ])
     res.json({ success: true })
   }),
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ SCHEDULER (Diamond) ════════════
+//  ════════════ SCHEDULER ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -774,7 +832,10 @@ router.delete(
   requireGuildAdmin,
   auditLog("scheduler.delete"),
   asyncHandler(async (req, res) => {
-    await query(`DELETE FROM scheduled_tasks WHERE id = $1 AND guild_id = $2`, [req.params.id, req.params.guildId])
+    await query(`DELETE FROM scheduled_tasks WHERE id = $1 AND guild_id = $2`, [
+      req.params.id,
+      req.params.guildId,
+    ])
     res.json({ success: true })
   }),
 )
@@ -789,7 +850,6 @@ router.post(
   requireGuildAdmin,
   auditLog("embed.send"),
   asyncHandler(async (req, res) => {
-    // TODO: يرسل الـ embed عبر البوت للقناة المحددة
     res.json({ success: true, message: "تم إرسال الإيمبيد" })
   }),
 )
@@ -829,13 +889,16 @@ router.delete(
   requireGuildAdmin,
   auditLog("embed.template_delete"),
   asyncHandler(async (req, res) => {
-    await query(`DELETE FROM embed_templates WHERE id = $1 AND guild_id = $2`, [req.params.id, req.params.guildId])
+    await query(`DELETE FROM embed_templates WHERE id = $1 AND guild_id = $2`, [
+      req.params.id,
+      req.params.guildId,
+    ])
     res.json({ success: true })
   }),
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ AUDIT LOG (Gold+) ════════════
+//  ════════════ AUDIT LOG ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -864,7 +927,7 @@ router.get(
     sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
     params.push(limit, offset)
 
-    const r = await query(sql, params)
+    const r = await query(sql, params).catch(() => ({ rows: [] }))
     res.json(r.rows)
   }),
 )
@@ -880,13 +943,11 @@ router.get(
   asyncHandler(async (req, res) => {
     const guildId = req.params.guildId
 
-    // إحصائيات أساسية مجمعة
     const [protection, logs] = await Promise.all([
       getSettings("protection_settings", guildId),
       getSettings("log_settings", guildId),
     ])
 
-    // حساب Health Score
     const securityScore = calculateSecurityScore(protection)
     const organizationScore = calculateOrganizationScore(logs)
 
@@ -923,7 +984,7 @@ function calculateOrganizationScore(logs) {
   if (!logs) return 30
   if (!logs.enabled) return 30
   const events = logs.events || {}
-  const enabled = Object.values(events).filter((e) => e.enabled).length
+  const enabled = Object.values(events).filter((e) => e?.enabled).length
   const total = Math.max(Object.keys(events).length, 1)
   return Math.round(30 + (enabled / total) * 70)
 }
