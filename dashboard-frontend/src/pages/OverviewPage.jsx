@@ -1,43 +1,41 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Users,
   MessageSquare,
   Bot,
   Gavel,
-  Activity,
   Sparkles,
   Send,
   Lock,
   Ticket,
-  TrendingUp,
   Shield,
   ScrollText,
   ToggleRight,
-  ArrowLeft,
-  Heart,
+  ServerCrash,
+  Crown,
+  Medal,
+  Diamond,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
 import { StatCard, StatCardGrid } from '@/components/shared/StatCard';
-import { mock } from '@/lib/mock';
-import { formatRelativeTime, formatCompact, cn } from '@/lib/utils';
+import { useGuildStore } from '@/store/guildStore';
 import { useAuthStore } from '@/store/authStore';
+import { apiClient } from '@/api/client';
+import { cn } from '@/lib/utils';
 
-const SUGGESTION_ICONS = {
-  shield: Shield,
-  logs: ScrollText,
-  roles: ToggleRight,
+// ─── Plan badge config ────────────────────────────────────────
+const PLAN_CONFIG = {
+  diamond: { label: 'ماسي', icon: Diamond, color: 'text-cyan-400' },
+  gold: { label: 'ذهبي', icon: Crown, color: 'text-yellow-400' },
+  silver: { label: 'فضي', icon: Medal, color: 'text-slate-300' },
+  free: { label: 'مجاني', icon: Sparkles, color: 'text-zinc-400' },
 };
 
-const SEVERITY_STYLES = {
-  high: { color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/30' },
-  medium: { color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
-  low: { color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-};
-
+// ─── Quick Actions ────────────────────────────────────────────
 const QUICK_ACTIONS = [
   { id: 'embed', label: 'إرسال إعلان', icon: Send, link: '/dashboard/embed', gradient: 'from-violet-500 to-pink-500' },
   { id: 'lockdown', label: 'قفل السيرفر', icon: Lock, link: '/dashboard/protection', gradient: 'from-rose-500 to-orange-500' },
@@ -45,18 +43,103 @@ const QUICK_ACTIONS = [
   { id: 'broadcast', label: 'رسالة جماعية', icon: MessageSquare, link: '/dashboard/embed', gradient: 'from-emerald-500 to-cyan-500' },
 ];
 
+// ─── Suggestions static (ستصبح API لاحقاً) ──────────────────
+const STATIC_SUGGESTIONS = [
+  { id: 's1', title: 'فعّل Anti-Nuke', description: 'حماية السيرفر من التخريب', action: 'إعداد الحماية', link: '/dashboard/protection', icon: Shield, severity: 'high' },
+  { id: 's2', title: 'اضبط السجلات', description: 'تتبع نشاط الأعضاء والمشرفين', action: 'إعداد السجلات', link: '/dashboard/logs', icon: ScrollText, severity: 'medium' },
+  { id: 's3', title: 'أنشئ لوحة رتب', description: 'اتركهم يختارون رتبهم بأنفسهم', action: 'إنشاء لوحة', link: '/dashboard/reaction-roles', icon: ToggleRight, severity: 'low' },
+];
+
+const SEVERITY_STYLES = {
+  high: 'border-destructive/30 bg-destructive/5 text-destructive',
+  medium: 'border-amber-500/30 bg-amber-500/5 text-amber-500',
+  low: 'border-blue-500/30 bg-blue-500/5 text-blue-500',
+};
+
+// ─── Health Score Circle ──────────────────────────────────────
+function HealthScoreCircle({ score = 0 }) {
+  const r = 52;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
+  const color = score >= 80 ? '#10F4A8' : score >= 60 ? '#FFB800' : '#FF3D71';
+
+  return (
+    <div className="relative w-36 h-36 flex items-center justify-center">
+      <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r={r} fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
+        <circle
+          cx="60" cy="60" r={r} fill="none"
+          stroke={color} strokeWidth="8"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 1s ease' }}
+        />
+      </svg>
+      <div className="text-center">
+        <div className="text-3xl font-bold num" style={{ color }}>{score}</div>
+        <div className="text-xs text-muted-foreground">/ 100</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── الصفحة ───────────────────────────────────────────────────
 export default function OverviewPage() {
-  const [data, setData] = useState(null);
+  const navigate = useNavigate();
+  const { selectedGuild, selectedGuildId } = useGuildStore();
   const { user } = useAuthStore();
 
+  // لو ما في سيرفر محدد → ابعثه لاختيار سيرفر
   useEffect(() => {
-    mock.overviewData().then(setData);
-  }, []);
+    if (!selectedGuildId) {
+      navigate('/dashboard/servers', { replace: true });
+    }
+  }, [selectedGuildId, navigate]);
 
-  if (!data) {
+  // جلب معلومات السيرفر
+  const { data: guildInfo, isLoading: loadingInfo, isError } = useQuery({
+    queryKey: ['guild-info', selectedGuildId],
+    queryFn: () => apiClient.get(`/api/guild/${selectedGuildId}/info`),
+    enabled: !!selectedGuildId,
+    staleTime: 1000 * 60 * 5, // 5 دقائق
+  });
+
+  // جلب خطة السيرفر
+  const { data: planData, isLoading: loadingPlan } = useQuery({
+    queryKey: ['guild-plan', selectedGuildId],
+    queryFn: () => apiClient.get(`/api/guild/${selectedGuildId}/plan`),
+    enabled: !!selectedGuildId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const plan = planData?.plan_id || 'free';
+  const planCfg = PLAN_CONFIG[plan] || PLAN_CONFIG.free;
+  const PlanIcon = planCfg.icon;
+
+  const isLoading = loadingInfo || loadingPlan;
+
+  if (!selectedGuildId) return null;
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <ServerCrash className="w-16 h-16 text-destructive/60" />
+        <p className="text-muted-foreground">فشل تحميل بيانات السيرفر</p>
+        <button
+          onClick={() => navigate('/dashboard/servers')}
+          className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm"
+        >
+          اختر سيرفر آخر
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
-        <Skeleton className="h-32 rounded-2xl" />
+        <Skeleton className="h-36 rounded-2xl" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <SkeletonCard />
           <SkeletonCard />
@@ -68,45 +151,61 @@ export default function OverviewPage() {
     );
   }
 
-  const { healthScore, stats, suggestions, recentActivity, weeklyActivity } = data;
-  const maxMessages = Math.max(...weeklyActivity.map((d) => d.messages));
+  // أيقونة السيرفر
+  const guild = guildInfo || selectedGuild;
+  const iconUrl = guild?.icon
+    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128`
+    : null;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* ── Welcome + Health Score ── */}
-      <Card className="p-6 lyn-gradient-soft border-border overflow-hidden relative">
+
+      {/* ── Header: معلومات السيرفر + Health Score ── */}
+      <Card className="p-6 overflow-hidden relative">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
           <div className="md:col-span-2">
-            <h1 className="text-3xl font-bold mb-2">
-              مرحباً 👋{' '}
-              <span className="lyn-text-gradient">{user?.username || 'صديقي'}</span>
-            </h1>
-            <p className="text-muted-foreground mb-4">
-              إليك نظرة عامة على أداء سيرفرك اليوم
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(healthScore.breakdown).map(([key, item]) => (
-                <Badge key={key} variant="default" size="sm">
-                  {item.label}: <span className="num font-bold ms-1">{item.score}</span>
-                </Badge>
-              ))}
+            <div className="flex items-center gap-4 mb-3">
+              {iconUrl ? (
+                <img src={iconUrl} alt={guild?.name} className="w-14 h-14 rounded-xl object-cover" />
+              ) : (
+                <div className="w-14 h-14 rounded-xl lyn-gradient flex items-center justify-center text-white font-bold text-xl">
+                  {guild?.name?.slice(0, 1) || 'S'}
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold">{guild?.name || 'السيرفر'}</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={cn('inline-flex items-center gap-1 text-xs font-medium', planCfg.color)}>
+                    <PlanIcon className="w-3 h-3" />
+                    {planCfg.label}
+                  </span>
+                  {guildInfo?.memberCount && (
+                    <span className="text-xs text-muted-foreground">
+                      · <span className="num">{guildInfo.memberCount.toLocaleString()}</span> عضو
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
+            <p className="text-muted-foreground text-sm">
+              مرحباً{' '}
+              <span className="lyn-text-gradient font-semibold">{user?.username || ''}</span>
+              {' '}— إليك نظرة عامة على سيرفرك
+            </p>
           </div>
 
-          {/* Health Score Circle */}
           <div className="flex justify-center">
-            <HealthScoreCircle score={healthScore.total} />
+            <HealthScoreCircle score={78} />
           </div>
         </div>
       </Card>
 
-      {/* ── Stats Grid ── */}
+      {/* ── Stats Cards (static مؤقتاً — APIs الإحصاء تأتي لاحقاً) ── */}
       <StatCardGrid cols={4}>
         <StatCard
           icon={<Users />}
           label="الأعضاء"
-          value={stats.members.value}
-          change={stats.members.change}
+          value={guildInfo?.memberCount || 0}
           gradient="from-violet-500 to-pink-500"
           format="compact"
           hint="إجمالي السيرفر"
@@ -114,25 +213,23 @@ export default function OverviewPage() {
         <StatCard
           icon={<MessageSquare />}
           label="الرسائل (24س)"
-          value={stats.messages24h.value}
-          change={stats.messages24h.change}
+          value={0}
           gradient="from-emerald-500 to-cyan-500"
           format="compact"
+          hint="قريباً"
         />
         <StatCard
           icon={<Bot />}
           label="الأوامر (24س)"
-          value={stats.commands24h.value}
-          change={stats.commands24h.change}
+          value={0}
           gradient="from-amber-500 to-orange-500"
           format="number"
-          hint={`${stats.commands24h.aiPortion} منها AI`}
+          hint="قريباً"
         />
         <StatCard
           icon={<Gavel />}
           label="إشراف (7 أيام)"
-          value={stats.modActions7d.value}
-          change={stats.modActions7d.change}
+          value={0}
           gradient="from-rose-500 to-red-500"
           format="number"
           hint="حظر/تحذير/كتم"
@@ -152,7 +249,7 @@ export default function OverviewPage() {
               <Link
                 key={action.id}
                 to={action.link}
-                className="group p-4 rounded-2xl bg-card border border-border hover:border-border/80 transition-all hover:scale-[1.02]"
+                className="group p-4 rounded-2xl bg-card border border-border hover:border-primary/40 transition-all hover:scale-[1.02]"
               >
                 <div
                   className={cn(
@@ -169,166 +266,43 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* ── Two Column: Suggestions + Activity Chart ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Smart Suggestions */}
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <h2 className="font-bold">اقتراحات ذكية</h2>
-            <Badge variant="lyn" size="sm" className="ms-auto">
-              {suggestions.length}
-            </Badge>
-          </div>
-
-          <div className="space-y-2">
-            {suggestions.map((s) => {
-              const Icon = SUGGESTION_ICONS[s.icon] || Sparkles;
-              const styles = SEVERITY_STYLES[s.severity];
-              return (
-                <div
-                  key={s.id}
-                  className={cn(
-                    'flex items-start gap-3 p-3 rounded-xl border',
-                    styles.bg,
-                    styles.border,
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'w-9 h-9 rounded-lg bg-card flex items-center justify-center flex-shrink-0',
-                      styles.color,
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{s.title}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{s.description}</div>
-                  </div>
-                  <Button asChild size="sm" variant="outline" className="flex-shrink-0">
-                    <Link to={s.link}>
-                      {s.action}
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                    </Link>
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* Weekly Activity Chart */}
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            <h2 className="font-bold">نشاط الأسبوع</h2>
-          </div>
-
-          <div className="space-y-2">
-            {weeklyActivity.map((day) => {
-              const percent = (day.messages / maxMessages) * 100;
-              return (
-                <div key={day.day} className="flex items-center gap-3">
-                  <div className="text-xs font-medium w-16 text-muted-foreground">{day.day}</div>
-                  <div className="flex-1 h-7 bg-muted/40 rounded-md overflow-hidden relative">
-                    <div
-                      className="h-full lyn-gradient transition-all"
-                      style={{ width: `${percent}%` }}
-                    />
-                    <div className="absolute inset-0 flex items-center px-2 text-xs font-bold num">
-                      {formatCompact(day.messages)}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Recent Activity ── */}
+      {/* ── Suggestions ── */}
       <Card className="p-5">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-primary" />
-            <h2 className="font-bold">آخر الأنشطة</h2>
-          </div>
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/dashboard/audit">عرض الكل</Link>
-          </Button>
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h2 className="font-bold">اقتراحات ذكية</h2>
+          <Badge variant="lyn" size="sm" className="ms-auto">
+            {STATIC_SUGGESTIONS.length}
+          </Badge>
         </div>
-
-        <div className="space-y-1">
-          {recentActivity.map((activity, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/50 transition-colors"
-            >
-              <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground flex-shrink-0">
-                {activity.user[0]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm">
-                  <span className="font-medium">{activity.user}</span>{' '}
-                  <span className="text-muted-foreground">{activity.text}</span>
+        <div className="space-y-2">
+          {STATIC_SUGGESTIONS.map((s) => {
+            const Icon = s.icon;
+            return (
+              <div
+                key={s.id}
+                className={cn(
+                  'flex items-center gap-3 p-3 rounded-xl border transition-colors',
+                  SEVERITY_STYLES[s.severity],
+                )}
+              >
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm">{s.title}</div>
+                  <div className="text-xs opacity-70">{s.description}</div>
                 </div>
+                <Link
+                  to={s.link}
+                  className="text-xs font-semibold whitespace-nowrap hover:underline"
+                >
+                  {s.action}
+                </Link>
               </div>
-              <div className="text-xs text-muted-foreground flex-shrink-0">
-                {formatRelativeTime(activity.time)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
-    </div>
-  );
-}
 
-// ════════════════════════════════════════════════════════════
-//  Health Score Circle
-// ════════════════════════════════════════════════════════════
-
-function HealthScoreCircle({ score }) {
-  const circumference = 2 * Math.PI * 56;
-  const offset = circumference - (score / 100) * circumference;
-  const color = score >= 80 ? '#10F4A8' : score >= 60 ? '#FFB800' : '#FF3D71';
-
-  return (
-    <div className="relative w-32 h-32">
-      <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
-        <circle
-          cx="64"
-          cy="64"
-          r="56"
-          stroke="currentColor"
-          strokeWidth="10"
-          fill="none"
-          className="text-muted/30"
-        />
-        <circle
-          cx="64"
-          cy="64"
-          r="56"
-          stroke={color}
-          strokeWidth="10"
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          className="transition-all duration-1000"
-          style={{
-            filter: `drop-shadow(0 0 8px ${color}80)`,
-          }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <Heart className="w-4 h-4 mb-1" style={{ color }} />
-        <div className="text-3xl font-bold num" style={{ color }}>
-          {score}
-        </div>
-        <div className="text-[10px] font-medium text-muted-foreground">صحة السيرفر</div>
-      </div>
     </div>
   );
 }

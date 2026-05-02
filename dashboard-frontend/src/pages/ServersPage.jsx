@@ -10,16 +10,15 @@ import {
   Settings,
   Plus,
   ExternalLink,
-  Loader2,
   ServerCrash,
-  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { useGuildStore } from '@/store/guildStore';
 import { apiClient } from '@/api/client';
 import { env } from '@/config/env';
 
-// ─── Plan config ─────────────────────────────────────────────
+// ─── Plan config ──────────────────────────────────────────────
 const PLAN_CONFIG = {
   diamond: {
     label: 'ماسي',
@@ -51,7 +50,6 @@ const PLAN_CONFIG = {
   },
 };
 
-// ─── جلب خطة سيرفر واحد ──────────────────────────────────────
 async function fetchGuildPlan(guildId) {
   try {
     const data = await apiClient.get(`/api/guild/${guildId}/plan`);
@@ -79,13 +77,10 @@ function ServerCard({ guild, plan, onManage, botInviteUrl }) {
         cfg.glow && `hover:shadow-lg hover:${cfg.glow}`,
       )}
     >
-      {/* شريط الخطة العلوي */}
       <div className={cn('h-1.5 w-full bg-gradient-to-r', cfg.gradient)} />
 
       <div className="p-5">
-        {/* Header */}
         <div className="flex items-start gap-4 mb-4">
-          {/* أيقونة السيرفر */}
           <div className="relative flex-shrink-0">
             {iconUrl ? (
               <img
@@ -104,7 +99,6 @@ function ServerCard({ guild, plan, onManage, botInviteUrl }) {
                 {guild.name.slice(0, 1)}
               </div>
             )}
-            {/* نقطة حالة البوت */}
             <span
               className={cn(
                 'absolute -bottom-1 -left-1 w-4 h-4 rounded-full border-2 border-card',
@@ -114,7 +108,6 @@ function ServerCard({ guild, plan, onManage, botInviteUrl }) {
             />
           </div>
 
-          {/* اسم + خطة */}
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-base truncate mb-1">{guild.name}</h3>
             <span
@@ -129,12 +122,8 @@ function ServerCard({ guild, plan, onManage, botInviteUrl }) {
           </div>
         </div>
 
-        {/* ID */}
-        <p className="text-xs text-muted-foreground mb-4 font-mono truncate">
-          {guild.id}
-        </p>
+        <p className="text-xs text-muted-foreground mb-4 font-mono truncate">{guild.id}</p>
 
-        {/* أزرار */}
         {hasBot ? (
           <button
             onClick={() => onManage(guild)}
@@ -171,10 +160,11 @@ function ServerCard({ guild, plan, onManage, botInviteUrl }) {
   );
 }
 
-// ─── الصفحة الرئيسية ──────────────────────────────────────────
+// ─── الصفحة ───────────────────────────────────────────────────
 export default function ServersPage() {
   const navigate = useNavigate();
   const { guilds: rawGuilds } = useAuthStore();
+  const { setSelectedGuild } = useGuildStore();
 
   const [search, setSearch] = useState('');
   const [plans, setPlans] = useState({});
@@ -186,7 +176,6 @@ export default function ServersPage() {
     env.BOT_INVITE_URL ||
     `https://discord.com/oauth2/authorize?client_id=${env.DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands`;
 
-  // 1. جلب سيرفرات البوت من الـ API
   useEffect(() => {
     let cancelled = false;
 
@@ -195,19 +184,16 @@ export default function ServersPage() {
       setError(null);
 
       try {
-        // جلب السيرفرات اللي البوت موجود فيها
         let botIds = [];
         try {
           const res = await apiClient.get('/api/bot/guilds');
           botIds = Array.isArray(res) ? res : [];
         } catch {
-          // لو فشل → نعتبر كلها بدون بوت
           botIds = [];
         }
 
         if (!cancelled) setBotGuildIds(botIds);
 
-        // جلب خطط السيرفرات اللي البوت فيها
         const planResults = {};
         await Promise.allSettled(
           rawGuilds
@@ -221,7 +207,7 @@ export default function ServersPage() {
           setPlans(planResults);
           setLoading(false);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setError('فشل تحميل بيانات السيرفرات');
           setLoading(false);
@@ -230,20 +216,18 @@ export default function ServersPage() {
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [rawGuilds]);
 
-  // 2. فلترة حسب البحث
   const guilds = rawGuilds
     .map((g) => ({
       ...g,
       hasBot: botGuildIds ? botGuildIds.includes(g.id) : false,
     }))
-    .filter((g) =>
-      search ? g.name.toLowerCase().includes(search.toLowerCase()) : true,
-    );
+    .filter((g) => (search ? g.name.toLowerCase().includes(search.toLowerCase()) : true));
 
-  // السيرفرات اللي فيها البوت أولاً
   const sorted = [...guilds].sort((a, b) => {
     if (a.hasBot && !b.hasBot) return -1;
     if (!a.hasBot && b.hasBot) return 1;
@@ -251,22 +235,15 @@ export default function ServersPage() {
   });
 
   const handleManage = (guild) => {
-    // نحفظ السيرفر المختار في sessionStorage ونروح للـ overview
-    sessionStorage.setItem('selectedGuildId', guild.id);
-    sessionStorage.setItem('selectedGuild', JSON.stringify(guild));
+    setSelectedGuild(guild);
     navigate('/dashboard');
   };
 
-  // ── States ──
+  // ── Loading ──
   if (loading) {
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="h-8 w-40 bg-muted/30 rounded-xl animate-pulse mb-2" />
-            <div className="h-4 w-56 bg-muted/20 rounded-lg animate-pulse" />
-          </div>
-        </div>
+        <div className="h-8 w-40 bg-muted/30 rounded-xl animate-pulse mb-2" />
         <div className="h-12 bg-muted/20 rounded-xl animate-pulse" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -277,6 +254,7 @@ export default function ServersPage() {
     );
   }
 
+  // ── Error ──
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -296,62 +274,37 @@ export default function ServersPage() {
   const withoutBot = sorted.filter((g) => !g.hasBot);
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">السيرفرات</h1>
-          <p className="text-muted-foreground text-sm">
-            {rawGuilds.length} سيرفر · {withBot.length} فيهم البوت
-          </p>
-        </div>
-        <a
-          href={botInviteUrl}
-          target="_blank"
-          rel="noreferrer"
-          className={cn(
-            'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl',
-            'bg-gradient-to-r from-lyn-500 to-lyn-pink-500 text-white',
-            'font-semibold text-sm hover:opacity-90 transition-opacity',
-            'shadow-lg shadow-lyn-500/25',
-          )}
-        >
-          <Plus className="w-4 h-4" />
-          دعوة البوت لسيرفر جديد
-        </a>
+      <div>
+        <h1 className="text-2xl font-bold mb-1">اختر سيرفرك</h1>
+        <p className="text-muted-foreground text-sm">
+          {withBot.length} سيرفر فيه البوت · {withoutBot.length} بدون البوت
+        </p>
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           type="text"
+          placeholder="ابحث عن سيرفر..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="ابحث عن سيرفر..."
-          className={cn(
-            'w-full pr-11 pl-4 py-3 rounded-xl text-sm',
-            'bg-card border border-border',
-            'focus:outline-none focus:border-primary/50',
-            'placeholder:text-muted-foreground transition-colors',
-          )}
+          className="w-full pr-10 pl-4 py-3 rounded-xl bg-card border border-border text-sm focus:outline-none focus:border-primary/50 transition-colors"
         />
       </div>
 
-      {/* لا يوجد نتائج */}
-      {sorted.length === 0 && (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
-          <AlertCircle className="w-12 h-12 text-muted-foreground/40" />
-          <div>
-            <p className="font-semibold mb-1">لا يوجد سيرفرات</p>
-            <p className="text-sm text-muted-foreground">
-              ما عندك أي سيرفر تملك فيه صلاحية المسؤول
-            </p>
-          </div>
+      {/* Empty */}
+      {guilds.length === 0 && (
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 text-center">
+          <Users className="w-12 h-12 text-muted-foreground/40" />
+          <p className="font-semibold">لا يوجد سيرفرات</p>
+          <p className="text-sm text-muted-foreground">ما عندك أي سيرفر تملك فيه صلاحية المسؤول</p>
         </div>
       )}
 
-      {/* سيرفرات فيها البوت */}
+      {/* مع البوت */}
       {withBot.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
@@ -372,7 +325,7 @@ export default function ServersPage() {
         </section>
       )}
 
-      {/* سيرفرات بدون البوت */}
+      {/* بدون البوت */}
       {withoutBot.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
