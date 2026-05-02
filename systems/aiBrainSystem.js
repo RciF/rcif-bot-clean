@@ -6,12 +6,16 @@ const economyRepository = require("../repositories/economyRepository")
 const memoryRepository = require("../repositories/memoryRepository")
 const aiDecisionSystem = require("./aiDecisionSystem")
 const logger = require("./loggerSystem")
+const config = require("../config")
 
 const MAX_TRANSFER = 100000
 const MAX_BUY_QUANTITY = 50
 
 const cooldowns = new Map()
 const GLOBAL_COOLDOWN = 2000
+
+// ✅ مصدر واحد للمتجر من config.js
+const shopItems = config.shopItems
 
 function checkCooldown(userId){
     const now = Date.now()
@@ -54,12 +58,6 @@ function getRandomBonus(){
     if(roll < 0.1) return 2
     if(roll < 0.3) return 1.5
     return 1
-}
-
-const shopItems = {
-    fishing_rod: { name: "🎣 صنارة", price: 300, description: "تستخدم للصيد.", aliases:["fishing_rod","صنارة","صناره","سنارة"] },
-    laptop: { name: "💻 لابتوب", price: 800, description: "جهاز عمل قوي.", aliases:["laptop","لابتوب","كمبيوتر","حاسوب"] },
-    car: { name: "🚗 سيارة", price: 5000, description: "وسيلة تنقل فاخرة.", aliases:["car","سيارة","سياره"] }
 }
 
 function normalizeText(text){
@@ -158,7 +156,7 @@ function parseItem(content){
 
     for(const key in shopItems){
         const item = shopItems[key]
-        if(item.aliases.some(a => text.includes(a))){
+        if(item.aliases && item.aliases.some(a => text.includes(a))){
             return key
         }
     }

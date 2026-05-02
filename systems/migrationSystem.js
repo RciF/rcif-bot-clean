@@ -92,28 +92,6 @@ async function runMigrations() {
             );
         `)
         
-// AI CONVERSATIONS
-        await databaseSystem.query(`
-            CREATE TABLE IF NOT EXISTS ai_conversations (
-                id SERIAL PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                guild_id TEXT NOT NULL DEFAULT 'dm',
-                channel_id TEXT NOT NULL DEFAULT 'dm',
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000
-            );
-        `)
-
-        await databaseSystem.query(`
-            CREATE INDEX IF NOT EXISTS idx_ai_conv_lookup
-            ON ai_conversations (user_id, guild_id, channel_id, created_at DESC);
-        `)
-
-        await databaseSystem.query(`
-            CREATE INDEX IF NOT EXISTS idx_ai_conv_cleanup
-            ON ai_conversations (created_at);
-        `)
         // AI CONVERSATIONS
         await databaseSystem.query(`
             CREATE TABLE IF NOT EXISTS ai_conversations (
@@ -148,10 +126,10 @@ async function runMigrations() {
             );
         `)
 
-await databaseSystem.query(`
-    CREATE INDEX IF NOT EXISTS idx_economy_users_user_id
-    ON economy_users (user_id);
-`)
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_economy_users_user_id
+            ON economy_users (user_id);
+        `)
 
         // RELATIONSHIPS
         await databaseSystem.query(`
@@ -328,121 +306,105 @@ await databaseSystem.query(`
             }
         }
 
-// PROTECTION SETTINGS
-await databaseSystem.query(`
-  CREATE TABLE IF NOT EXISTS protection_settings (
-    guild_id TEXT PRIMARY KEY,
-    -- Anti-Spam
-    antispam_enabled BOOLEAN DEFAULT false,
-    antispam_max_messages INTEGER DEFAULT 5,
-    antispam_interval_ms INTEGER DEFAULT 3000,
-    antispam_action TEXT DEFAULT 'mute',
-    antispam_mute_duration INTEGER DEFAULT 300000,
-    -- Anti-Raid
-    antiraid_enabled BOOLEAN DEFAULT false,
-    antiraid_join_threshold INTEGER DEFAULT 10,
-    antiraid_join_interval_ms INTEGER DEFAULT 10000,
-    antiraid_action TEXT DEFAULT 'lockdown',
-    -- Anti-Nuke
-    antinuke_enabled BOOLEAN DEFAULT false,
-    antinuke_channel_delete_threshold INTEGER DEFAULT 3,
-    antinuke_role_delete_threshold INTEGER DEFAULT 3,
-    antinuke_ban_threshold INTEGER DEFAULT 3,
-    antinuke_interval_ms INTEGER DEFAULT 10000,
-    antinuke_action TEXT DEFAULT 'ban',
-    -- General
-    log_channel_id TEXT,
-    whitelist_roles JSONB DEFAULT '[]',
-    whitelist_users JSONB DEFAULT '[]',
-    updated_at TIMESTAMP DEFAULT NOW()
-  );
-`)
+        // PROTECTION SETTINGS
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS protection_settings (
+                guild_id TEXT PRIMARY KEY,
+                antispam_enabled BOOLEAN DEFAULT false,
+                antispam_max_messages INTEGER DEFAULT 5,
+                antispam_interval_ms INTEGER DEFAULT 3000,
+                antispam_action TEXT DEFAULT 'mute',
+                antispam_mute_duration INTEGER DEFAULT 300000,
+                antiraid_enabled BOOLEAN DEFAULT false,
+                antiraid_join_threshold INTEGER DEFAULT 10,
+                antiraid_join_interval_ms INTEGER DEFAULT 10000,
+                antiraid_action TEXT DEFAULT 'lockdown',
+                antinuke_enabled BOOLEAN DEFAULT false,
+                antinuke_channel_delete_threshold INTEGER DEFAULT 3,
+                antinuke_role_delete_threshold INTEGER DEFAULT 3,
+                antinuke_ban_threshold INTEGER DEFAULT 3,
+                antinuke_interval_ms INTEGER DEFAULT 10000,
+                antinuke_action TEXT DEFAULT 'ban',
+                log_channel_id TEXT,
+                whitelist_roles JSONB DEFAULT '[]',
+                whitelist_users JSONB DEFAULT '[]',
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+        `)
 
-// ✅ حذف جدول reaction_roles القديم (تم حذف الأمر بالكامل)
-await databaseSystem.query(`DROP TABLE IF EXISTS reaction_roles CASCADE;`)
+        // ✅ حذف جدول reaction_roles القديم
+        await databaseSystem.query(`DROP TABLE IF EXISTS reaction_roles CASCADE;`)
 
-// ✅ Protection Settings
-await databaseSystem.query(`
-  CREATE TABLE IF NOT EXISTS protection_settings (
-    guild_id TEXT PRIMARY KEY,
-    antispam_enabled BOOLEAN DEFAULT false,
-    antispam_max_messages INT DEFAULT 5,
-    antispam_interval_ms INT DEFAULT 3000,
-    antispam_action TEXT DEFAULT 'mute',
-    antispam_mute_duration INT DEFAULT 300000,
-    antiraid_enabled BOOLEAN DEFAULT false,
-    antiraid_join_threshold INT DEFAULT 10,
-    antiraid_join_interval_ms INT DEFAULT 10000,
-    antiraid_action TEXT DEFAULT 'lockdown',
-    antinuke_enabled BOOLEAN DEFAULT false,
-    antinuke_channel_delete_threshold INT DEFAULT 3,
-    antinuke_role_delete_threshold INT DEFAULT 3,
-    antinuke_ban_threshold INT DEFAULT 3,
-    antinuke_interval_ms INT DEFAULT 10000,
-    antinuke_action TEXT DEFAULT 'ban',
-    log_channel_id TEXT,
-    whitelist_roles JSONB DEFAULT '[]',
-    whitelist_users JSONB DEFAULT '[]',
-    updated_at TIMESTAMP DEFAULT NOW()
-  );
-`)
+        // STATS CHANNELS
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS stats_channels (
+                id         SERIAL PRIMARY KEY,
+                guild_id   TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                stat_type  TEXT NOT NULL,
+                position   INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE (guild_id, stat_type)
+            );
+        `)
 
-// STATS CHANNELS
-await databaseSystem.query(`
-  CREATE TABLE IF NOT EXISTS stats_channels (
-    id         SERIAL PRIMARY KEY,
-    guild_id   TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    stat_type  TEXT NOT NULL,
-    position   INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE (guild_id, stat_type)
-  );
-`)
-await databaseSystem.query(`
-  CREATE INDEX IF NOT EXISTS idx_stats_guild ON stats_channels (guild_id);
-`)
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_stats_guild ON stats_channels (guild_id);
+        `)
 
-// EVENTS SYSTEM
-await databaseSystem.query(`
-  CREATE TABLE IF NOT EXISTS guild_events (
-    id SERIAL PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    message_id TEXT,
-    creator_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT,
-    category TEXT DEFAULT 'other',
-    start_time BIGINT NOT NULL,
-    end_time BIGINT,
-    max_attendees INTEGER DEFAULT 0,
-    status TEXT DEFAULT 'upcoming',
-    image_url TEXT,
-    location TEXT,
-    ping_role_id TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-  );
-`)
+        // EVENTS SYSTEM
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS guild_events (
+                id SERIAL PRIMARY KEY,
+                guild_id TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                message_id TEXT,
+                creator_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                category TEXT DEFAULT 'other',
+                start_time BIGINT NOT NULL,
+                end_time BIGINT,
+                max_attendees INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'upcoming',
+                image_url TEXT,
+                location TEXT,
+                ping_role_id TEXT,
+                reminder_sent BOOLEAN DEFAULT false,
+                started_notified BOOLEAN DEFAULT false,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        `)
 
-await databaseSystem.query(`
-  CREATE TABLE IF NOT EXISTS event_attendees (
-    id SERIAL PRIMARY KEY,
-    event_id INTEGER NOT NULL,
-    user_id TEXT NOT NULL,
-    status TEXT DEFAULT 'going',
-    joined_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE (event_id, user_id)
-  );
-`)
+        // ✅ Migration للقواعد القديمة — إضافة الأعمدة لو ما كانت موجودة
+        await databaseSystem.query(`
+            ALTER TABLE guild_events
+            ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT false
+        `)
 
-await databaseSystem.query(`
-  CREATE INDEX IF NOT EXISTS idx_guild_events_guild ON guild_events (guild_id);
-`)
+        await databaseSystem.query(`
+            ALTER TABLE guild_events
+            ADD COLUMN IF NOT EXISTS started_notified BOOLEAN DEFAULT false
+        `)
 
-await databaseSystem.query(`
-  CREATE INDEX IF NOT EXISTS idx_event_attendees_event ON event_attendees (event_id);
-`)
+        await databaseSystem.query(`
+            CREATE TABLE IF NOT EXISTS event_attendees (
+                id SERIAL PRIMARY KEY,
+                event_id INTEGER NOT NULL,
+                user_id TEXT NOT NULL,
+                status TEXT DEFAULT 'going',
+                joined_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE (event_id, user_id)
+            );
+        `)
+
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_guild_events_guild ON guild_events (guild_id);
+        `)
+
+        await databaseSystem.query(`
+            CREATE INDEX IF NOT EXISTS idx_event_attendees_event ON event_attendees (event_id);
+        `)
 
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 
