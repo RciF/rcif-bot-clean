@@ -9,24 +9,38 @@ const aiObservationSystem = require("../systems/aiObservationSystem")
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
 const logger = require("../systems/loggerSystem")
 const protectionSystem = require("../systems/protectionSystem")
+const scheduler = require("../systems/schedulerSystem")
 
 // ✅ معالج أمر المطور (بريفكس مخفي)
 const { DEV_PREFIXES, handleDeveloperCommand } = require("../commands/admin/developer")
 
-// ✅ FIX: استخدام Map بدل Set عشان نخزن timestamp مع كل message
-// هذا يسمح لنا بتنظيف القديم بشكل صحيح
+// ══════════════════════════════════════════════════════════
+//  PROCESSED MESSAGES TRACKING
+//  Map<messageId, timestamp> — يمنع double-processing
+//  TTL = 10 ثواني (بعدها الرسالة لن تأتي مرة ثانية)
+//
+//  التنظيف: scheduler واحد كل دقيقة (مو setTimeout لكل رسالة)
+//  هذا يمنع تراكم آلاف الـ setTimeout في السيرفرات النشطة
+// ══════════════════════════════════════════════════════════
+
 const processedMessages = new Map()
 const PROCESSED_TTL = 10000 // 10 ثواني
+const CLEANUP_INTERVAL = 60 * 1000 // دقيقة
 
-// ✅ FIX: تنظيف دوري للـ Map كل دقيقة لمنع تراكم الذاكرة
-setInterval(() => {
-  const now = Date.now()
-  for (const [id, timestamp] of processedMessages.entries()) {
-    if (now - timestamp > PROCESSED_TTL) {
-      processedMessages.delete(id)
+// تسجيل التنظيف عبر scheduler عشان graceful shutdown يقدر يوقفه
+scheduler.register(
+  "processed-messages-cleanup",
+  CLEANUP_INTERVAL,
+  () => {
+    const now = Date.now()
+    for (const [id, timestamp] of processedMessages.entries()) {
+      if (now - timestamp > PROCESSED_TTL) {
+        processedMessages.delete(id)
+      }
     }
-  }
-}, 60 * 1000)
+  },
+  false
+)
 
 module.exports = {
   name: "messageCreate",
@@ -38,13 +52,9 @@ module.exports = {
       if (!message?.author || message.author.bot) return
       if (!message.guild) return
 
-      // ✅ FIX: تحقق بالـ Map مع timestamp
-      const now = Date.now()
+      // ✅ تحقق وحفظ بـ Map (مع timestamp للتنظيف)
       if (processedMessages.has(message.id)) return
-      processedMessages.set(message.id, now)
-
-      // تنظيف فوري للرسالة بعد TTL
-      setTimeout(() => processedMessages.delete(message.id), PROCESSED_TTL)
+      processedMessages.set(message.id, Date.now())
 
       // ══════════════════════════════════════════════════════════
       //  🔒 معالج أمر المطور (بريفكس مخفي)

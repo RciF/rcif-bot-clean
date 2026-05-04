@@ -1,6 +1,7 @@
 const analyticsTracker = require("../systems/analyticsTracker")
 const errorSystem      = require("../systems/errorSystem")
 const ticketSystem     = require("../systems/ticketSystem")
+const logger           = require("../systems/loggerSystem")
 const { handleButtonRoleInteraction } = require("../commands/roles/button-role-handler")
 const { handleEventButton } = require("../commands/events/eventButtons")
 const { eventView, eventList } = require("../commands/events/eventView")
@@ -12,15 +13,22 @@ const helpInteractionHandler = require("../systems/helpInteractionHandler")
 // ══════════════════════════════════════
 //  DASHBOARD SETTINGS CACHE
 //  نخزن إعدادات كل سيرفر 5 دقائق
-//  لتجنب ضرب الـ API عند كل أمر
+//  + negative caching: لو فشل الطلب، نكاش "null" لمدة 30 ثانية
+//    عشان ما نضرب الـ API كل أمر لما الداشبورد عطلان
 // ══════════════════════════════════════
 const settingsCache = new Map()
-const CACHE_TTL     = 5 * 60 * 1000
+const CACHE_TTL          = 5 * 60 * 1000  // 5 دقائق للنجاح
+const NEGATIVE_CACHE_TTL = 30 * 1000      // 30 ثانية للفشل
 
 async function getGuildCommandSettings(guildId) {
   const cached = settingsCache.get(guildId)
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
-    return cached.data
+
+  if (cached) {
+    const age = Date.now() - cached.fetchedAt
+    const ttl = cached.failed ? NEGATIVE_CACHE_TTL : CACHE_TTL
+    if (age < ttl) {
+      return cached.data
+    }
   }
 
   const dashUrl   = process.env.DASHBOARD_URL || "http://localhost:4000"
@@ -31,11 +39,16 @@ async function getGuildCommandSettings(guildId) {
       headers: { "x-bot-secret": botSecret },
       signal:  AbortSignal.timeout(3000)
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      // negative cache: ما نضرب الـ API كل أمر
+      settingsCache.set(guildId, { data: null, fetchedAt: Date.now(), failed: true })
+      return null
+    }
     const data = await res.json()
-    settingsCache.set(guildId, { data, fetchedAt: Date.now() })
+    settingsCache.set(guildId, { data, fetchedAt: Date.now(), failed: false })
     return data
   } catch {
+    settingsCache.set(guildId, { data: null, fetchedAt: Date.now(), failed: true })
     return null
   }
 }
@@ -54,6 +67,18 @@ async function trackToDashboard(commandName, guildId) {
       body:    JSON.stringify({ command: commandName, guildId }),
       signal:  AbortSignal.timeout(2000)
     })
+  } catch {}
+}
+
+// ══════════════════════════════════════
+//  SAFE REPLY HELPER — يتعامل مع interaction states
+// ══════════════════════════════════════
+async function safeErrorReply(interaction, message = "❌ حدث خطأ غير متوقع") {
+  try {
+    if (interaction.replied || interaction.deferred) {
+      return await interaction.followUp({ content: message, ephemeral: true }).catch(() => {})
+    }
+    return await interaction.reply({ content: message, ephemeral: true }).catch(() => {})
   } catch {}
 }
 
@@ -114,12 +139,13 @@ module.exports = {
       try {
         await command.execute(interaction, client)
       } catch (error) {
-        errorSystem.handleError(error)
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-        } else {
-          await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-        }
+        errorSystem.handleError(error, {
+          source: "slash_command",
+          commandName,
+          userId: interaction.user?.id,
+          guildId
+        })
+        await safeErrorReply(interaction, "❌ حدث خطأ أثناء تنفيذ الأمر. حاول مرة ثانية.")
       }
 
       return
@@ -127,6 +153,8 @@ module.exports = {
 
     // ══════════════════════════════════════
     //  AUTOCOMPLETE
+    //  ⚠️ Discord ينتظر رد خلال 3 ثواني — لو فشل، لازم نرسل رد فاضي
+    //     عشان ما يبقى المستخدم يشوف "Loading..." للأبد
     // ══════════════════════════════════════
     if (interaction.isAutocomplete()) {
       const command = client.commands.get(interaction.commandName)
@@ -134,7 +162,17 @@ module.exports = {
       try {
         await command.autocomplete(interaction, client)
       } catch (error) {
-        console.error("[AUTOCOMPLETE ERROR]", error.message)
+        logger.error("AUTOCOMPLETE_FAILED", {
+          commandName: interaction.commandName,
+          userId: interaction.user?.id,
+          error: error.message
+        })
+        // لازم نرد بأي شي حتى لو فاضي عشان نوقف الـ loading state
+        try {
+          if (!interaction.responded) {
+            await interaction.respond([]).catch(() => {})
+          }
+        } catch {}
       }
       return
     }
@@ -145,13 +183,13 @@ module.exports = {
     if (interaction.isButton()) {
       const customId = interaction.customId
 
-// ✅ Help System Buttons
+      // ✅ Help System Buttons
       if (customId.startsWith("help:")) {
         const handled = await helpInteractionHandler.handle(interaction)
         if (handled) return
       }
 
-      // ✅ NEW: Verify Panel Button
+      // ✅ Verify Panel Button
       if (customId.startsWith("verify_panel:")) {
         return await handleVerifyPanelButton(interaction)
       }
@@ -174,10 +212,13 @@ module.exports = {
         if (customId === "ticket_reopen")           return await ticketSystem.handleReopenButton(interaction)
         if (customId === "ticket_change_priority")  return await ticketSystem.handleChangePriorityButton(interaction)
       } catch (error) {
-        console.error("[BUTTON ERROR]", error.message)
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: "❌ حدث خطأ أثناء معالجة الزر", ephemeral: true }).catch(() => {})
-        }
+        logger.error("BUTTON_INTERACTION_FAILED", {
+          customId,
+          userId: interaction.user?.id,
+          guildId: interaction.guildId,
+          error: error.message
+        })
+        await safeErrorReply(interaction, "❌ حدث خطأ أثناء معالجة الزر.")
       }
       return
     }
@@ -187,20 +228,40 @@ module.exports = {
     // ══════════════════════════════════════
     if (interaction.isStringSelectMenu()) {
       const customId = interaction.customId
+
       // ✅ Help System Select Menus
       if (customId.startsWith("help:")) {
         const handled = await helpInteractionHandler.handle(interaction)
         if (handled) return
       }
+
       try {
         if (customId === "ticket_category_select") return await ticketSystem.handleCategorySelect(interaction)
         if (customId === "ticket_priority_select") return await ticketSystem.handlePrioritySelect(interaction)
       } catch (error) {
-        console.error("[SELECT MENU ERROR]", error.message)
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: "❌ حدث خطأ أثناء معالجة القائمة", ephemeral: true }).catch(() => {})
-        }
+        logger.error("SELECT_MENU_FAILED", {
+          customId,
+          userId: interaction.user?.id,
+          guildId: interaction.guildId,
+          error: error.message
+        })
+        await safeErrorReply(interaction, "❌ حدث خطأ أثناء معالجة القائمة.")
       }
+      return
+    }
+
+    // ══════════════════════════════════════
+    //  MODAL SUBMIT
+    //  ⚠️ حالياً ما عندنا modals مسجلة، لكن نعالجها عشان ما تكون silent failure
+    //     لو أحد ضاف modal مستقبلاً، يضيف routing هنا
+    // ══════════════════════════════════════
+    if (interaction.isModalSubmit()) {
+      logger.warn("UNHANDLED_MODAL_SUBMIT", {
+        customId: interaction.customId,
+        userId: interaction.user?.id,
+        guildId: interaction.guildId
+      })
+      await safeErrorReply(interaction, "❌ هذا النموذج غير مدعوم حالياً.")
       return
     }
   }
