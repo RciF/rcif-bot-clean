@@ -48,6 +48,20 @@ function unregister(name) {
 }
 
 /**
+ * إيقاف كل الـ jobs (للـ graceful shutdown)
+ */
+function stopAll() {
+  const count = jobs.size
+  for (const job of jobs.values()) {
+    clearInterval(job.id)
+  }
+  jobs.clear()
+  if (count > 0) {
+    logger.warn(`SCHEDULER_ALL_JOBS_STOPPED ${count}`)
+  }
+}
+
+/**
  * قائمة الـ jobs النشطة
  */
 function list() {
@@ -57,4 +71,4 @@ function list() {
   }))
 }
 
-module.exports = { register, unregister, list }
+module.exports = { register, unregister, stopAll, list }

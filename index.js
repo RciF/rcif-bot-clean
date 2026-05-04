@@ -7,6 +7,7 @@ const { startApiServer } = require("./systems/apiServerSystem")
 const logger = require("./systems/loggerSystem")
 const subRoleSystem = require("./systems/subscriptionRoleSystem")
 const scheduler = require("./systems/schedulerSystem")
+const databaseManager = require("./utils/databaseManager")
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN
 
 if (!DISCORD_TOKEN) {
@@ -181,6 +182,71 @@ function pushCommand(filePath, commands) {
     process.exit(1)
   }
 })()
+
+// ══════════════════════════════════════════════════════════════════
+//  GRACEFUL SHUTDOWN
+//  يتعامل مع SIGTERM (Render restart) و SIGINT (Ctrl+C)
+//  يضمن:
+//   1. إيقاف كل الـ scheduled jobs
+//   2. إغلاق Discord client (ينهي الـ gateway connection)
+//   3. إغلاق DB pool (ينهي كل المعاملات المفتوحة)
+//   4. خروج نظيف خلال 10 ثواني كحد أقصى
+// ══════════════════════════════════════════════════════════════════
+
+let isShuttingDown = false
+
+async function gracefulShutdown(signal) {
+
+  if (isShuttingDown) {
+    logger.warn(`SHUTDOWN_ALREADY_IN_PROGRESS ${signal}`)
+    return
+  }
+
+  isShuttingDown = true
+
+  logger.warn(`SHUTDOWN_INITIATED ${signal}`)
+
+  // hard timeout: لو الإغلاق طول أكثر من 10 ثواني، اخرج بالقوة
+  const forceExitTimer = setTimeout(() => {
+    logger.error("SHUTDOWN_TIMEOUT_FORCING_EXIT")
+    process.exit(1)
+  }, 10000)
+
+  forceExitTimer.unref?.()
+
+  // 1) إيقاف كل الـ scheduled jobs
+  try {
+    scheduler.stopAll()
+    logger.info("SHUTDOWN_SCHEDULERS_STOPPED")
+  } catch (err) {
+    logger.error("SHUTDOWN_SCHEDULERS_FAILED", { error: err.message })
+  }
+
+  // 2) إغلاق Discord client
+  try {
+    if (client?.isReady?.()) {
+      await client.destroy()
+      logger.info("SHUTDOWN_DISCORD_CLIENT_CLOSED")
+    }
+  } catch (err) {
+    logger.error("SHUTDOWN_DISCORD_CLIENT_FAILED", { error: err.message })
+  }
+
+  // 3) إغلاق DB pool
+  try {
+    await databaseManager.close()
+    logger.info("SHUTDOWN_DATABASE_CLOSED")
+  } catch (err) {
+    logger.error("SHUTDOWN_DATABASE_FAILED", { error: err.message })
+  }
+
+  logger.success("SHUTDOWN_COMPLETED")
+  clearTimeout(forceExitTimer)
+  process.exit(0)
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"))
+process.on("SIGINT",  () => gracefulShutdown("SIGINT"))
 
 process.on("unhandledRejection", (error) => {
   logger.error("UNHANDLED_PROMISE_REJECTION", {

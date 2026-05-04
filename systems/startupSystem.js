@@ -40,17 +40,10 @@ async function startupSystem() {
 
     }
 
-    logger.info("RUNNING_DATABASE_MIGRATIONS");
+    // ✅ كل الـ migrations تشتغل من مكان واحد (migrationSystem.runMigrations)
+    //    والذي يستدعي بدوره addStreak و addCardCustomization في نهايته
+    await migrationSystem.runMigrations();
 
-   await migrationSystem.runMigrations();
-
-  logger.success("DATABASE_MIGRATIONS_COMPLETED");
-
-  const addStreakMigration = require("../scripts/migrations/addStreak")
-  await addStreakMigration()
-
-  const addCardCustomizationMigration = require("../scripts/migrations/addCardCustomization")
-  await addCardCustomizationMigration()
   } catch (error) {
 
     logger.error("DATABASE_INITIALIZATION_FAILED", {

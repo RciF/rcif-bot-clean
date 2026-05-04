@@ -405,6 +405,17 @@ async function runMigrations() {
         await databaseSystem.query(`
             CREATE INDEX IF NOT EXISTS idx_event_attendees_event ON event_attendees (event_id);
         `)
+        // ══════════════════════════════════════════════════════
+        //  Migrations الإضافية — اللي كانت متناثرة في startupSystem
+        // ══════════════════════════════════════════════════════
+ 
+        // Streak columns لـ economy_users
+        const addStreakMigration = require("../scripts/migrations/addStreak")
+        await addStreakMigration()
+ 
+        // Card customization tables
+        const addCardCustomizationMigration = require("../scripts/migrations/addCardCustomization")
+        await addCardCustomizationMigration()
 
         logger.success("DATABASE_MIGRATIONS_COMPLETED")
 
