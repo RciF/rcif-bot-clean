@@ -1,8 +1,41 @@
 const xpRepository = require("../repositories/xpRepository")
 const databaseSystem = require("./databaseSystem")
+const scheduler = require("./schedulerSystem")
 
+// ═══════════════════════════════════════════════════
+//  XP COOLDOWN — per (userId, guildId)
+//  ═════════════════════════════════════════════════
+//  ⚠️ ملاحظة: هذا هو الكولداون الفعلي لكسب XP.
+//   xpCooldownSystem.js كان يدوبل هذه الوظيفة لكن
+//   بدون التمييز بين السيرفرات (مشكلة) — الآن نعتمد
+//   على هذا فقط من messageCreate.
+// ═══════════════════════════════════════════════════
 const xpCooldown = new Map()
 const XP_COOLDOWN = 10000 // 10 ثوانٍ
+const MAX_COOLDOWN_ENTRIES = 10000 // حد أقصى للحماية من النمو غير المنتظم
+
+// ✅ FIX: cleanup تلقائي عبر scheduler
+//  (بدل ما تكبر الـ Map بدون نهاية مع الوقت)
+scheduler.register(
+  "xp-cooldown-cleanup",
+  5 * 60 * 1000, // كل 5 دقائق
+  () => {
+    const now = Date.now()
+
+    // امسح القديم اللي فات عليه أكثر من دقيقة (أي 6× الكولداون = آمن)
+    for (const [key, lastTime] of xpCooldown.entries()) {
+      if (now - lastTime > 60 * 1000) {
+        xpCooldown.delete(key)
+      }
+    }
+
+    // safety net — لو لسه كبير مع عدم نشاط، امسحه كله
+    if (xpCooldown.size > MAX_COOLDOWN_ENTRIES) {
+      xpCooldown.clear()
+    }
+  },
+  false
+)
 
 function calculateLevelFromXP(totalXP) {
   let xp = totalXP
