@@ -1,23 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster } from 'sonner';
-import { QueryProvider } from '@/components/ui/QueryProvider';
 import App from './App.jsx';
 import './index.css';
 
+// ✅ ملاحظة: QueryProvider + Toaster موجودين في RootLayout.jsx
+// لا تكررهم هنا — التكرار يسبب 2× QueryClient و 2× Toaster
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <QueryProvider>
-      <App />
-      <Toaster
-        position="bottom-right"
-        dir="rtl"
-        richColors
-        closeButton
-        toastOptions={{
-          duration: 4000,
-        }}
-      />
-    </QueryProvider>
+    <App />
   </StrictMode>,
 );

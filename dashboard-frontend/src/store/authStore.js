@@ -8,6 +8,13 @@ import { isOwner } from "@/config/env"
  *
  * Backend response format:
  *   { success, token, user: {id, username, avatar, isOwner}, guilds: [...] }
+ *
+ * ⚠️ ملاحظة عن التخزين:
+ *   - zustand/persist هو المصدر الوحيد للـ state بين الجلسات (lyn-auth-storage)
+ *   - localStorage["lyn-auth-token"] مخزن منفصل لأن axios interceptor
+ *     يقرأ منه مباشرة (بدون React) — هذا التخزين المنفصل ضروري
+ *   - تم حذف lyn-user و lyn-guilds من localStorage المنفصل لأنهم
+ *     يُحفظون في zustand/persist بالفعل (كانوا مكررين)
  */
 export const useAuthStore = create(
   persist(
@@ -30,16 +37,13 @@ export const useAuthStore = create(
             throw new Error("استجابة غير صالحة من الخادم")
           }
 
-          // الباك اند يرجع isOwner، لكن نتأكد منها محلياً
           const userWithFlags = {
             ...data.user,
             isOwner: data.user.isOwner ?? isOwner(data.user.id),
           }
 
-          // حفظ في localStorage
+          // ✅ token فقط في localStorage المنفصل (axios interceptor يقرأ منه)
           localStorage.setItem("lyn-auth-token", data.token)
-          localStorage.setItem("lyn-user", JSON.stringify(userWithFlags))
-          localStorage.setItem("lyn-guilds", JSON.stringify(data.guilds || []))
 
           set({
             user: userWithFlags,
@@ -72,10 +76,6 @@ export const useAuthStore = create(
             isOwner: data.user.isOwner ?? isOwner(data.user.id),
           }
 
-          // تحديث localStorage بأحدث البيانات
-          localStorage.setItem("lyn-user", JSON.stringify(userWithFlags))
-          localStorage.setItem("lyn-guilds", JSON.stringify(data.guilds || []))
-
           set({
             user: userWithFlags,
             guilds: data.guilds || [],
@@ -87,8 +87,6 @@ export const useAuthStore = create(
           // الـ token غير صالح → امسح كل شي
           console.warn("[AUTH] fetchMe failed:", err.message)
           localStorage.removeItem("lyn-auth-token")
-          localStorage.removeItem("lyn-user")
-          localStorage.removeItem("lyn-guilds")
           set({
             user: null,
             guilds: [],
@@ -107,44 +105,12 @@ export const useAuthStore = create(
           // تجاهل
         }
         localStorage.removeItem("lyn-auth-token")
-        localStorage.removeItem("lyn-user")
-        localStorage.removeItem("lyn-guilds")
         set({
           user: null,
           guilds: [],
           token: null,
           isAuthenticated: false,
           error: null,
-        })
-      },
-
-      // ── Mock login (للتطوير) ──
-      mockLogin: () => {
-        const mockUser = {
-          id: "529320108032786433",
-          username: "Saud (DEV)",
-          avatar: null,
-          isOwner: true,
-        }
-        const mockGuilds = [
-          {
-            id: "mock-guild-1",
-            name: "سيرفر التطوير",
-            icon: null,
-            permissions: "8",
-          },
-        ]
-        const mockToken = "mock-token-dev"
-
-        localStorage.setItem("lyn-auth-token", mockToken)
-        localStorage.setItem("lyn-user", JSON.stringify(mockUser))
-        localStorage.setItem("lyn-guilds", JSON.stringify(mockGuilds))
-
-        set({
-          user: mockUser,
-          guilds: mockGuilds,
-          token: mockToken,
-          isAuthenticated: true,
         })
       },
 

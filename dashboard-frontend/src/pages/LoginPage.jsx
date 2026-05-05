@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DISCORD_OAUTH_URL, env } from '@/config/env';
-import { useAuthStore } from '@/store/authStore';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-  const { mockLogin } = useAuthStore();
 
   const handleDiscordLogin = () => {
     if (!env.DISCORD_CLIENT_ID) {
@@ -17,12 +14,6 @@ export default function LoginPage() {
     }
     setLoading(true);
     window.location.href = DISCORD_OAUTH_URL;
-  };
-
-  const handleMockLogin = () => {
-    mockLogin();
-    toast.success('تم تسجيل الدخول كمطوّر (وضع التطوير)');
-    navigate('/dashboard');
   };
 
   return (
@@ -50,16 +41,6 @@ export default function LoginPage() {
           </>
         )}
       </button>
-
-      {env.IS_DEV && (
-        <button
-          onClick={handleMockLogin}
-          className="mt-3 w-full py-3 rounded-xl border border-dashed border-border hover:bg-accent text-sm font-medium transition-colors flex items-center justify-center gap-2"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>دخول كمطوّر (DEV)</span>
-        </button>
-      )}
 
       <div className="mt-6 text-center text-sm text-muted-foreground">
         لا تملك حساب؟{' '}
