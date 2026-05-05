@@ -34,13 +34,28 @@ function setCached(key, data, ttl) {
   cache.set(key, { data, expiresAt: Date.now() + ttl })
 }
 
-// تنظيف cache دوري
-setInterval(() => {
+// ═══════════════════════════════════════════════════════════
+//  تنظيف cache دوري
+//  ✅ FIX: حفظ id + .unref() عشان graceful shutdown
+// ═══════════════════════════════════════════════════════════
+
+const cleanupInterval = setInterval(() => {
   const now = Date.now()
   for (const [key, entry] of cache.entries()) {
     if (now > entry.expiresAt) cache.delete(key)
   }
 }, 5 * 60 * 1000) // كل 5 دقائق
+
+// ✅ unref حتى لا يمنع process exit
+cleanupInterval.unref?.()
+
+/**
+ * إيقاف cache cleanup interval
+ * يستخدم في graceful shutdown
+ */
+function stopCacheCleanup() {
+  clearInterval(cleanupInterval)
+}
 
 // ════════════════════════════════════════════════════════════
 //  Core: Discord API Request
@@ -288,4 +303,5 @@ module.exports = {
   fetchGuildMembers,
   fetchGuildEmojis,
   invalidateGuildCache,
+  stopCacheCleanup,
 }

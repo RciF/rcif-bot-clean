@@ -26,6 +26,10 @@ const settingsRoutes = require("./routes/settings")
 const subscriptionRoutes = require("./routes/subscription")
 const commandsRoutes = require("./routes/commands")
 
+// ── Services / Utils (with stoppable intervals) ──
+const guildPlanService = require("./services/guildPlan")
+const discordUtil = require("./utils/discord")
+
 // ── Migrations ──
 const { runMigrations } = require("./scripts/migrate")
 
@@ -160,6 +164,9 @@ app.use(errorHandler)
 //  STARTUP
 // ════════════════════════════════════════════════════════════
 
+// ✅ FIX: حفظ مرجع لـ HTTP server عشان نقدر نقفله عند shutdown
+let httpServer = null
+
 async function start() {
   try {
     // 1. تأكد من اتصال DB
@@ -176,7 +183,7 @@ async function start() {
     await runMigrations()
 
     // 4. ابدأ السيرفر
-    app.listen(env.PORT, () => {
+    httpServer = app.listen(env.PORT, () => {
       console.log("═══════════════════════════════════════════")
       console.log(`🚀 Server running on port ${env.PORT}`)
       console.log(`🌍 Environment: ${env.NODE_ENV}`)
@@ -191,21 +198,83 @@ async function start() {
   }
 }
 
-// ── Graceful shutdown ──
-process.on("SIGTERM", async () => {
-  console.log("📴 SIGTERM received, shutting down gracefully...")
-  await db.pool.end()
-  process.exit(0)
-})
+// ════════════════════════════════════════════════════════════
+//  ✅ FIX: Graceful Shutdown متكامل
+//  ─────────────────────────────────────────────────────────
+//  يضمن:
+//   1. إيقاف cache cleanup intervals
+//   2. إيقاف HTTP server (ينتظر الطلبات الحالية تخلص)
+//   3. إغلاق DB pool
+//   4. hard timeout 10 ثوان لو شي علق
+//   5. حماية من double-shutdown
+// ════════════════════════════════════════════════════════════
 
-process.on("SIGINT", async () => {
-  console.log("📴 SIGINT received, shutting down gracefully...")
-  await db.pool.end()
+let isShuttingDown = false
+
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) {
+    console.log(`📴 [${signal}] Shutdown already in progress`)
+    return
+  }
+  isShuttingDown = true
+
+  console.log(`📴 [${signal}] received, shutting down gracefully...`)
+
+  // hard timeout: لو الإغلاق طول أكثر من 10 ثوان، اخرج بالقوة
+  const forceExitTimer = setTimeout(() => {
+    console.error("❌ Shutdown timeout — forcing exit")
+    process.exit(1)
+  }, 10000)
+  forceExitTimer.unref?.()
+
+  // 1) إيقاف cache cleanup intervals
+  try {
+    guildPlanService.stopCacheCleanup()
+    discordUtil.stopCacheCleanup()
+    console.log("✅ Cache cleanup intervals stopped")
+  } catch (err) {
+    console.error("⚠️  Failed to stop cache intervals:", err.message)
+  }
+
+  // 2) إيقاف HTTP server (ينتظر الطلبات الحالية تخلص)
+  if (httpServer) {
+    try {
+      await new Promise((resolve) => {
+        httpServer.close(() => {
+          console.log("✅ HTTP server closed")
+          resolve()
+        })
+      })
+    } catch (err) {
+      console.error("⚠️  Failed to close HTTP server:", err.message)
+    }
+  }
+
+  // 3) إغلاق DB pool
+  try {
+    await db.pool.end()
+    console.log("✅ Database pool closed")
+  } catch (err) {
+    console.error("⚠️  Failed to close DB pool:", err.message)
+  }
+
+  console.log("✅ Shutdown completed")
+  clearTimeout(forceExitTimer)
   process.exit(0)
-})
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"))
+process.on("SIGINT", () => gracefulShutdown("SIGINT"))
 
 process.on("unhandledRejection", (reason) => {
   console.error("❌ Unhandled Rejection:", reason)
+})
+
+// ✅ FIX: إضافة uncaughtException handler
+process.on("uncaughtException", (err) => {
+  console.error("❌ Uncaught Exception:", err.message)
+  if (!env.IS_PROD) console.error(err.stack)
+  // ما نخرج فوراً — نسجل ونكمل (إلا لو fatal جداً)
 })
 
 start()

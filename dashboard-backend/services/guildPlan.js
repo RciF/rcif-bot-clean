@@ -62,17 +62,31 @@ function invalidateGuildPlan(guildId) {
   cache.delete(guildId)
 }
 
-/**
- * تنظيف cache دوري
- */
-setInterval(() => {
+// ═══════════════════════════════════════════════════════════
+//  تنظيف cache دوري
+//  ✅ FIX: حفظ id + .unref() عشان graceful shutdown
+// ═══════════════════════════════════════════════════════════
+
+const cleanupInterval = setInterval(() => {
   const now = Date.now()
   for (const [k, v] of cache.entries()) {
     if (now > v.expiresAt) cache.delete(k)
   }
 }, 60 * 1000)
 
+// ✅ unref حتى لا يمنع process exit
+cleanupInterval.unref?.()
+
+/**
+ * إيقاف cache cleanup interval
+ * يستخدم في graceful shutdown
+ */
+function stopCacheCleanup() {
+  clearInterval(cleanupInterval)
+}
+
 module.exports = {
   getGuildPlan,
   invalidateGuildPlan,
+  stopCacheCleanup,
 }
