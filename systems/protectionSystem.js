@@ -1,6 +1,7 @@
 const { EmbedBuilder, PermissionFlagsBits } = require("discord.js")
 const databaseSystem = require("./databaseSystem")
 const logger = require("./loggerSystem")
+const scheduler = require("./schedulerSystem")
 
 // ═══════════════════════════════════════════════════
 //  IN-MEMORY TRACKERS
@@ -19,8 +20,38 @@ const nukeTracker = new Map()
 const settingsCache = new Map()
 const CACHE_TTL = 2 * 60 * 1000 // دقيقتين
 
-// Raid lockdown state: { guildId -> true/false }
+// Raid lockdown state: { guildId -> { active: true, autoLiftTimer: timeoutId|null } }
+// ⚠️ لاحظ: هذي in-memory فقط. لو البوت يُعاد تشغيله أثناء lockdown،
+//   القنوات تبقى مقفولة في Discord لكن الـ state يضيع.
+//   الحل المستقبلي: حفظ في DB. الحل الحالي: على الأدمن يفك يدوياً.
 const lockdownState = new Map()
+
+const LOCKDOWN_AUTO_LIFT_MS = 10 * 60 * 1000 // 10 دقائق
+
+// ═══════════════════════════════════════════════════
+//  JSON HELPER — حماية للقراءة من DB
+// ═══════════════════════════════════════════════════
+
+/**
+ * يحوّل قيمة من DB إلى array.
+ * يدعم:
+ *  - array أصلاً (JSONB من Postgres)
+ *  - string JSON (TEXT من Postgres)
+ *  - null/undefined → []
+ */
+function parseJSONArray(value) {
+  if (Array.isArray(value)) return value
+  if (!value) return []
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
 
 // ═══════════════════════════════════════════════════
 //  SETTINGS
@@ -38,7 +69,14 @@ async function getSettings(guildId) {
       [guildId]
     )
 
-    const data = result || null
+    let data = result || null
+
+    // ✅ FIX: فك تشفير JSON للـ whitelist
+    if (data) {
+      data.whitelist_users = parseJSONArray(data.whitelist_users)
+      data.whitelist_roles = parseJSONArray(data.whitelist_roles)
+    }
+
     settingsCache.set(guildId, { data, time: Date.now() })
     return data
   } catch (err) {
@@ -107,8 +145,9 @@ async function saveSettings(guildId, data) {
 function isWhitelisted(settings, userId, memberRoles) {
   if (!settings) return false
 
-  const whitelistUsers = settings.whitelist_users || []
-  const whitelistRoles = settings.whitelist_roles || []
+  // ✅ FIX: نتأكد إنها arrays فعلياً (parseJSONArray في getSettings)
+  const whitelistUsers = Array.isArray(settings.whitelist_users) ? settings.whitelist_users : []
+  const whitelistRoles = Array.isArray(settings.whitelist_roles) ? settings.whitelist_roles : []
 
   if (whitelistUsers.includes(userId)) return true
 
@@ -280,7 +319,7 @@ async function checkRaid(member) {
     raidTracker.set(guildId, filtered)
 
     if (filtered.length < threshold) return
-    if (lockdownState.get(guildId)) return // بالفعل في lockdown
+    if (isInLockdown(guildId)) return // بالفعل في lockdown
 
     // RAID مكتشف!
     raidTracker.delete(guildId)
@@ -316,23 +355,45 @@ async function checkRaid(member) {
   }
 }
 
+// ═══════════════════════════════════════════════════
+//  LOCKDOWN
+// ═══════════════════════════════════════════════════
+
 async function activateLockdown(guild, settings) {
   try {
-    lockdownState.set(guild.id, true)
+    // ✅ FIX: حماية من lockdown مكرر
+    const existing = lockdownState.get(guild.id)
+    if (existing?.active) {
+      logger.warn("LOCKDOWN_ALREADY_ACTIVE", { guild: guild.id })
+      return
+    }
 
     const everyoneRole = guild.roles.everyone
     const textChannels = guild.channels.cache.filter(c => c.type === 0) // GuildText
 
-    for (const [, channel] of textChannels) {
-      try {
-        await channel.permissionOverwrites.edit(everyoneRole, {
+    // ✅ FIX: parallel بدل sequential — أسرع بكثير في السيرفرات الكبيرة
+    await Promise.allSettled(
+      [...textChannels.values()].map(channel =>
+        channel.permissionOverwrites.edit(everyoneRole, {
           SendMessages: false
-        })
-      } catch {}
-    }
+        }).catch(() => null)
+      )
+    )
 
-    // رفع الـ lockdown بعد 10 دقائق تلقائياً
-    setTimeout(() => deactivateLockdown(guild, settings), 10 * 60 * 1000)
+    // ✅ FIX: نخزن timer ID في state عشان نقدر نلغيه
+    const autoLiftTimer = setTimeout(() => {
+      deactivateLockdown(guild, settings).catch(err =>
+        logger.error("LOCKDOWN_AUTO_LIFT_FAILED", { error: err.message })
+      )
+    }, LOCKDOWN_AUTO_LIFT_MS)
+
+    autoLiftTimer.unref?.()
+
+    lockdownState.set(guild.id, {
+      active: true,
+      autoLiftTimer,
+      activatedAt: Date.now()
+    })
 
     logger.info("LOCKDOWN_ACTIVATED", { guild: guild.id })
   } catch (err) {
@@ -342,18 +403,26 @@ async function activateLockdown(guild, settings) {
 
 async function deactivateLockdown(guild, settings) {
   try {
+    const state = lockdownState.get(guild.id)
+
+    // ✅ FIX: ألغي الـ auto-lift timer لو موجود (يمنع double-deactivation)
+    if (state?.autoLiftTimer) {
+      clearTimeout(state.autoLiftTimer)
+    }
+
     lockdownState.delete(guild.id)
 
     const everyoneRole = guild.roles.everyone
     const textChannels = guild.channels.cache.filter(c => c.type === 0)
 
-    for (const [, channel] of textChannels) {
-      try {
-        await channel.permissionOverwrites.edit(everyoneRole, {
+    // ✅ FIX: parallel
+    await Promise.allSettled(
+      [...textChannels.values()].map(channel =>
+        channel.permissionOverwrites.edit(everyoneRole, {
           SendMessages: null
-        })
-      } catch {}
-    }
+        }).catch(() => null)
+      )
+    )
 
     const embed = new EmbedBuilder()
       .setColor(0x22c55e)
@@ -370,7 +439,8 @@ async function deactivateLockdown(guild, settings) {
 }
 
 function isInLockdown(guildId) {
-  return lockdownState.get(guildId) || false
+  const state = lockdownState.get(guildId)
+  return state?.active === true
 }
 
 // ═══════════════════════════════════════════════════
@@ -491,32 +561,38 @@ async function checkNuke(guild, executorId, actionType) {
 }
 
 // ═══════════════════════════════════════════════════
-//  CLEANUP (تنظيف الذاكرة كل 5 دقائق)
+//  CLEANUP — كل 5 دقائق عبر scheduler
+//  (مو setInterval خام عشان graceful shutdown يقدر يوقفه)
 // ═══════════════════════════════════════════════════
 
-setInterval(() => {
-  const now = Date.now()
+scheduler.register(
+  "protection-trackers-cleanup",
+  5 * 60 * 1000,
+  () => {
+    const now = Date.now()
 
-  for (const [key, timestamps] of spamTracker.entries()) {
-    if (timestamps.length === 0 || now - timestamps[timestamps.length - 1] > 60000) {
-      spamTracker.delete(key)
+    for (const [key, timestamps] of spamTracker.entries()) {
+      if (timestamps.length === 0 || now - timestamps[timestamps.length - 1] > 60000) {
+        spamTracker.delete(key)
+      }
     }
-  }
 
-  for (const [key, joins] of raidTracker.entries()) {
-    if (joins.length === 0 || now - joins[joins.length - 1] > 60000) {
-      raidTracker.delete(key)
+    for (const [key, joins] of raidTracker.entries()) {
+      if (joins.length === 0 || now - joins[joins.length - 1] > 60000) {
+        raidTracker.delete(key)
+      }
     }
-  }
 
-  for (const [key, data] of nukeTracker.entries()) {
-    const allEmpty =
-      data.channelDeletes.length === 0 &&
-      data.roleDeletes.length === 0 &&
-      data.bans.length === 0
-    if (allEmpty) nukeTracker.delete(key)
-  }
-}, 5 * 60 * 1000)
+    for (const [key, data] of nukeTracker.entries()) {
+      const allEmpty =
+        data.channelDeletes.length === 0 &&
+        data.roleDeletes.length === 0 &&
+        data.bans.length === 0
+      if (allEmpty) nukeTracker.delete(key)
+    }
+  },
+  false
+)
 
 // ═══════════════════════════════════════════════════
 //  EXPORTS
