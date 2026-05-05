@@ -122,6 +122,10 @@ function pushCommand(filePath, commands) {
     const eventReminderSystem = require("./systems/eventReminderSystem")
     eventReminderSystem.startScheduler(client)
 
+    // ✅ Auto-close scheduler للتذاكر الخاملة
+    const ticketSystem = require("./systems/ticketSystem")
+    ticketSystem.startAutoCloseScheduler(client)
+
     // ══════════════════════════════════════
     //  ✅ نشر الأوامر تلقائياً
     // ══════════════════════════════════════

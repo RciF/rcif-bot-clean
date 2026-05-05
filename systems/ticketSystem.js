@@ -10,6 +10,7 @@ const {
 
 const databaseSystem = require("./databaseSystem")
 const logger = require("./loggerSystem")
+const scheduler = require("./schedulerSystem")
 
 // ══════════════════════════════════════
 //  CONSTANTS
@@ -64,6 +65,9 @@ const PRIORITY_LABELS = {
   high:   "🔴 عالية",
   urgent: "🔴 عالية"
 }
+
+// Discord limit: max 50 channels per category
+const MAX_CHANNELS_PER_CATEGORY = 50
 
 // ══════════════════════════════════════
 //  SETTINGS HELPERS
@@ -195,24 +199,22 @@ async function getTicketCount(guildId) {
   }
 }
 
+// ✅ FIX: query واحد بدل 3 (تحسين أداء)
 async function getTicketStats(guildId) {
   try {
-    const total = await databaseSystem.queryOne(
-      "SELECT COUNT(*) as count FROM tickets WHERE guild_id = $1",
-      [guildId]
-    )
-    const open = await databaseSystem.queryOne(
-      "SELECT COUNT(*) as count FROM tickets WHERE guild_id = $1 AND status = 'open'",
-      [guildId]
-    )
-    const closed = await databaseSystem.queryOne(
-      "SELECT COUNT(*) as count FROM tickets WHERE guild_id = $1 AND status = 'closed'",
-      [guildId]
-    )
+    const result = await databaseSystem.queryOne(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'open')   AS open,
+        COUNT(*) FILTER (WHERE status = 'closed') AS closed
+      FROM tickets
+      WHERE guild_id = $1
+    `, [guildId])
+
     return {
-      total: parseInt(total?.count || 0),
-      open: parseInt(open?.count || 0),
-      closed: parseInt(closed?.count || 0)
+      total:  parseInt(result?.total  || 0),
+      open:   parseInt(result?.open   || 0),
+      closed: parseInt(result?.closed || 0)
     }
   } catch (error) {
     return { total: 0, open: 0, closed: 0 }
@@ -501,7 +503,8 @@ async function sendLog(guild, ticket, action, executor, extra = {}) {
       reopen:          0x06b6d4,
       delete:          0x6b7280,
       transcript:      0xeab308,
-      priority_change: 0x8b5cf6
+      priority_change: 0x8b5cf6,
+      auto_close:      0x6b7280
     }
 
     const titles = {
@@ -513,7 +516,8 @@ async function sendLog(guild, ticket, action, executor, extra = {}) {
       reopen:          "🔓 إعادة فتح تذكرة",
       delete:          "🗑️ حذف تذكرة",
       transcript:      "📜 حفظ محادثة",
-      priority_change: "🎯 تغيير الأولوية"
+      priority_change: "🎯 تغيير الأولوية",
+      auto_close:      "⏰ إغلاق تلقائي (عدم نشاط)"
     }
 
     const embed = new EmbedBuilder()
@@ -653,6 +657,21 @@ async function handleCategorySelect(interaction) {
       })
     }
 
+    // ✅ FIX: فحص حد القنوات في الكاتيقوري قبل الإنشاء
+    if (settings?.category_id) {
+      const category_channel = guild.channels.cache.get(settings.category_id)
+      if (category_channel && category_channel.type === ChannelType.GuildCategory) {
+        const channelsInCategory = guild.channels.cache.filter(c => c.parentId === settings.category_id).size
+        if (channelsInCategory >= MAX_CHANNELS_PER_CATEGORY) {
+          return interaction.update({
+            content: `❌ كاتيقوري التذاكر ممتلئ (${MAX_CHANNELS_PER_CATEGORY}/${MAX_CHANNELS_PER_CATEGORY} قناة).\nأبلغ الإدارة لتنظيف التذاكر القديمة.`,
+            embeds: [],
+            components: []
+          })
+        }
+      }
+    }
+
     await interaction.update({
       content: "⏳ جاري إنشاء التذكرة...",
       embeds: [],
@@ -756,8 +775,16 @@ async function handleCategorySelect(interaction) {
   } catch (error) {
     logger.error("TICKET_CATEGORY_SELECT_FAILED", { error: error.message })
 
+    // ✅ FIX: رسالة خطأ أوضح حسب نوع الفشل
+    let errorMessage = "❌ حدث خطأ أثناء إنشاء التذكرة."
+    if (error.code === 50035 || error.message?.includes("Maximum number")) {
+      errorMessage = "❌ تم الوصول للحد الأقصى من القنوات في السيرفر أو الكاتيقوري."
+    } else if (error.code === 50013 || error.message?.includes("Missing Permissions")) {
+      errorMessage = "❌ البوت ما عنده صلاحيات كافية لإنشاء قناة."
+    }
+
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: "❌ حدث خطأ أثناء إنشاء التذكرة." }).catch(() => {})
+      await interaction.editReply({ content: errorMessage }).catch(() => {})
     }
   }
 }
@@ -1249,13 +1276,15 @@ async function handleDeleteButton(interaction) {
 
     await sendLog(interaction.guild, ticket, "delete", interaction.user)
 
-    setTimeout(async () => {
+    // ✅ FIX: .unref() عشان graceful shutdown
+    const deleteTimer = setTimeout(async () => {
       try {
         await interaction.channel.delete(`حذف تذكرة #${ticket.id} بواسطة ${interaction.user.tag}`)
       } catch (err) {
         logger.error("TICKET_CHANNEL_DELETE_FAILED", { error: err.message })
       }
     }, 5000)
+    deleteTimer.unref?.()
 
   } catch (error) {
     logger.error("TICKET_DELETE_FAILED", { error: error.message })
@@ -1321,6 +1350,160 @@ async function handleReopenButton(interaction) {
 }
 
 // ══════════════════════════════════════
+//  ✅ FIX: AUTO-CLOSE SCHEDULER
+//  ════════════════════════════════════
+//  يفحص كل ساعة التذاكر اللي ما فيها نشاط
+//  منذ auto_close_hours ساعة ويغلقها تلقائياً.
+//
+//  الـ "نشاط" = آخر رسالة في القناة (last_message_id)
+//  الـ "إغلاق" = نفس عملية handleCloseConfirm لكن
+//  بدون تفاعل مستخدم.
+// ══════════════════════════════════════
+
+async function autoCloseInactiveTickets(client) {
+  try {
+    // جلب كل التذاكر المفتوحة
+    const result = await databaseSystem.query(
+      "SELECT * FROM tickets WHERE status = 'open'"
+    )
+    const openTickets = result?.rows || []
+
+    if (openTickets.length === 0) return
+
+    let closedCount = 0
+
+    for (const ticket of openTickets) {
+      try {
+        const guild = client.guilds.cache.get(ticket.guild_id)
+        if (!guild) continue
+
+        const channel = guild.channels.cache.get(ticket.channel_id)
+        if (!channel) {
+          // القناة محذوفة — ضع التذكرة على closed
+          await updateTicket(ticket.channel_id, {
+            status: "closed",
+            closed_at: new Date().toISOString(),
+            close_reason: "channel_deleted"
+          })
+          continue
+        }
+
+        const settings = await getSettings(ticket.guild_id)
+        const autoCloseHours = settings?.auto_close_hours || 48
+        const inactivityThreshold = autoCloseHours * 60 * 60 * 1000
+
+        // فحص آخر نشاط في القناة
+        let lastActivity = new Date(ticket.created_at).getTime()
+
+        if (channel.lastMessageId) {
+          try {
+            const lastMsg = await channel.messages.fetch(channel.lastMessageId)
+            if (lastMsg) {
+              lastActivity = Math.max(lastActivity, lastMsg.createdTimestamp)
+            }
+          } catch {
+            // الرسالة محذوفة — استخدم created_at
+          }
+        }
+
+        const timeSinceLastActivity = Date.now() - lastActivity
+        if (timeSinceLastActivity < inactivityThreshold) continue
+
+        // ✅ التذكرة خاملة — أغلقها
+        let transcriptData = { transcript: "", messageCount: 0 }
+        if (settings?.transcript_enabled !== false) {
+          transcriptData = await generateTranscript(channel, ticket)
+        }
+
+        await updateTicket(ticket.channel_id, {
+          status: "closed",
+          closed_at: new Date().toISOString(),
+          close_reason: "auto_close_inactivity",
+          message_count: transcriptData.messageCount
+        })
+
+        // حذف صلاحية الكتابة
+        try {
+          await channel.permissionOverwrites.edit(ticket.user_id, {
+            SendMessages: false,
+            ViewChannel: true
+          })
+        } catch {
+          // العضو طلع
+        }
+
+        // إرسال transcript للـ log channel
+        if (settings?.log_channel_id && transcriptData.transcript) {
+          const logChannel = guild.channels.cache.get(settings.log_channel_id)
+          if (logChannel) {
+            const buffer = Buffer.from(transcriptData.transcript, "utf-8")
+            await logChannel.send({
+              files: [{
+                attachment: buffer,
+                name: `transcript-${ticket.id}.txt`
+              }]
+            }).catch(() => {})
+          }
+        }
+
+        // إعلان في القناة
+        const closedEmbed = new EmbedBuilder()
+          .setColor(0x6b7280)
+          .setTitle("⏰ تم إغلاق التذكرة تلقائياً")
+          .setDescription(`تم إغلاق التذكرة بسبب عدم النشاط لمدة **${autoCloseHours}** ساعة.`)
+          .setTimestamp()
+
+        await channel.send({
+          embeds: [closedEmbed],
+          components: [buildAfterCloseButtons()]
+        }).catch(() => {})
+
+        await channel.setName(`مغلقة-${ticket.id}`).catch(() => {})
+
+        // لوق
+        await sendLog(guild, ticket, "auto_close", client.user, {
+          duration: formatDuration(ticket.created_at, Date.now()),
+          messageCount: transcriptData.messageCount,
+          reason: `عدم نشاط لمدة ${autoCloseHours} ساعة`
+        })
+
+        closedCount++
+
+        // تأخير صغير عشان rate limit
+        await new Promise(r => setTimeout(r, 500))
+
+      } catch (err) {
+        logger.error("TICKET_AUTO_CLOSE_ITEM_FAILED", {
+          ticketId: ticket.id,
+          error: err.message
+        })
+      }
+    }
+
+    if (closedCount > 0) {
+      logger.info("TICKET_AUTO_CLOSE_BATCH", { closedCount, total: openTickets.length })
+    }
+
+  } catch (error) {
+    logger.error("TICKET_AUTO_CLOSE_FAILED", { error: error.message })
+  }
+}
+
+/**
+ * بدء scheduler للإغلاق التلقائي.
+ * يجب استدعاؤه مرة واحدة عند startup مع client.
+ */
+function startAutoCloseScheduler(client) {
+  scheduler.register(
+    "ticket-auto-close",
+    60 * 60 * 1000, // كل ساعة
+    () => autoCloseInactiveTickets(client),
+    false
+  )
+  logger.info("TICKET_AUTO_CLOSE_SCHEDULER_STARTED")
+}
+
+// ══════════════════════════════════════
 //  EXPORTS
 // ══════════════════════════════════════
 
@@ -1363,6 +1546,10 @@ module.exports = {
   handleChangePriorityButton,
   handlePrioritySelect,
   updateWelcomeEmbedPriority,
+
+  // Auto-Close (NEW)
+  startAutoCloseScheduler,
+  autoCloseInactiveTickets,
 
   // Utils
   generateTranscript,
