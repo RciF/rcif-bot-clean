@@ -7,20 +7,50 @@ const aiMemorySystem = require("./aiMemorySystem")
 const logger = require("./loggerSystem")
 const devModeSystem = require("./devModeSystem")
 const planGateSystem = require("./planGateSystem")
+const scheduler = require("./schedulerSystem")
 
 const OWNER_ID = "529320108032786433"
 
+// ══════════════════════════════════════
+//  COOLDOWNS — لمنع الـ spam على البوت
+// ══════════════════════════════════════
 const cooldowns = new Map()
 const COOLDOWN_TIME = 6000
 const MAX_COOLDOWNS = 500
 const MAX_REPLY_LENGTH = 1900
 
-const recentReplies = new Map()
-const RECENT_REPLY_TTL = 5000
-
+// ══════════════════════════════════════
+//  USER SPAM TRACKING
+// ══════════════════════════════════════
 const userSpam = new Map()
 const SPAM_WINDOW = 4000
 const SPAM_LIMIT = 4
+
+// ══════════════════════════════════════
+//  CLEANUP — يعمل كل دقيقة عبر scheduler
+//  ينظف cooldowns القديمة و userSpam القديم
+//  (بدل ما نستدعي cleanup يدوياً عند كل رسالة)
+// ══════════════════════════════════════
+scheduler.register(
+  "ai-auto-reply-cleanup",
+  60 * 1000, // دقيقة
+  () => {
+    const now = Date.now()
+
+    // تنظيف cooldowns لو وصلوا الحد الأعلى
+    if (cooldowns.size > MAX_COOLDOWNS) {
+      cooldowns.clear()
+    }
+
+    // تنظيف userSpam المنتهي
+    for (const [userId, data] of userSpam.entries()) {
+      if (now - data.last > SPAM_WINDOW) {
+        userSpam.delete(userId)
+      }
+    }
+  },
+  false
+)
 
 function randomDelay() {
   return 400 + Math.floor(Math.random() * 700)
@@ -36,27 +66,6 @@ function sanitize(text) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, MAX_REPLY_LENGTH)
-}
-
-function cleanup() {
-
-  if (cooldowns.size > MAX_COOLDOWNS) {
-    cooldowns.clear()
-  }
-
-  const now = Date.now()
-
-  for (const [key, time] of recentReplies.entries()) {
-    if (now - time > RECENT_REPLY_TTL) {
-      recentReplies.delete(key)
-    }
-  }
-
-  for (const [userId, data] of userSpam.entries()) {
-    if (now - data.last > SPAM_WINDOW) {
-      userSpam.delete(userId)
-    }
-  }
 }
 
 function removeBotMention(message, content) {
@@ -100,7 +109,7 @@ module.exports = async (message) => {
     // 🔒 منع المعالجة المزدوجة — قفل فوري بـ message.id
     if (message._aiProcessed) return
     message._aiProcessed = true
-    
+
     const userId = message.author.id
 
     // 🔥 dev mode commands
@@ -127,8 +136,6 @@ module.exports = async (message) => {
 
     if (!devModeSystem.canRespond(userId)) return
 
-    cleanup()
-
     // 🔥 anti spam
     if (userId !== OWNER_ID && detectSpam(userId)) {
       return message.reply("⚠️ لا ترسل رسائل بسرعة.")
@@ -150,7 +157,7 @@ module.exports = async (message) => {
 
     cooldowns.set(userId, now)
 
-    // ✅ UPDATED: استخدام checkUserRateLimit الجديد مع رسائل ذكية
+    // ✅ checkUserRateLimit مع رسائل ذكية
     const rateLimitCheck = aiRateLimitSystem.checkUserRateLimit(userId)
 
     if (!rateLimitCheck.allowed) {
@@ -174,11 +181,7 @@ module.exports = async (message) => {
 
     if (!content || content.length < 2) return
 
-    const dedupeKey = `${userId}:${message.id}`
-
-    if (recentReplies.has(dedupeKey)) return
-    recentReplies.set(dedupeKey, now)
-
+    // 🔥 brain intent detection (economy etc.)
     const intent = aiBrainSystem.detectIntent(content)
 
     if (intent) {

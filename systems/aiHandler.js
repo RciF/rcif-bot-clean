@@ -9,7 +9,6 @@ const aiMemorySystem = require("../systems/aiMemorySystem");
 const aiKnowledgeSystem = require("../systems/aiKnowledgeSystem");
 const aiDecisionSystem = require("../systems/aiDecisionSystem");
 const aiEmotionSystem = require("../systems/aiEmotionSystem");
-const aiAutonomousSystem = require("../systems/aiAutonomousSystem");
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem");
 const aiServerAwarenessSystem = require("../systems/aiServerAwarenessSystem");
 
@@ -26,13 +25,84 @@ class AIHandler {
     this.maxMessageLength = 2000;
     this.maxModelTokens = 800;
 
+    // ═══════════════════════════════════════════════════════
+    //  Response Cache
+    //  Map<cacheKey, { content, expiresAt }>
+    //  - حد أعلى 50 entry
+    //  - TTL = 15 دقيقة
+    //  - الردود اللي استخدمت tools ما تتكاش (لأن نتيجة الأداة قد تتغير)
+    // ═══════════════════════════════════════════════════════
     this.responseCache = new Map();
     this.maxCacheSize = 50;
+    this.cacheTTL = 15 * 60 * 1000; // 15 دقيقة
 
+    // ═══════════════════════════════════════════════════════
+    //  Active Requests
+    //  Map<requestKey, timeoutId> — يمنع تكرار نفس الطلب
+    //  مع timeout كحماية لو OpenAI تعطل
+    // ═══════════════════════════════════════════════════════
     this.activeRequests = new Map();
+    this.activeRequestTTL = 30 * 1000; // 30 ثانية
 
     this.feedbackMemory = new Map();
   }
+
+  // ═══════════════════════════════════════════════════════
+  //  ACTIVE REQUEST HELPERS
+  // ═══════════════════════════════════════════════════════
+
+  lockRequest(requestKey) {
+    // لو موجود فعلاً، ما نسجل ثاني
+    if (this.activeRequests.has(requestKey)) return false;
+
+    // timeout يحرر القفل تلقائياً لو شي علق
+    const timeoutId = setTimeout(() => {
+      this.activeRequests.delete(requestKey);
+    }, this.activeRequestTTL);
+
+    timeoutId.unref?.();
+
+    this.activeRequests.set(requestKey, timeoutId);
+    return true;
+  }
+
+  releaseRequest(requestKey) {
+    const timeoutId = this.activeRequests.get(requestKey);
+    if (timeoutId) clearTimeout(timeoutId);
+    this.activeRequests.delete(requestKey);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  CACHE HELPERS — مع TTL
+  // ═══════════════════════════════════════════════════════
+
+  getCached(key) {
+    const entry = this.responseCache.get(key);
+    if (!entry) return null;
+
+    if (Date.now() > entry.expiresAt) {
+      this.responseCache.delete(key);
+      return null;
+    }
+
+    return entry.content;
+  }
+
+  setCached(key, content) {
+    if (this.responseCache.size >= this.maxCacheSize) {
+      const firstKey = this.responseCache.keys().next().value;
+      this.responseCache.delete(firstKey);
+    }
+
+    this.responseCache.set(key, {
+      content,
+      expiresAt: Date.now() + this.cacheTTL
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  FEEDBACK
+  // ═══════════════════════════════════════════════════════
 
   updateFeedback(userId, action, success = true) {
     const data = this.feedbackMemory.get(userId) || {
@@ -117,8 +187,10 @@ class AIHandler {
         maxToolRounds = 3
       } = options;
 
-      if (cacheKey && this.responseCache.has(cacheKey)) {
-        return this.responseCache.get(cacheKey);
+      // ✅ FIX: استخدم getCached مع TTL
+      if (cacheKey) {
+        const cached = this.getCached(cacheKey);
+        if (cached) return cached;
       }
 
       const model = this.chooseModel(mode);
@@ -131,6 +203,9 @@ class AIHandler {
 
       let conversationMessages = [...messages];
       let finalContent = null;
+
+      // ✅ FIX: علم لو استخدمنا أدوات — ما نكاش الجواب
+      let usedTools = false;
 
       // ═══════════════════════════════════════════════
       //  حلقة Tool Calling — أقصى 3 جولات
@@ -161,6 +236,8 @@ class AIHandler {
         const toolCalls = msg.tool_calls;
 
         if (toolCalls && toolCalls.length > 0 && guild) {
+          usedTools = true;
+
           // أضف رسالة الموديل (اللي فيها tool_calls) للمحادثة
           conversationMessages.push({
             role: "assistant",
@@ -205,12 +282,9 @@ class AIHandler {
         break;
       }
 
-      if (cacheKey && finalContent) {
-        if (this.responseCache.size >= this.maxCacheSize) {
-          const firstKey = this.responseCache.keys().next().value;
-          this.responseCache.delete(firstKey);
-        }
-        this.responseCache.set(cacheKey, finalContent);
+      // ✅ FIX: ما نكاش الردود اللي استخدمت tools (نتائجها قد تتغير)
+      if (cacheKey && finalContent && !usedTools) {
+        this.setCached(cacheKey, finalContent);
       }
 
       return finalContent;
@@ -332,7 +406,7 @@ class AIHandler {
         logger.error("CONTEXT_BUILD_FAILED", { error: err.message });
       }
 
-   // 9) توجيهات الأدوات — إجبار صارم على الاستخدام
+      // 9) توجيهات الأدوات — إجبار صارم على الاستخدام
       const toolsGuide = guild.id ? `
 [⚠️ قواعد صارمة — قراءة إلزامية]
 
@@ -408,11 +482,10 @@ ${toolsGuide}
 
       requestKey = `${userId}:${cleanMessage}`;
 
-      if (this.activeRequests.has(requestKey)) {
+      // ✅ FIX: lockRequest يفحص ويسجل + timeout كحماية
+      if (!this.lockRequest(requestKey)) {
         return "⏳ انتظر لحظة...";
       }
-
-      this.activeRequests.set(requestKey, true);
 
       const systemPrompt = await this.buildSystemPrompt(userId, cleanMessage, context);
 
@@ -425,16 +498,16 @@ ${toolsGuide}
         { role: "user", content: cleanMessage }
       ];
 
-    const cacheKey = this.buildCacheKey(userId, cleanMessage, "", "");
+      const cacheKey = this.buildCacheKey(userId, cleanMessage, "", "");
 
-   let reply = await this.generateAIResponse(messages, {
-      cacheKey,
-      mode: context.model || "smart",
-      guild: context.guild || null,
-      user: context.user || null
-    });
+      let reply = await this.generateAIResponse(messages, {
+        cacheKey,
+        mode: context.model || "smart",
+        guild: context.guild || null,
+        user: context.user || null
+      });
 
-      this.activeRequests.delete(requestKey);
+      this.releaseRequest(requestKey);
 
       if (!reply) {
         return "❌ حصل خطأ في الرد";
@@ -464,7 +537,7 @@ ${toolsGuide}
       logger.error("AI_HANDLER_ERROR", { error: error.message });
 
       if (requestKey) {
-        this.activeRequests.delete(requestKey);
+        this.releaseRequest(requestKey);
       }
 
       return "❌ حصل خطأ في الذكاء الاصطناعي";
