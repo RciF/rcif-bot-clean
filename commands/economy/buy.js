@@ -113,6 +113,14 @@ module.exports = {
         )
         const user = userResult.rows[0]
 
+        // ✅ FIX: تحقق من وجود الـ user (نظرياً مستحيل بعد الـ INSERT لكن نحتاط)
+        if (!user) {
+          await client.query("ROLLBACK")
+          return interaction.editReply({
+            content: "❌ ما قدرت أجلب بيانات حسابك. حاول مرة ثانية."
+          })
+        }
+
         if (user.coins < totalCost) {
           await client.query("ROLLBACK")
           const shortage = totalCost - user.coins
@@ -249,7 +257,8 @@ module.exports = {
         return interaction.editReply({ embeds: [embed] })
 
       } catch (err) {
-        await client.query("ROLLBACK")
+        // ✅ FIX: ROLLBACK آمن — ما يفشل لو الـ transaction انتهى أصلاً
+        await client.query("ROLLBACK").catch(() => {})
         throw err
       } finally {
         client.release()

@@ -213,6 +213,13 @@ module.exports = {
             )
           }
 
+          // ✅ FIX: نتأكد إن المستخدم موجود قبل ما نحاول نضيف الفلوس (مستحيل لكن نحتاط)
+          await client.query(
+            `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
+             VALUES ($1, 0, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
+            [userId]
+          )
+
           await client.query(
             "UPDATE economy_users SET coins = coins + $1 WHERE user_id = $2",
             [totalSellPrice, userId]
@@ -250,7 +257,8 @@ module.exports = {
           })
 
         } catch (err) {
-          await client.query("ROLLBACK")
+          // ✅ FIX: ROLLBACK آمن
+          await client.query("ROLLBACK").catch(() => {})
           throw err
         } finally {
           client.release()

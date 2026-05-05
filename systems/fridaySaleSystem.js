@@ -1,6 +1,7 @@
 const database = require("./databaseSystem")
 const { ALL_ITEMS } = require("../config/economyConfig")
 const logger = require("./loggerSystem")
+const scheduler = require("./schedulerSystem")
 
 const SALE_COUNT = 3
 const MIN_DISCOUNT = 10
@@ -67,29 +68,38 @@ function applyDiscount(price, discount) {
   return Math.floor(price * (1 - discount / 100))
 }
 
+// ═══════════════════════════════════════════════════
+//  SCHEDULER — يعمل كل دقيقة عبر scheduler المركزي
+//  (مو setInterval خام عشان graceful shutdown)
+// ═══════════════════════════════════════════════════
+
+async function tick() {
+  const now = new Date()
+  const day = now.getDay()
+  const hour = now.getHours()
+  const minute = now.getMinutes()
+
+  // الجمعة الساعة 00:00 → نولّد عروض جديدة
+  if (day === 5 && hour === 0 && minute === 0) {
+    logger.info("FRIDAY_SALES_GENERATING")
+    await generateSales()
+  }
+
+  // السبت الساعة 00:00 → نحذف العروض
+  if (day === 6 && hour === 0 && minute === 0) {
+    await database.execute("DELETE FROM friday_sales")
+    logger.info("FRIDAY_SALES_CLEARED")
+  }
+}
+
 // ✅ تشغيل الـ scheduler
 function startScheduler() {
-  // كل ساعة نتحقق
-  setInterval(async () => {
-    const now = new Date()
-    const day = now.getDay()
-    const hour = now.getHours()
-    const minute = now.getMinutes()
-
-    // الجمعة الساعة 00:00 → نولّد عروض جديدة
-    if (day === 5 && hour === 0 && minute === 0) {
-      logger.info("FRIDAY_SALES_GENERATING")
-      await generateSales()
-    }
-
-    // السبت الساعة 00:00 → نحذف العروض
-    if (day === 6 && hour === 0 && minute === 0) {
-      await database.execute("DELETE FROM friday_sales")
-      logger.info("FRIDAY_SALES_CLEARED")
-    }
-
-  }, 60 * 1000) // كل دقيقة
-
+  scheduler.register(
+    "friday-sale-tick",
+    60 * 1000, // كل دقيقة
+    tick,
+    false
+  )
   logger.info("FRIDAY_SALE_SCHEDULER_STARTED")
 }
 

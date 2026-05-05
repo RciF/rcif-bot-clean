@@ -129,6 +129,14 @@ module.exports = {
             )
             const user = userResult.rows[0]
 
+            // ✅ FIX: تحقق من وجود الـ user (نظرياً مستحيل بعد الـ INSERT لكن نحتاط)
+            if (!user) {
+                return interaction.reply({
+                    content: "❌ ما قدرت أجلب بيانات المستخدم. حاول مرة ثانية.",
+                    ephemeral: true
+                })
+            }
+
             const lastDaily     = Number(user.last_daily)      || 0
             const lastDay       = Number(user.streak_last_day) || 0
             const currentStreak = Number(user.streak)          || 0

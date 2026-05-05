@@ -52,7 +52,6 @@ module.exports = {
       }
 
       const type = interaction.options.getString("النوع") || "coins"
-      const guildId = "global"
 
       await interaction.deferReply()
 
@@ -73,59 +72,82 @@ module.exports = {
         })
       }
 
-      // ✅ جلب ممتلكات كل مستخدم
-      const enrichedUsers = []
+      // ═══════════════════════════════════════════════════════
+      //  ✅ FIX: N+1 query problem
+      //  بدل ما نسوي 50 query منفصلة لجلب inventory كل مستخدم،
+      //  نسوي query واحد بـ WHERE user_id = ANY($1)
+      // ═══════════════════════════════════════════════════════
+      const userIds = users.map(u => u.user_id)
 
-      for (const user of users) {
-        const assetsResult = await database.query(
-          "SELECT item_id, quantity FROM inventory WHERE user_id = $1  AND quantity > 0",
-          [user.user_id]
+      const inventoryResult = await database.query(
+        "SELECT user_id, item_id, quantity FROM inventory WHERE user_id = ANY($1) AND quantity > 0",
+        [userIds]
+      )
+      const allInventoryRows = inventoryResult.rows || []
+
+      // تجميع inventory حسب user_id
+      const inventoryByUser = new Map()
+      for (const row of allInventoryRows) {
+        if (!inventoryByUser.has(row.user_id)) {
+          inventoryByUser.set(row.user_id, [])
+        }
+        inventoryByUser.get(row.user_id).push({
+          item_id: row.item_id,
+          quantity: row.quantity
+        })
+      }
+
+      // ═══════════════════════════════════════════════════════
+      //  ✅ FIX: members.fetch بـ Promise.allSettled (parallel)
+      //  بدل sequential await داخل for loop
+      // ═══════════════════════════════════════════════════════
+      const memberFetchResults = await Promise.allSettled(
+        users.map(u =>
+          interaction.guild.members.fetch(u.user_id).catch(() => null)
         )
-        const assets = assetsResult.rows || []
+      )
+
+      // بناء enrichedUsers
+      const enrichedUsers = users.map((user, index) => {
+        const assets = inventoryByUser.get(user.user_id) || []
         const netWorth = calculateNetWorth(user.coins, assets)
         const totalItems = assets.reduce((sum, a) => sum + (a.quantity || 0), 0)
         const stage = getProgressStage(assets)
 
-        // جلب اسم المستخدم من Discord
+        const memberResult = memberFetchResults[index]
         let username = "مجهول"
-        try {
-          const member = await interaction.guild.members.fetch(user.user_id).catch(() => null)
-          if (member) username = member.user.username
-        } catch {
-          // نتجاهل
+        if (memberResult.status === "fulfilled" && memberResult.value) {
+          username = memberResult.value.user.username
         }
 
-        enrichedUsers.push({
+        return {
           userId: user.user_id,
           username,
           coins: user.coins,
           netWorth,
           totalItems,
           stage
-        })
-      }
+        }
+      })
 
       // ✅ ترتيب حسب النوع
-      let sorted, title, description, valueKey, valueLabel
+      let sorted, title, description, valueKey
 
       if (type === "networth") {
         sorted = enrichedUsers.sort((a, b) => b.netWorth - a.netWorth).slice(0, 10)
         title = "💎 أعلى ثروة"
         description = "ترتيب حسب صافي الثروة (رصيد + قيمة الممتلكات)"
         valueKey = "netWorth"
-        valueLabel = "الثروة"
       } else if (type === "items") {
         sorted = enrichedUsers.sort((a, b) => b.totalItems - a.totalItems).slice(0, 10)
         title = "📦 أكثر ممتلكات"
         description = "ترتيب حسب عدد الممتلكات"
         valueKey = "totalItems"
-        valueLabel = "الممتلكات"
       } else {
         sorted = enrichedUsers.sort((a, b) => b.coins - a.coins).slice(0, 10)
         title = "💵 أعلى رصيد"
         description = "ترتيب حسب الكوينز النقدية"
         valueKey = "coins"
-        valueLabel = "الرصيد"
       }
 
       // ✅ ميداليات
