@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   FolderOpen,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -28,7 +29,8 @@ import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { EmbedPreview } from '@/components/shared/EmbedPreview';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ChannelPicker } from '@/components/shared/ChannelPicker';
-import { mock } from '@/lib/mock';
+import { useGuildStore } from '@/store/guildStore';
+import { settingsApi } from '@/api';
 import { intToHexColor, hexToIntColor, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -56,6 +58,8 @@ const DEFAULT_EMBED = {
 };
 
 export default function EmbedBuilderPage() {
+  const { selectedGuildId } = useGuildStore();
+
   const [embed, setEmbed] = useState(DEFAULT_EMBED);
   const [templates, setTemplates] = useState(null);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -63,11 +67,47 @@ export default function EmbedBuilderPage() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [sendChannel, setSendChannel] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  // ─── Load templates ───
+  const loadTemplates = async () => {
+    if (!selectedGuildId) {
+      setTemplates([]);
+      return;
+    }
+    try {
+      const rows = await settingsApi.getEmbedTemplates(selectedGuildId);
+      setTemplates(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      setTemplates([]);
+      toast.error(err.message || 'فشل تحميل القوالب');
+    }
+  };
 
   useEffect(() => {
-    mock.embedTemplates().then(setTemplates);
-  }, []);
+    let mounted = true;
+    if (!selectedGuildId) {
+      setTemplates([]);
+      return;
+    }
+    setTemplates(null);
+    settingsApi
+      .getEmbedTemplates(selectedGuildId)
+      .then((rows) => {
+        if (!mounted) return;
+        setTemplates(Array.isArray(rows) ? rows : []);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setTemplates([]);
+        toast.error(err.message || 'فشل تحميل القوالب');
+      });
+    return () => { mounted = false; };
+  }, [selectedGuildId]);
 
+  // ─── Embed updates ───
   const updateEmbed = (path, value) => {
     setEmbed((prev) => {
       const next = JSON.parse(JSON.stringify(prev));
@@ -98,30 +138,68 @@ export default function EmbedBuilderPage() {
     }));
   };
 
+  // ─── Template actions ───
   const loadTemplate = (template) => {
-    setEmbed({ ...DEFAULT_EMBED, ...template.data });
+    // backend يرجع template.data كـ JSONB (ممكن يجي string أو object)
+    let data = template.data;
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch { data = {}; }
+    }
+    setEmbed({ ...DEFAULT_EMBED, ...(data || {}) });
     setShowTemplates(false);
     toast.success(`تم تحميل قالب "${template.name}"`);
   };
 
-  const handleSend = () => {
-    if (!sendChannel) return;
-    setShowSendDialog(false);
-    setSendChannel(null);
-    toast.success('تم إرسال الإيمبيد للقناة');
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim() || !selectedGuildId) return;
+    setSavingTemplate(true);
+    try {
+      const result = await settingsApi.saveEmbedTemplate(selectedGuildId, {
+        name: templateName.trim(),
+        data: embed,
+      });
+      setTemplates((prev) => [result, ...(prev || [])]);
+      setTemplateName('');
+      setShowSaveDialog(false);
+      toast.success('تم حفظ القالب');
+    } catch (err) {
+      toast.error(err.message || 'فشل الحفظ');
+    } finally {
+      setSavingTemplate(false);
+    }
   };
 
-  const handleSaveTemplate = () => {
-    if (!templateName.trim()) return;
-    setTemplates((prev) => [...prev, { id: Date.now(), name: templateName, data: embed }]);
-    setTemplateName('');
-    setShowSaveDialog(false);
-    toast.success('تم حفظ القالب');
+  const deleteTemplate = async (id) => {
+    if (!selectedGuildId) return;
+    setDeletingId(id);
+    try {
+      await settingsApi.deleteEmbedTemplate(selectedGuildId, id);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      toast.success('تم حذف القالب');
+    } catch (err) {
+      toast.error(err.message || 'فشل الحذف');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  const deleteTemplate = (id) => {
-    setTemplates((prev) => prev.filter((t) => t.id !== id));
-    toast.success('تم حذف القالب');
+  // ─── Send to channel ───
+  const handleSend = async () => {
+    if (!sendChannel || !selectedGuildId) return;
+    setSending(true);
+    try {
+      await settingsApi.sendEmbed(selectedGuildId, {
+        channel_id: sendChannel,
+        embed,
+      });
+      toast.success('تم إرسال الإيمبيد للقناة');
+      setShowSendDialog(false);
+      setSendChannel(null);
+    } catch (err) {
+      toast.error(err.message || 'فشل الإرسال');
+    } finally {
+      setSending(false);
+    }
   };
 
   const reset = () => {
@@ -267,8 +345,15 @@ export default function EmbedBuilderPage() {
 
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3 gap-3">
-              <h3 className="font-bold">الحقول ({embed.fields.length}/25)</h3>
-              <Button size="sm" variant="outline" onClick={addField} disabled={embed.fields.length >= 25}>
+              <h3 className="font-bold">
+                الحقول (<span className="num">{embed.fields.length}</span>/25)
+              </h3>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={addField}
+                disabled={embed.fields.length >= 25}
+              >
                 <Plus className="w-4 h-4" />
                 إضافة حقل
               </Button>
@@ -301,21 +386,33 @@ export default function EmbedBuilderPage() {
                     maxLength={1024}
                   />
                   <div className="flex items-center gap-2 text-xs">
-                    <Switch size="sm" checked={field.inline} onCheckedChange={(v) => updateField(idx, 'inline', v)} />
+                    <Switch
+                      size="sm"
+                      checked={field.inline}
+                      onCheckedChange={(v) => updateField(idx, 'inline', v)}
+                    />
                     <span className="text-muted-foreground">في نفس الصف (Inline)</span>
                   </div>
                 </div>
               ))}
 
               {embed.fields.length === 0 && (
-                <div className="text-center py-4 text-sm text-muted-foreground">ما فيه حقول بعد</div>
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  ما فيه حقول بعد
+                </div>
               )}
             </div>
           </Card>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={reset} className="flex-1">إعادة تعيين</Button>
-            <Button variant="outline" onClick={() => setShowSaveDialog(true)} className="flex-1">
+            <Button variant="outline" onClick={reset} className="flex-1">
+              إعادة تعيين
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowSaveDialog(true)}
+              className="flex-1"
+            >
               <Save className="w-4 h-4" />
               حفظ كقالب
             </Button>
@@ -341,37 +438,68 @@ export default function EmbedBuilderPage() {
             <DialogDescription>اختر قالباً لتحميله في المحرر</DialogDescription>
           </DialogHeader>
 
-          {!templates ? (
+          {templates === null ? (
             <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 rounded-xl" />
+              ))}
             </div>
           ) : templates.length === 0 ? (
-            <EmptyState icon={<FolderOpen />} title="لا توجد قوالب" size="sm" />
+            <EmptyState
+              icon={<FolderOpen />}
+              title="لا توجد قوالب"
+              description="احفظ إيمبيد جديد كقالب علشان تستخدمه لاحقاً"
+              size="sm"
+            />
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {templates.map((t) => (
-                <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl border border-border">
+              {templates.map((t) => {
+                let data = t.data;
+                if (typeof data === 'string') {
+                  try { data = JSON.parse(data); } catch { data = {}; }
+                }
+                const color = data?.color || 0x9b59b6;
+                return (
                   <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: intToHexColor(t.data.color || 0x9b59b6) + '20' }}
+                    key={t.id}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border"
                   >
-                    <Sparkles className="w-5 h-5" style={{ color: intToHexColor(t.data.color || 0x9b59b6) }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{t.name}</div>
-                    <div className="text-xs text-muted-foreground line-clamp-1">
-                      {t.data.title || t.data.description?.slice(0, 50) || 'بدون عنوان'}
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: intToHexColor(color) + '20' }}
+                    >
+                      <Sparkles
+                        className="w-5 h-5"
+                        style={{ color: intToHexColor(color) }}
+                      />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      <div className="text-xs text-muted-foreground line-clamp-1">
+                        {data?.title || data?.description?.slice(0, 50) || 'بدون عنوان'}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => loadTemplate({ ...t, data })}
+                    >
+                      تحميل
+                    </Button>
+                    <button
+                      onClick={() => deleteTemplate(t.id)}
+                      disabled={deletingId === t.id}
+                      className="w-9 h-9 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-50"
+                    >
+                      {deletingId === t.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => loadTemplate(t)}>تحميل</Button>
-                  <button
-                    onClick={() => deleteTemplate(t.id)}
-                    className="w-9 h-9 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex items-center justify-center transition-colors flex-shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </DialogContent>
@@ -391,10 +519,21 @@ export default function EmbedBuilderPage() {
             placeholder="اختر قناة..."
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendDialog(false)} className="flex-1">إلغاء</Button>
-            <Button onClick={handleSend} disabled={!sendChannel} className="flex-1">
+            <Button
+              variant="outline"
+              onClick={() => setShowSendDialog(false)}
+              className="flex-1"
+              disabled={sending}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={handleSend}
+              disabled={!sendChannel || sending}
+              className="flex-1"
+            >
               <Send className="w-4 h-4" />
-              إرسال
+              {sending ? 'جاري الإرسال...' : 'إرسال'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -413,12 +552,24 @@ export default function EmbedBuilderPage() {
             placeholder="اسم القالب..."
             maxLength={50}
             onKeyDown={(e) => e.key === 'Enter' && handleSaveTemplate()}
+            disabled={savingTemplate}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveDialog(false)} className="flex-1">إلغاء</Button>
-            <Button onClick={handleSaveTemplate} disabled={!templateName.trim()} className="flex-1">
+            <Button
+              variant="outline"
+              onClick={() => setShowSaveDialog(false)}
+              className="flex-1"
+              disabled={savingTemplate}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={handleSaveTemplate}
+              disabled={!templateName.trim() || savingTemplate}
+              className="flex-1"
+            >
               <Save className="w-4 h-4" />
-              حفظ
+              {savingTemplate ? 'جاري الحفظ...' : 'حفظ'}
             </Button>
           </DialogFooter>
         </DialogContent>
