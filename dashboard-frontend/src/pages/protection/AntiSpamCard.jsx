@@ -7,23 +7,27 @@ import { cn } from '@/lib/utils';
 
 const ACTIONS = [
   { id: 'mute', label: 'كتم', icon: VolumeX, color: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
-  { id: 'kick', label: 'طرد', icon: UserX, color: 'bg-orange-500/10 text-orange-500 border-orange-500/30' },
-  { id: 'ban', label: 'حظر', icon: Hammer, color: 'bg-destructive/10 text-destructive border-destructive/30' },
+  { id: 'kick', label: 'طرد', icon: UserX,   color: 'bg-orange-500/10 text-orange-500 border-orange-500/30' },
+  { id: 'ban',  label: 'حظر', icon: Hammer,  color: 'bg-destructive/10 text-destructive border-destructive/30' },
 ];
 
-/**
- * AntiSpamCard
- */
 export function AntiSpamCard({ data, updateField }) {
+  const enabled     = data.antispam_enabled     ?? false;
+  const maxMessages = data.antispam_max_messages ?? 5;
+  // البوت يخزن المدة بـ ms — نعرضها بثواني
+  const intervalSec = Math.round((data.antispam_interval_ms ?? 3000) / 1000);
+  const action      = data.antispam_action       ?? 'mute';
+
+  const setIntervalSec = (sec) => updateField('antispam_interval_ms', Math.max(1000, sec * 1000));
+
   return (
     <Card className="p-5">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex items-start gap-3 flex-1">
           <div
             className={cn(
               'w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0',
-              data.enabled
+              enabled
                 ? 'bg-amber-500/20 text-amber-500'
                 : 'bg-muted text-muted-foreground',
             )}
@@ -38,107 +42,71 @@ export function AntiSpamCard({ data, updateField }) {
           </div>
         </div>
         <Switch
-          checked={data.enabled}
-          onCheckedChange={(v) => updateField('antiSpam.enabled', v)}
+          checked={enabled}
+          onCheckedChange={(v) => updateField('antispam_enabled', v)}
           size="lg"
         />
       </div>
 
-      {/* Settings (تظهر فقط لما enabled) */}
-      <div
-        className={cn(
-          'space-y-5 transition-all',
-          !data.enabled && 'opacity-50 pointer-events-none',
-        )}
-      >
+      <div className={cn('space-y-5 transition-all', !enabled && 'opacity-50 pointer-events-none')}>
         <Separator />
 
-        {/* Max Messages */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium">عدد الرسائل المسموح</label>
-            <span className="text-sm font-bold lyn-text-gradient num">
-              {data.maxMessages} رسالة
-            </span>
+            <span className="text-sm font-bold lyn-text-gradient num">{maxMessages} رسالة</span>
           </div>
           <Slider
-            value={[data.maxMessages]}
-            onValueChange={([v]) => updateField('antiSpam.maxMessages', v)}
+            value={[maxMessages]}
+            onValueChange={([v]) => updateField('antispam_max_messages', v)}
             min={3}
             max={20}
             step={1}
-            disabled={!data.enabled}
+            disabled={!enabled}
           />
           <p className="text-xs text-muted-foreground mt-1.5">
-            كم رسالة يقدر يرسل العضو في {data.timeWindow} ثانية
+            كم رسالة يقدر يرسل العضو في {intervalSec} ثانية
           </p>
         </div>
 
-        {/* Time Window */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium">المدة الزمنية</label>
-            <span className="text-sm font-bold lyn-text-gradient num">
-              {data.timeWindow} ثانية
-            </span>
+            <span className="text-sm font-bold lyn-text-gradient num">{intervalSec} ثانية</span>
           </div>
           <Slider
-            value={[data.timeWindow]}
-            onValueChange={([v]) => updateField('antiSpam.timeWindow', v)}
+            value={[intervalSec]}
+            onValueChange={([v]) => setIntervalSec(v)}
             min={1}
             max={60}
             step={1}
-            disabled={!data.enabled}
+            disabled={!enabled}
           />
         </div>
 
-        {/* Action */}
         <div>
           <label className="text-sm font-medium mb-2 block">العقوبة</label>
           <div className="grid grid-cols-3 gap-2">
-            {ACTIONS.map((action) => {
-              const Icon = action.icon;
-              const isSelected = data.action === action.id;
+            {ACTIONS.map((a) => {
+              const Icon = a.icon;
+              const isSelected = action === a.id;
               return (
                 <button
-                  key={action.id}
-                  onClick={() => updateField('antiSpam.action', action.id)}
-                  disabled={!data.enabled}
+                  key={a.id}
+                  onClick={() => updateField('antispam_action', a.id)}
+                  disabled={!enabled}
                   className={cn(
-                    'p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2',
-                    'hover:scale-105',
-                    isSelected
-                      ? action.color
-                      : 'border-border bg-card hover:border-border/80',
+                    'p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 hover:scale-105',
+                    isSelected ? a.color : 'border-border bg-card hover:border-border/80',
                   )}
                 >
                   <Icon className="w-5 h-5" />
-                  <span className="text-sm font-medium">{action.label}</span>
+                  <span className="text-sm font-medium">{a.label}</span>
                 </button>
               );
             })}
           </div>
         </div>
-
-        {/* Mute Duration (يظهر بس لو action=mute) */}
-        {data.action === 'mute' && (
-          <div className="animate-lyn-fade-up">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium">مدة الكتم</label>
-              <span className="text-sm font-bold lyn-text-gradient num">
-                {data.muteDuration} دقيقة
-              </span>
-            </div>
-            <Slider
-              value={[data.muteDuration]}
-              onValueChange={([v]) => updateField('antiSpam.muteDuration', v)}
-              min={1}
-              max={1440}
-              step={1}
-              disabled={!data.enabled}
-            />
-          </div>
-        )}
       </div>
     </Card>
   );

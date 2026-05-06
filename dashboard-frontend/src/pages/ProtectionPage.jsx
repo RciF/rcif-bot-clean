@@ -13,10 +13,10 @@ import { AntiNukeCard } from './protection/AntiNukeCard';
 import { LockdownCard } from './protection/LockdownCard';
 
 export default function ProtectionPage() {
-  const { data, updateField, isLoading, isSaving, isDirty, save, reset } =
+  const { data, setData, updateField, isLoading, isSaving, isDirty, save, reset } =
     useGuildSettings({ section: 'protection' });
 
-  const planGate = usePlanGate('protection', PLAN_TIERS.SILVER);
+  const planGate = usePlanGate('protection', PLAN_TIERS.GOLD);
 
   if (isLoading) {
     return (
@@ -55,7 +55,7 @@ export default function ProtectionPage() {
         <AntiSpamCard data={data} updateField={updateField} />
         <AntiRaidCard data={data} updateField={updateField} />
         <AntiNukeCard data={data} updateField={updateField} />
-        <LockdownCard data={data} updateField={updateField} />
+        <LockdownCard data={data} updateField={updateField} setData={setData} />
       </div>
 
       <SaveBar isDirty={isDirty} isSaving={isSaving} onSave={handleSave} onReset={reset} />

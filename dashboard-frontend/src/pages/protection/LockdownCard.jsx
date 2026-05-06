@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Lock, Unlock, AlertCircle, Hash, ShieldCheck } from 'lucide-react';
+import { Lock, Unlock, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Separator } from '@/components/ui/Separator';
+import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import {
   Dialog,
   DialogContent,
@@ -11,21 +12,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/Dialog';
-import { formatRelativeTime } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { formatRelativeTime, cn } from '@/lib/utils';
 
-/**
- * LockdownCard — Lockdown يدوي + قناة لوق + Whitelist (placeholder)
- */
 export function LockdownCard({ data, updateField, setData }) {
   const [showLockConfirm, setShowLockConfirm] = useState(false);
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
 
+  const isLocked = data.is_locked ?? data.isLocked ?? false;
+  const lockedAt = data.lockdown_started_at ?? data.lockdownStartedAt ?? null;
+  const logChannelId = data.log_channel_id ?? data.logChannelId ?? null;
+
   const handleLockdown = () => {
     setData((prev) => ({
       ...prev,
-      isLocked: true,
-      lockdownStartedAt: new Date().toISOString(),
+      is_locked: true,
+      lockdown_started_at: new Date().toISOString(),
     }));
     setShowLockConfirm(false);
   };
@@ -33,8 +34,8 @@ export function LockdownCard({ data, updateField, setData }) {
   const handleUnlock = () => {
     setData((prev) => ({
       ...prev,
-      isLocked: false,
-      lockdownStartedAt: null,
+      is_locked: false,
+      lockdown_started_at: null,
     }));
     setShowUnlockConfirm(false);
   };
@@ -42,27 +43,26 @@ export function LockdownCard({ data, updateField, setData }) {
   return (
     <>
       <Card className="p-5">
-        {/* Header */}
         <div className="flex items-start gap-3 mb-4">
           <div className="w-11 h-11 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center flex-shrink-0">
             <Lock className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold mb-1">الإغلاق اليدوي و Whitelist</h3>
+            <h3 className="font-bold mb-1">الإغلاق اليدوي وقناة اللوق</h3>
             <p className="text-sm text-muted-foreground">
-              أوقف الانضمام للسيرفر فوراً + استثناء رتب وأعضاء من نظام الحماية
+              أوقف الانضمام للسيرفر فوراً، واختر قناة لتلقّي تنبيهات الحماية
             </p>
           </div>
         </div>
 
         <Separator className="mb-4" />
 
-        {/* ── Lockdown Status & Button ── */}
+        {/* Status */}
         <div className="mb-5">
           <div
             className={cn(
               'rounded-xl p-4 mb-3',
-              data.isLocked
+              isLocked
                 ? 'bg-destructive/10 border border-destructive/30'
                 : 'bg-emerald-500/10 border border-emerald-500/30',
             )}
@@ -71,36 +71,31 @@ export function LockdownCard({ data, updateField, setData }) {
               <div
                 className={cn(
                   'w-10 h-10 rounded-lg flex items-center justify-center',
-                  data.isLocked
+                  isLocked
                     ? 'bg-destructive/20 text-destructive'
                     : 'bg-emerald-500/20 text-emerald-500',
                 )}
               >
-                {data.isLocked ? <Lock className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                {isLocked ? <Lock className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
               </div>
               <div className="flex-1">
                 <div className="font-bold text-sm">
-                  {data.isLocked ? 'السيرفر مغلق' : 'السيرفر مفتوح'}
+                  {isLocked ? 'السيرفر مغلق' : 'السيرفر مفتوح'}
                 </div>
-                {data.isLocked && data.lockdownStartedAt && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    منذ {formatRelativeTime(data.lockdownStartedAt)}
-                  </div>
-                )}
-                {!data.isLocked && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    الأعضاء يقدرون ينضمون عادي
-                  </div>
-                )}
+                <div className="text-xs text-muted-foreground">
+                  {isLocked && lockedAt
+                    ? `قُفل ${formatRelativeTime(lockedAt)}`
+                    : 'الانضمام مسموح'}
+                </div>
               </div>
             </div>
           </div>
 
-          {data.isLocked ? (
+          {isLocked ? (
             <Button
               variant="outline"
-              className="w-full border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10"
               onClick={() => setShowUnlockConfirm(true)}
+              className="w-full gap-2"
             >
               <Unlock className="w-4 h-4" />
               فتح السيرفر
@@ -108,60 +103,33 @@ export function LockdownCard({ data, updateField, setData }) {
           ) : (
             <Button
               variant="outline"
-              className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
               onClick={() => setShowLockConfirm(true)}
+              className="w-full gap-2 text-destructive hover:bg-destructive/10"
             >
               <Lock className="w-4 h-4" />
-              إغلاق السيرفر فوراً
+              إغلاق السيرفر
             </Button>
           )}
         </div>
 
         <Separator className="mb-4" />
 
-        {/* ── Log Channel ── */}
-        <div className="mb-5">
-          <label className="text-sm font-medium mb-2 block">قناة سجل الحماية</label>
-          <div className="border-2 border-dashed border-border rounded-xl p-4 text-center">
-            <Hash className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground mb-2">
-              ChannelPicker قيد البناء — الأسبوع الجاي
-            </p>
-            {data.logChannel && (
-              <span className="inline-block px-2.5 py-1 rounded-md bg-violet-500/10 text-violet-500 text-xs font-medium">
-                # القناة المختارة: {data.logChannel}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* ── Whitelist (placeholder) ── */}
+        {/* Log channel */}
         <div>
-          <label className="text-sm font-medium mb-2 block">القائمة البيضاء</label>
-          <p className="text-xs text-muted-foreground mb-3">
-            رتب وأعضاء محصنين من نظام الحماية
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="border-2 border-dashed border-border rounded-xl p-3 text-center">
-              <p className="text-xs font-medium mb-1">الرتب المحصنة</p>
-              <p className="text-xs text-muted-foreground num">
-                {data.whitelist?.roles?.length || 0} رتبة
-              </p>
-            </div>
-            <div className="border-2 border-dashed border-border rounded-xl p-3 text-center">
-              <p className="text-xs font-medium mb-1">الأعضاء المحصنون</p>
-              <p className="text-xs text-muted-foreground num">
-                {data.whitelist?.members?.length || 0} عضو
-              </p>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            RolePicker و MemberPicker قيد البناء
+          <label className="text-sm font-medium mb-2 block">قناة لوق الحماية</label>
+          <ChannelPicker
+            value={logChannelId}
+            onChange={(v) => updateField('log_channel_id', v)}
+            types={[0, 5]}
+            placeholder="اختر قناة لتنبيهات الحماية..."
+          />
+          <p className="text-xs text-muted-foreground mt-1.5">
+            البوت يرسل هنا أي اكتشاف Spam/Raid/Nuke
           </p>
         </div>
       </Card>
 
-      {/* ── Lockdown Confirm ── */}
+      {/* Lock confirm */}
       <Dialog open={showLockConfirm} onOpenChange={setShowLockConfirm}>
         <DialogContent>
           <div className="flex justify-center -mt-4 mb-2">
@@ -172,30 +140,25 @@ export function LockdownCard({ data, updateField, setData }) {
           <DialogHeader>
             <DialogTitle className="text-center">إغلاق السيرفر؟</DialogTitle>
             <DialogDescription className="text-center">
-              هذا راح يمنع أي شخص جديد من الانضمام حتى تفك الإغلاق يدوياً
+              راح يتم منع الانضمام لكل الأعضاء الجدد. الأعضاء الحاليين ما يتأثرون.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowLockConfirm(false)}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={() => setShowLockConfirm(false)} className="flex-1">
               إلغاء
             </Button>
             <Button
-              variant="default"
               onClick={handleLockdown}
               className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
               <Lock className="w-4 h-4" />
-              نعم، أغلق
+              إغلاق
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Unlock Confirm ── */}
+      {/* Unlock confirm */}
       <Dialog open={showUnlockConfirm} onOpenChange={setShowUnlockConfirm}>
         <DialogContent>
           <div className="flex justify-center -mt-4 mb-2">
@@ -206,20 +169,16 @@ export function LockdownCard({ data, updateField, setData }) {
           <DialogHeader>
             <DialogTitle className="text-center">فتح السيرفر؟</DialogTitle>
             <DialogDescription className="text-center">
-              راح يقدر الأعضاء الجدد ينضمون مرة ثانية
+              راح يُسمح للأعضاء الجدد بالانضمام مرة ثانية.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowUnlockConfirm(false)}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={() => setShowUnlockConfirm(false)} className="flex-1">
               إلغاء
             </Button>
             <Button onClick={handleUnlock} className="flex-1">
               <Unlock className="w-4 h-4" />
-              نعم، افتح
+              فتح
             </Button>
           </DialogFooter>
         </DialogContent>
