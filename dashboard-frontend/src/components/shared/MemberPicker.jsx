@@ -1,34 +1,78 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, X, Check, ChevronDown, User } from 'lucide-react';
+import { Search, X, Check, ChevronDown, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { mock } from '@/lib/mock';
+import { useGuildResources } from '@/hooks/useGuildResources';
 import { cn } from '@/lib/utils';
 
 /**
- * MemberPicker — اختيار عضو
+ * MemberPicker — اختيار عضو/أعضاء من السيرفر الحالي
+ *
+ * يستخدم useGuildResources لجلب الأعضاء من API الحقيقي
+ * مع caching تلقائي عبر react-query.
+ *
+ * ⚠️ Discord member structure:
+ *   { user: { id, username, global_name, avatar, ... }, nick, roles, joined_at, ... }
  *
  * @example
  *   <MemberPicker value={userId} onChange={setUserId} />
  *   <MemberPicker value={userIds} onChange={setUserIds} multiple />
  */
 
+/**
+ * استخراج معلومات عضو من Discord member object
+ */
+function normalizeMember(m) {
+  // ربما يجي بصيغة flat (من بعض الـ APIs) أو nested (Discord standard)
+  const user = m.user || m;
+  const id = user.id || m.id;
+  const username =
+    m.nick ||
+    user.global_name ||
+    user.username ||
+    `User ${(id || '').slice(0, 6)}`;
+
+  let avatarUrl = null;
+  if (user.avatar) {
+    const ext = user.avatar.startsWith('a_') ? 'gif' : 'png';
+    avatarUrl = `https://cdn.discordapp.com/avatars/${id}/${user.avatar}.${ext}?size=64`;
+  } else if (id) {
+    // Default Discord avatar
+    const defaultIndex = (BigInt(id) >> 22n) % 6n;
+    avatarUrl = `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
+  }
+
+  return {
+    id,
+    username,
+    avatarUrl,
+    isBot: user.bot === true,
+  };
+}
+
 export function MemberPicker({
   value,
   onChange,
   multiple = false,
+  excludeBots = true,
   placeholder = 'اختر عضو...',
   disabled = false,
   className,
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [members, setMembers] = useState(null);
   const containerRef = useRef(null);
 
-  useEffect(() => {
-    mock.membersList().then(setMembers);
-  }, []);
+  // ✅ يجلب أعضاء السيرفر الحالي من API الحقيقي
+  const { members: rawMembers, isLoading } = useGuildResources({
+    types: ['members'],
+  });
+
+  // تطبيع البيانات لشكل ثابت
+  const members = useMemo(() => {
+    const list = (rawMembers || []).map(normalizeMember).filter((m) => m.id);
+    if (excludeBots) return list.filter((m) => !m.isBot);
+    return list;
+  }, [rawMembers, excludeBots]);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -41,11 +85,12 @@ export function MemberPicker({
   }, [open]);
 
   const filtered = useMemo(() => {
-    if (!members) return [];
     let list = members;
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter((m) => m.username.toLowerCase().includes(q) || m.id.includes(search));
+      list = list.filter(
+        (m) => m.username.toLowerCase().includes(q) || m.id.includes(search),
+      );
     }
     return list.slice(0, 50);
   }, [members, search]);
@@ -53,7 +98,6 @@ export function MemberPicker({
   const selectedIds = multiple ? value || [] : value ? [value] : [];
 
   const selectedMembers = useMemo(() => {
-    if (!members) return [];
     return members.filter((m) => selectedIds.includes(m.id));
   }, [members, selectedIds]);
 
@@ -93,7 +137,12 @@ export function MemberPicker({
         )}
       >
         <div className="flex-1 flex flex-wrap gap-1.5 items-center text-start">
-          {selectedMembers.length === 0 ? (
+          {isLoading && selectedMembers.length === 0 ? (
+            <span className="inline-flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              جاري التحميل...
+            </span>
+          ) : selectedMembers.length === 0 ? (
             <span className="text-muted-foreground">{placeholder}</span>
           ) : multiple ? (
             selectedMembers.map((m) => (
@@ -101,9 +150,18 @@ export function MemberPicker({
                 key={m.id}
                 className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-500 text-xs font-medium"
               >
-                <div className="w-4 h-4 rounded-full bg-violet-500/30 flex items-center justify-center text-[8px] font-bold">
-                  {m.username[0]}
-                </div>
+                {m.avatarUrl ? (
+                  <img
+                    src={m.avatarUrl}
+                    alt=""
+                    className="w-4 h-4 rounded-full"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-4 h-4 rounded-full bg-violet-500/30 flex items-center justify-center text-[8px] font-bold">
+                    {m.username[0]}
+                  </div>
+                )}
                 {m.username}
                 <button
                   type="button"
@@ -116,9 +174,18 @@ export function MemberPicker({
             ))
           ) : (
             <span className="inline-flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                {selectedMembers[0].username[0]}
-              </div>
+              {selectedMembers[0].avatarUrl ? (
+                <img
+                  src={selectedMembers[0].avatarUrl}
+                  alt=""
+                  className="w-5 h-5 rounded-full"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                  {selectedMembers[0].username[0]}
+                </div>
+              )}
               <span className="font-medium">{selectedMembers[0].username}</span>
             </span>
           )}
@@ -147,14 +214,17 @@ export function MemberPicker({
           </div>
 
           <div className="max-h-64 overflow-y-auto p-1">
-            {!members ? (
-              <div className="space-y-1 p-1">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10 rounded-lg" />
-                ))}
+            {isLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                جاري تحميل الأعضاء...
               </div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-6 text-sm text-muted-foreground">لا توجد نتائج</div>
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                {members.length === 0
+                  ? 'لا يوجد أعضاء في السيرفر'
+                  : 'لا توجد نتائج للبحث'}
+              </div>
             ) : (
               filtered.map((m) => {
                 const isSelected = selectedIds.includes(m.id);
@@ -169,11 +239,17 @@ export function MemberPicker({
                     )}
                   >
                     <div className="relative flex-shrink-0">
-                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                        {m.username[0]}
-                      </div>
-                      {m.isOnline && (
-                        <div className="absolute bottom-0 left-0 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-popover" />
+                      {m.avatarUrl ? (
+                        <img
+                          src={m.avatarUrl}
+                          alt=""
+                          className="w-7 h-7 rounded-full"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                          {m.username[0]}
+                        </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -189,7 +265,7 @@ export function MemberPicker({
             )}
           </div>
 
-          {filtered.length === 50 && (
+          {filtered.length === 50 && members.length > 50 && (
             <div className="border-t border-border px-3 py-1.5 text-[10px] text-muted-foreground text-center">
               عرض أول 50 — استخدم البحث لتضييق النتائج
             </div>
