@@ -7,6 +7,7 @@
  *  - welcome: welcome_channel_id, goodbye_channel_id, welcome_message
  *  - tickets: ticket_settings (مفرد) + category_id, log_channel_id, support_role_id
  *  - xp: levelup_channel_id, xp_multiplier
+ *  - economy_users: GLOBAL (بدون guild_id)
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -80,9 +81,7 @@ async function upsertSettings(table, guildId, data) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ WELCOME (يستخدم schema البوت + توسعات الداش) ════════════
-//  أعمدة البوت: welcome_channel_id, goodbye_channel_id, welcome_message, goodbye_message, enabled
-//  أعمدة الداش الإضافية: type, embed_data, leave_enabled, leave_message, mention_user
+//  ════════════ WELCOME ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -128,7 +127,7 @@ router.post(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ PROTECTION (جدول جديد) ════════════
+//  ════════════ PROTECTION ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -190,7 +189,7 @@ router.delete(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ LOGS (مزدوج: أعمدة البوت + JSONB events) ════════════
+//  ════════════ LOGS ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -274,9 +273,7 @@ router.get(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ════════════ XP (يستخدم schema البوت + توسعات) ════════════
-//  أعمدة البوت: levelup_channel_id, xp_multiplier, disabled_channels
-//  أعمدة الداش: enabled, min/max_xp, role_rewards, multipliers, level_up_message
+//  ════════════ XP ════════════
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -318,7 +315,6 @@ router.get(
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
-    // البوت يستخدم جدول "xp" (مو xp_users)
     const r = await query(
       `SELECT user_id, level, xp
        FROM xp
@@ -347,8 +343,8 @@ router.delete(
 
 // ════════════════════════════════════════════════════════════
 //  ════════════ ECONOMY ════════════
-//  ⚠️ economy_users في البوت هو جدول global (بدون guild_id)
-//     economy_settings الجديد هو per-guild
+//  ⚠️ economy_users في البوت GLOBAL (بدون guild_id)
+//     economy_settings + economy_shop = per-guild
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -434,8 +430,6 @@ router.post(
   asyncHandler(async (req, res) => {
     const { userId, amount } = req.body
     if (!userId || !amount) throw new ApiError("userId و amount مطلوبين", 400)
-
-    // economy_users في البوت بدون guild_id (global)
     await query(
       `INSERT INTO economy_users (user_id, coins) VALUES ($1, $2)
        ON CONFLICT (user_id) DO UPDATE SET coins = economy_users.coins + $2`,
@@ -446,8 +440,30 @@ router.post(
 )
 
 // ════════════════════════════════════════════════════════════
+//  ✅ NEW: GET /economy/leaderboard
+//  أغنى المستخدمين عالمياً (الاقتصاد عالمي)
+// ════════════════════════════════════════════════════════════
+
+router.get(
+  "/economy/leaderboard",
+  requireAuth,
+  requireGuildAdmin,
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100)
+    const r = await query(
+      `SELECT user_id, coins
+       FROM economy_users
+       WHERE coins > 0
+       ORDER BY coins DESC
+       LIMIT $1`,
+      [limit],
+    ).catch(() => ({ rows: [] }))
+    res.json(r.rows)
+  }),
+)
+
+// ════════════════════════════════════════════════════════════
 //  ════════════ TICKETS ════════════
-//  ⚠️ البوت يستخدم ticket_settings (مفرد) + category_id, log_channel_id, support_role_id
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -592,7 +608,6 @@ router.delete(
 
 // ════════════════════════════════════════════════════════════
 //  ════════════ MODERATION ════════════
-//  ⚠️ البوت يستخدم جدول "warnings" (بدون moderation_ prefix)
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -600,7 +615,6 @@ router.get(
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
-    // نحاول من جدول البوت "warnings" أولاً، نسقط لجدول moderation_warnings لو ما موجود
     let r
     try {
       r = await query(
@@ -627,7 +641,7 @@ router.delete(
         [req.params.guildId, req.params.userId],
       )
     } catch {
-      // الجدول مش موجود — تجاهل
+      // تجاهل
     }
     res.json({ success: true })
   }),

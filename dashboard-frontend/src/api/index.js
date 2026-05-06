@@ -83,6 +83,9 @@ export const settingsApi = {
   saveShop: (g, items) => apiClient.put(`/api/guild/${g}/economy/shop`, { items }),
   giveCoins: (g, userId, amount) =>
     apiClient.post(`/api/guild/${g}/economy/give`, { userId, amount }),
+  // ✅ NEW: أغنى المستخدمين عالمياً
+  getEconomyLeaderboard: (g, limit = 50) =>
+    apiClient.get(`/api/guild/${g}/economy/leaderboard?limit=${limit}`),
 
   // Tickets
   getTickets: (g) => apiClient.get(`/api/guild/${g}/tickets`),
@@ -149,16 +152,9 @@ export const commandsApi = {
 // ════════════════════════════════════════════════════════════
 
 export const subscriptionApi = {
-  // جلب الاشتراك الحالي للمستخدم
   get: (userId) => apiClient.get(`/api/subscription/${userId}`),
-
-  // ✅ NEW: جلب طلبات الدفع الخاصة بالمستخدم (سجل المدفوعات)
   getMyPayments: () => apiClient.get(`/api/payment-requests/me`),
-
-  // إرسال طلب اشتراك جديد
   requestPayment: (data) => apiClient.post(`/api/payment-requests`, data),
-
-  // ربط الاشتراك بسيرفر
   linkGuild: (guildId) => apiClient.post(`/api/guild/${guildId}/link`),
   unlinkGuild: (guildId) => apiClient.delete(`/api/guild/${guildId}/link`),
 }
