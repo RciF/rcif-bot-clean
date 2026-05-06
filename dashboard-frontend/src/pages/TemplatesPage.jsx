@@ -1,17 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Layers,
   Sparkles,
   Check,
   AlertTriangle,
-  Save,
   Star,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Skeleton } from '@/components/ui/Skeleton';
 import {
   Dialog,
   DialogContent,
@@ -22,34 +20,209 @@ import {
 } from '@/components/ui/Dialog';
 import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { PlanLockBanner } from '@/components/shared/PlanLockOverlay';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { usePlanGate } from '@/hooks/usePlanGate';
-import { mock } from '@/lib/mock';
+import { useGuildStore } from '@/store/guildStore';
+import { settingsApi } from '@/api';
 import { PLAN_TIERS } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
+// ════════════════════════════════════════════════════════════
+//  PRESETS — قوالب جاهزة (client-side)
+//  كل preset يحدد إعدادات كل نظام يأثر عليه + apply() يطبقها
+// ════════════════════════════════════════════════════════════
+
+const PRESETS = [
+  {
+    id: 'gaming',
+    name: 'سيرفر جيمنج',
+    icon: '🎮',
+    gradient: 'from-violet-500 to-purple-600',
+    popular: true,
+    description: 'إعدادات مثالية لسيرفرات الألعاب — حماية متوسطة + xp فعّال + لوقات أساسية',
+    changes: [
+      'تفعيل XP بمعدل x1.2',
+      'حماية ضد Spam (5 رسائل/5ث)',
+      'حماية ضد Raid (10 انضمام/30ث)',
+      'لوقات أساسية مفعّلة',
+    ],
+    systemsAffected: ['XP', 'الحماية', 'اللوق'],
+    requiredPlan: 'silver',
+    apply: async (guildId) => {
+      await Promise.all([
+        settingsApi.saveXp(guildId, {
+          enabled: true,
+          xp_multiplier: 1.2,
+          min_xp_per_message: 15,
+          max_xp_per_message: 25,
+          cooldown: 60,
+        }),
+        settingsApi.saveProtection(guildId, {
+          anti_spam: { enabled: true, maxMessages: 5, timeWindow: 5, action: 'mute' },
+          anti_raid: { enabled: true, maxJoins: 10, timeWindow: 30, action: 'lockdown' },
+          anti_nuke: { enabled: false },
+        }),
+        settingsApi.saveLogs(guildId, {
+          enabled: true,
+          events: {
+            messageDelete: { enabled: true },
+            messageEdit: { enabled: true },
+            memberJoin: { enabled: true },
+            memberLeave: { enabled: true },
+          },
+        }),
+      ]);
+    },
+  },
+  {
+    id: 'community',
+    name: 'سيرفر مجتمع',
+    icon: '👥',
+    gradient: 'from-pink-500 to-rose-500',
+    popular: true,
+    description: 'مثالي للمجتمعات النشطة — XP، اقتصاد، ترحيب جذاب',
+    changes: [
+      'XP مفعّل (معدل عادي)',
+      'اقتصاد كامل بمكافآت يومية',
+      'ترحيب وأودعة مفعّلين',
+      'حماية متوسطة',
+    ],
+    systemsAffected: ['XP', 'الاقتصاد', 'الترحيب', 'الحماية'],
+    requiredPlan: 'gold',
+    apply: async (guildId) => {
+      await Promise.all([
+        settingsApi.saveXp(guildId, {
+          enabled: true,
+          xp_multiplier: 1,
+          min_xp_per_message: 15,
+          max_xp_per_message: 25,
+        }),
+        settingsApi.saveEconomy(guildId, {
+          enabled: true,
+          currency_symbol: '🪙',
+          currency_name: 'كوينز',
+          daily_reward: { min: 100, max: 500 },
+          weekly_reward: { min: 1000, max: 5000 },
+          starting_balance: 100,
+        }),
+        settingsApi.saveWelcome(guildId, {
+          enabled: true,
+          leave_enabled: true,
+          mention_user: true,
+        }),
+        settingsApi.saveProtection(guildId, {
+          anti_spam: { enabled: true, maxMessages: 7, timeWindow: 5, action: 'mute' },
+          anti_raid: { enabled: true, maxJoins: 15, timeWindow: 60, action: 'lockdown' },
+        }),
+      ]);
+    },
+  },
+  {
+    id: 'security',
+    name: 'حماية قصوى',
+    icon: '🛡️',
+    gradient: 'from-rose-500 to-red-600',
+    description: 'لما تبي أعلى مستوى حماية — مناسب للسيرفرات الكبيرة المعرضة للهجوم',
+    changes: [
+      'Anti-Spam صارم (3 رسائل/5ث)',
+      'Anti-Raid قوي (5 انضمام/30ث)',
+      'Anti-Nuke مفعّل بالكامل',
+      'لوقات شاملة لكل الأحداث',
+    ],
+    systemsAffected: ['الحماية', 'اللوق'],
+    requiredPlan: 'gold',
+    apply: async (guildId) => {
+      await Promise.all([
+        settingsApi.saveProtection(guildId, {
+          anti_spam: { enabled: true, maxMessages: 3, timeWindow: 5, action: 'mute' },
+          anti_raid: { enabled: true, maxJoins: 5, timeWindow: 30, action: 'lockdown' },
+          anti_nuke: {
+            enabled: true,
+            maxChannelDeletes: 2,
+            maxRoleDeletes: 2,
+            maxBans: 3,
+          },
+        }),
+        settingsApi.saveLogs(guildId, {
+          enabled: true,
+          events: {
+            messageDelete: { enabled: true },
+            messageEdit: { enabled: true },
+            memberJoin: { enabled: true },
+            memberLeave: { enabled: true },
+            memberBan: { enabled: true },
+            memberKick: { enabled: true },
+            roleCreate: { enabled: true },
+            roleDelete: { enabled: true },
+            channelCreate: { enabled: true },
+            channelDelete: { enabled: true },
+          },
+        }),
+      ]);
+    },
+  },
+  {
+    id: 'minimal',
+    name: 'بسيط ونظيف',
+    icon: '✨',
+    gradient: 'from-slate-400 to-slate-600',
+    description: 'إعدادات خفيفة بدون تعقيد — مناسب للسيرفرات الصغيرة',
+    changes: [
+      'حماية أساسية ضد Spam',
+      'ترحيب مفعّل',
+      'بدون XP أو اقتصاد',
+      'لوقات أساسية فقط',
+    ],
+    systemsAffected: ['الحماية', 'الترحيب', 'اللوق'],
+    requiredPlan: 'silver',
+    apply: async (guildId) => {
+      await Promise.all([
+        settingsApi.saveProtection(guildId, {
+          anti_spam: { enabled: true, maxMessages: 8, timeWindow: 10, action: 'mute' },
+          anti_raid: { enabled: false },
+          anti_nuke: { enabled: false },
+        }),
+        settingsApi.saveWelcome(guildId, {
+          enabled: true,
+          mention_user: true,
+        }),
+        settingsApi.saveLogs(guildId, {
+          enabled: true,
+          events: {
+            memberJoin: { enabled: true },
+            memberLeave: { enabled: true },
+            memberBan: { enabled: true },
+          },
+        }),
+      ]);
+    },
+  },
+];
+
 export default function TemplatesPage() {
-  const [templates, setTemplates] = useState(null);
+  const { selectedGuildId } = useGuildStore();
   const [confirmApply, setConfirmApply] = useState(null);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [customName, setCustomName] = useState('');
+  const [applying, setApplying] = useState(false);
 
   const planGate = usePlanGate('templates', PLAN_TIERS.SILVER);
 
-  useEffect(() => {
-    mock.presetTemplates().then(setTemplates);
-  }, []);
-
-  const handleApply = () => {
-    toast.success(`تم تطبيق قالب ${confirmApply.name}`);
-    setConfirmApply(null);
-  };
-
-  const handleSaveCurrent = () => {
-    if (!customName.trim()) return;
-    toast.success(`تم حفظ "${customName}" كقالب مخصص`);
-    setCustomName('');
-    setShowSaveDialog(false);
+  const handleApply = async () => {
+    if (!confirmApply || !selectedGuildId) return;
+    setApplying(true);
+    try {
+      await confirmApply.apply(selectedGuildId);
+      toast.success(`تم تطبيق قالب "${confirmApply.name}"`);
+      setConfirmApply(null);
+    } catch (err) {
+      if (err.code === 'PLAN_REQUIRED') {
+        toast.error('بعض الإعدادات تحتاج خطة أعلى');
+      } else {
+        toast.error(err.message || 'فشل تطبيق القالب');
+      }
+    } finally {
+      setApplying(false);
+    }
   };
 
   return (
@@ -59,16 +232,6 @@ export default function TemplatesPage() {
         title="القوالب الجاهزة"
         description="طبّق إعدادات سيرفر كاملة بضغطة واحدة"
         plan="silver"
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={planGate.gateAction(() => setShowSaveDialog(true))}
-          >
-            <Save className="w-4 h-4" />
-            احفظ سيرفري كقالب
-          </Button>
-        }
       />
 
       {planGate.isLocked && (
@@ -80,20 +243,21 @@ export default function TemplatesPage() {
         />
       )}
 
-      {!templates ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-56 rounded-2xl" />
-          ))}
-        </div>
+      {!selectedGuildId ? (
+        <Card className="p-8">
+          <EmptyState
+            icon={<Layers />}
+            title="اختر سيرفر أولاً"
+            description="ارجع لصفحة السيرفرات واختر سيرفر لتطبيق القوالب عليه"
+          />
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {templates.map((tpl) => (
+          {PRESETS.map((tpl) => (
             <Card
               key={tpl.id}
               className="overflow-hidden hover:border-border/80 transition-colors group"
             >
-              {/* Top gradient header */}
               <div
                 className={cn(
                   'h-24 bg-gradient-to-br relative flex items-center justify-center',
@@ -110,12 +274,18 @@ export default function TemplatesPage() {
               </div>
 
               <div className="p-5">
-                <h3 className="font-bold text-lg mb-1">{tpl.name}</h3>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h3 className="font-bold text-lg">{tpl.name}</h3>
+                  {tpl.requiredPlan && tpl.requiredPlan !== 'silver' && (
+                    <Badge variant="warning" size="sm">
+                      {tpl.requiredPlan}
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
                   {tpl.description}
                 </p>
 
-                {/* Changes list */}
                 <div className="space-y-1.5 mb-4">
                   {tpl.changes.map((change, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
@@ -125,7 +295,6 @@ export default function TemplatesPage() {
                   ))}
                 </div>
 
-                {/* Affected systems */}
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {tpl.systemsAffected.map((sys) => (
                     <Badge key={sys} variant="default" size="sm">
@@ -147,8 +316,11 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {/* Apply Confirm */}
-      <Dialog open={!!confirmApply} onOpenChange={() => setConfirmApply(null)}>
+      {/* ═══ Apply Confirm ═══ */}
+      <Dialog
+        open={!!confirmApply}
+        onOpenChange={(v) => !v && !applying && setConfirmApply(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <div className="flex justify-center -mt-4 mb-2">
             <div
@@ -172,11 +344,11 @@ export default function TemplatesPage() {
           <div className="bg-amber-500/5 border border-amber-500/30 rounded-xl p-3 my-2 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">
-              هذا راح يغير الأنظمة:{' '}
+              هذا القالب راح يستبدل إعدادات الأنظمة:{' '}
               <span className="font-bold text-foreground">
                 {confirmApply?.systemsAffected?.join('، ')}
               </span>
-              . إعداداتك الحالية في هذي الأنظمة راح تنحفظ في السجل قبل الاستبدال.
+              . إعداداتك الحالية في هذي الأنظمة راح تنحفظ في سجل الأنشطة قبل الاستبدال.
             </p>
           </div>
 
@@ -185,44 +357,26 @@ export default function TemplatesPage() {
               variant="outline"
               onClick={() => setConfirmApply(null)}
               className="flex-1"
+              disabled={applying}
             >
-              إلغاء
-            </Button>
-            <Button onClick={handleApply} className="flex-1">
-              <Sparkles className="w-4 h-4" />
-              نعم، طبّق
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Save Current Settings Dialog */}
-      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>حفظ سيرفري كقالب مخصص</DialogTitle>
-            <DialogDescription>
-              راح يتم حفظ كل إعدادات سيرفرك الحالية كقالب مخصص تقدر تستخدمه على سيرفرات أخرى
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={customName}
-            onChange={(e) => setCustomName(e.target.value)}
-            placeholder="اسم القالب..."
-            maxLength={50}
-            onKeyDown={(e) => e.key === 'Enter' && handleSaveCurrent()}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveDialog(false)} className="flex-1">
               إلغاء
             </Button>
             <Button
-              onClick={handleSaveCurrent}
-              disabled={!customName.trim()}
+              onClick={handleApply}
               className="flex-1"
+              disabled={applying}
             >
-              <Save className="w-4 h-4" />
-              حفظ
+              {applying ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  جاري التطبيق...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  نعم، طبّق
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
