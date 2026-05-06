@@ -1,4 +1,4 @@
-import { Bot, MessageSquare, Reply, Hash } from 'lucide-react';
+import { Bot, MessageSquare, Reply } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
 import { Separator } from '@/components/ui/Separator';
@@ -7,13 +7,19 @@ import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { cn } from '@/lib/utils';
 
 export function AIGeneralTab({ data, updateField }) {
+  const enabled = data.enabled ?? false;
+  const respondMentions = data.respond_to_mentions ?? data.respondToMentions ?? true;
+  const respondReplies  = data.respond_to_replies  ?? data.respondToReplies  ?? true;
+  const alwaysChannels  = data.always_respond_channels ?? data.alwaysRespondChannels ?? [];
+  const allowedChannels = data.allowed_channels ?? data.allowedChannels ?? [];
+
   return (
     <div className="space-y-4">
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0', data.enabled ? 'lyn-gradient lyn-glow' : 'bg-muted')}>
-              <Bot className={cn('w-5 h-5', data.enabled ? 'text-white' : 'text-muted-foreground')} />
+            <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0', enabled ? 'lyn-gradient lyn-glow' : 'bg-muted')}>
+              <Bot className={cn('w-5 h-5', enabled ? 'text-white' : 'text-muted-foreground')} />
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-bold mb-1">تفعيل الذكاء الاصطناعي</h3>
@@ -22,11 +28,11 @@ export function AIGeneralTab({ data, updateField }) {
               </p>
             </div>
           </div>
-          <Switch checked={data.enabled} onCheckedChange={(v) => updateField('enabled', v)} size="lg" />
+          <Switch checked={enabled} onCheckedChange={(v) => updateField('enabled', v)} size="lg" />
         </div>
       </Card>
 
-      <Card className={cn('p-5 transition-opacity', !data.enabled && 'opacity-50 pointer-events-none')}>
+      <Card className={cn('p-5 transition-opacity', !enabled && 'opacity-50 pointer-events-none')}>
         <div className="mb-4">
           <h3 className="font-bold mb-1">سلوك الرد</h3>
           <p className="text-sm text-muted-foreground">متى يرد AI تلقائياً</p>
@@ -43,7 +49,10 @@ export function AIGeneralTab({ data, updateField }) {
                 <div className="text-xs text-muted-foreground">يرد لما أحد يعمل @Lyn في رسالة</div>
               </div>
             </div>
-            <Switch checked={data.respondToMentions} onCheckedChange={(v) => updateField('respondToMentions', v)} />
+            <Switch
+              checked={respondMentions}
+              onCheckedChange={(v) => updateField('respond_to_mentions', v)}
+            />
           </div>
 
           <Separator />
@@ -58,12 +67,15 @@ export function AIGeneralTab({ data, updateField }) {
                 <div className="text-xs text-muted-foreground">يرد لما أحد يعمل reply على رسالة من Lyn</div>
               </div>
             </div>
-            <Switch checked={data.respondToReplies} onCheckedChange={(v) => updateField('respondToReplies', v)} />
+            <Switch
+              checked={respondReplies}
+              onCheckedChange={(v) => updateField('respond_to_replies', v)}
+            />
           </div>
         </div>
       </Card>
 
-      <Card className={cn('p-5 transition-opacity', !data.enabled && 'opacity-50 pointer-events-none')}>
+      <Card className={cn('p-5 transition-opacity', !enabled && 'opacity-50 pointer-events-none')}>
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-bold">قنوات الرد الدائم</h3>
@@ -77,15 +89,15 @@ export function AIGeneralTab({ data, updateField }) {
         </div>
 
         <ChannelPicker
-          value={data.alwaysRespondChannels || []}
-          onChange={(v) => updateField('alwaysRespondChannels', v)}
+          value={alwaysChannels}
+          onChange={(v) => updateField('always_respond_channels', v)}
           multiple
           types={[0]}
           placeholder="اختر قنوات الرد الدائم..."
         />
       </Card>
 
-      <Card className={cn('p-5 transition-opacity', !data.enabled && 'opacity-50 pointer-events-none')}>
+      <Card className={cn('p-5 transition-opacity', !enabled && 'opacity-50 pointer-events-none')}>
         <div className="mb-4">
           <h3 className="font-bold mb-1">القنوات المسموحة</h3>
           <p className="text-sm text-muted-foreground">
@@ -94,8 +106,8 @@ export function AIGeneralTab({ data, updateField }) {
         </div>
 
         <ChannelPicker
-          value={data.allowedChannels || []}
-          onChange={(v) => updateField('allowedChannels', v)}
+          value={allowedChannels}
+          onChange={(v) => updateField('allowed_channels', v)}
           multiple
           types={[0]}
           placeholder="اختر القنوات المسموحة..."

@@ -1,19 +1,73 @@
-import { Activity, Zap, Sparkles, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Activity, Zap, TrendingUp, Sparkles } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import { Card } from '@/components/ui/Card';
-import { Switch } from '@/components/ui/Switch';
 import { Badge } from '@/components/ui/Badge';
-import { Separator } from '@/components/ui/Separator';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { StatCard, StatCardGrid } from '@/components/shared/StatCard';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { useGuildStore } from '@/store/guildStore';
+import { apiClient } from '@/api/client';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
-/**
- * AIUsageTab — Tab الاستخدام والإحصائيات
- */
-export function AIUsageTab({ data }) {
-  const usagePercent = Math.round((data.usageToday / data.usageLimit) * 100);
-  const remaining = data.usageLimit - data.usageToday;
+function formatDate(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ar', { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
 
-  // ألوان حسب نسبة الاستخدام
+export function AIUsageTab() {
+  const { selectedGuildId } = useGuildStore();
+  const [usage, setUsage] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!selectedGuildId) return;
+    setUsage(null);
+    apiClient
+      .get(`/api/guild/${selectedGuildId}/ai/usage`)
+      .then((res) => {
+        if (!mounted) return;
+        setUsage(res);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setUsage({ today: { count: 0, limit: 0, remaining: 0, percentage: 0, tokens: 0 }, weekly: [], topUsers: [] });
+        if (err?.code !== 'PLAN_REQUIRED') {
+          toast.error(err?.message || 'فشل تحميل الاستخدام');
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [selectedGuildId]);
+
+  if (!usage) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-24 rounded-2xl" />
+        <Skeleton className="h-32 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+    );
+  }
+
+  const { today, weekly, topUsers } = usage;
+  const usagePercent = today.percentage || 0;
+
   const getUsageColor = () => {
     if (usagePercent >= 90) return 'text-destructive';
     if (usagePercent >= 70) return 'text-amber-500';
@@ -26,25 +80,29 @@ export function AIUsageTab({ data }) {
     return 'from-emerald-500 to-cyan-500';
   };
 
+  const chartData = (weekly || []).map((d) => ({
+    date: formatDate(d.date),
+    رسائل: d.count || 0,
+  }));
+
   return (
     <div className="space-y-4">
-      {/* ── Usage Stats Grid ── */}
       <StatCardGrid cols={3}>
         <StatCard
           icon={<Activity />}
           label="الاستخدام اليوم"
-          value={data.usageToday}
+          value={today.count}
           format="number"
           gradient="from-violet-500 to-pink-500"
-          hint={`من أصل ${data.usageLimit} رسالة`}
+          hint={`من أصل ${today.limit} رسالة`}
         />
         <StatCard
           icon={<Zap />}
           label="المتبقي اليوم"
-          value={remaining}
+          value={today.remaining}
           format="number"
           gradient="from-emerald-500 to-cyan-500"
-          hint="يصفر الساعة 12 منتصف الليل"
+          hint="يصفر بعد منتصف الليل"
         />
         <StatCard
           icon={<TrendingUp />}
@@ -55,115 +113,105 @@ export function AIUsageTab({ data }) {
         />
       </StatCardGrid>
 
-      {/* ── Usage Progress ── */}
       <Card className="p-5">
         <div className="flex items-center justify-between gap-4 mb-3">
           <div>
             <h3 className="font-bold">استخدام اليوم</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              <span className={cn('num font-bold', getUsageColor())}>
-                {data.usageToday}
-              </span>{' '}
+              <span className={cn('num font-bold', getUsageColor())}>{today.count}</span>{' '}
               <span className="text-muted-foreground">/</span>{' '}
-              <span className="num">{data.usageLimit}</span> رسالة
+              <span className="num">{today.limit}</span> رسالة
             </p>
           </div>
-          <Badge variant={usagePercent >= 90 ? 'danger' : usagePercent >= 70 ? 'warning' : 'success'}>
+          <Badge variant={usagePercent >= 90 ? 'destructive' : usagePercent >= 70 ? 'secondary' : 'default'}>
             {usagePercent}%
           </Badge>
         </div>
 
-        {/* Progress Bar */}
-        <div className="h-3 rounded-full bg-secondary overflow-hidden">
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div
-            className={cn(
-              'h-full rounded-full bg-gradient-to-l transition-all duration-700',
-              getProgressGradient(),
-            )}
+            className={cn('h-full bg-gradient-to-r rounded-full transition-all', getProgressGradient())}
             style={{ width: `${Math.min(usagePercent, 100)}%` }}
           />
         </div>
 
-        {usagePercent >= 90 && (
-          <p className="text-xs text-destructive mt-3 flex items-center gap-1.5">
-            ⚠️ اقتربت من الحد اليومي — راح يصفر الساعة 12 منتصف الليل
+        {today.tokens > 0 && (
+          <p className="text-xs text-muted-foreground mt-3">
+            استهلكت <span className="num font-semibold">{today.tokens.toLocaleString('ar')}</span> توكن اليوم
           </p>
         )}
       </Card>
 
-      {/* ── Creative Model Card ── */}
       <Card className="p-5">
-        <div className="flex items-start gap-3 mb-4">
-          <div
-            className={cn(
-              'w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0',
-              data.creativeModelEnabled
-                ? 'lyn-gradient lyn-glow'
-                : 'bg-muted',
-            )}
-          >
-            <Sparkles
-              className={cn(
-                'w-5 h-5',
-                data.creativeModelEnabled ? 'text-white' : 'text-muted-foreground',
-              )}
-            />
-          </div>
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="w-5 h-5 text-violet-500" />
+          <h3 className="font-bold">آخر 7 أيام</h3>
+        </div>
 
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-bold">النموذج الإبداعي</h3>
-              <Badge variant="diamond" size="sm">
-                💎 Diamond
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              نموذج GPT-4o للردود الإبداعية والأكثر ذكاءً
-            </p>
-          </div>
-
-          <Switch
-            checked={data.creativeModelEnabled}
-            disabled
-            size="default"
+        {chartData.length === 0 ? (
+          <EmptyState
+            icon={<Activity />}
+            title="ما في استخدام بعد"
+            description="عند استخدام AI تظهر الإحصائيات هنا"
           />
-        </div>
-
-        <Separator className="my-4" />
-
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-            <span className="text-muted-foreground">ردود أكثر ذكاءً وإبداعاً</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-            <span className="text-muted-foreground">فهم أعمق للسياق</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-            <span className="text-muted-foreground">يحتاج خطة Diamond للتفعيل</span>
-          </div>
-        </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--popover))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '0.75rem',
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="رسائل"
+                stroke="#a855f7"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </Card>
 
-      {/* ── Top Users (placeholder) ── */}
-      <Card className="p-5">
-        <div className="mb-3">
-          <h3 className="font-bold">أكثر الأعضاء استخداماً</h3>
-          <p className="text-sm text-muted-foreground">
-            قريباً — ترتيب الأعضاء حسب استخدام AI
-          </p>
-        </div>
-
-        <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
-          <Activity className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm font-medium mb-1">قيد البناء</p>
-          <p className="text-xs text-muted-foreground">
-            هذي الإحصائية راح تتفعل بعد ربط APIs الباك اند
-          </p>
-        </div>
-      </Card>
+      {topUsers && topUsers.length > 0 && (
+        <Card className="p-5">
+          <h3 className="font-bold mb-3">أكثر المستخدمين اليوم</h3>
+          <div className="space-y-2">
+            {topUsers.map((u, i) => {
+              const max = topUsers[0]?.count || 1;
+              const pct = (u.count / max) * 100;
+              return (
+                <div key={u.user_id} className="flex items-center gap-3">
+                  <div className="w-6 text-center text-xs text-muted-foreground num">#{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-mono text-muted-foreground ltr">
+                        {u.user_id.slice(-6)}
+                      </span>
+                      <span className="text-xs text-muted-foreground num">
+                        {u.count} رسالة
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full lyn-gradient rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

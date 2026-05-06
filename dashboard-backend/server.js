@@ -26,6 +26,7 @@ const settingsRoutes = require("./routes/settings")
 const subscriptionRoutes = require("./routes/subscription")
 const commandsRoutes = require("./routes/commands")
 const statsRoutes = require("./routes/stats")
+const aiRoutes = require("./routes/ai")
 
 // ── Services / Utils (with stoppable intervals) ──
 const guildPlanService = require("./services/guildPlan")
@@ -152,6 +153,7 @@ app.use("/api/guild/:guildId", guildRoutes)
 app.use("/api/guild/:guildId", settingsRoutes)
 app.use("/api/guild/:guildId", commandsRoutes)
 app.use("/api/guild/:guildId", statsRoutes)
+app.use("/api/guild/:guildId", aiRoutes)
 
 // ════════════════════════════════════════════════════════════
 //  ERROR HANDLERS (must be last)

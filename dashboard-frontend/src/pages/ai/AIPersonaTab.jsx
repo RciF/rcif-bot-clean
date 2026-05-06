@@ -1,6 +1,5 @@
 import { Heart, Briefcase, Smile, GraduationCap, Wand2, Check } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
 
 const PERSONAS = [
@@ -38,15 +37,13 @@ const PERSONAS = [
   },
 ];
 
-/**
- * AIPersonaTab — اختيار شخصية AI
- */
 export function AIPersonaTab({ data, updateField }) {
-  const isCustom = data.persona === 'custom';
+  const persona = data.persona ?? 'friendly';
+  const customPrompt = data.custom_prompt ?? data.customPrompt ?? '';
+  const isCustom = persona === 'custom';
 
   return (
     <div className="space-y-4">
-      {/* ── Persona Cards ── */}
       <div>
         <div className="mb-4">
           <h3 className="font-bold mb-1">اختر شخصية AI</h3>
@@ -56,87 +53,61 @@ export function AIPersonaTab({ data, updateField }) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {PERSONAS.map((persona) => {
-            const Icon = persona.icon;
-            const isSelected = data.persona === persona.id;
-
+          {PERSONAS.map((p) => {
+            const Icon = p.icon;
+            const isSelected = persona === p.id;
             return (
               <button
-                key={persona.id}
-                onClick={() => updateField('persona', persona.id)}
+                key={p.id}
+                onClick={() => updateField('persona', p.id)}
                 className={cn(
-                  'group text-start p-4 rounded-2xl border-2 transition-all',
-                  'hover:border-primary/50',
-                  isSelected
-                    ? 'border-primary bg-primary/5 shadow-sm'
-                    : 'border-border bg-card',
+                  'group text-start p-4 rounded-2xl border-2 transition-all hover:border-primary/50',
+                  isSelected ? 'border-primary bg-primary/5' : 'border-border bg-card',
                 )}
               >
-                <div className="flex items-start gap-3 mb-3">
-                  <div
-                    className={cn(
-                      'w-11 h-11 rounded-xl bg-gradient-to-br flex items-center justify-center flex-shrink-0',
-                      persona.color,
-                    )}
-                  >
+                <div className="flex items-start gap-3 mb-2">
+                  <div className={cn(
+                    'w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center flex-shrink-0',
+                    p.color,
+                  )}>
                     <Icon className="w-5 h-5 text-white" />
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-base">{persona.name}</h4>
-                      {isSelected && (
-                        <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                          <Check className="w-3 h-3" />
-                        </div>
-                      )}
+                      <h4 className="font-bold">{p.name}</h4>
+                      {isSelected && <Check className="w-4 h-4 text-primary" />}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {persona.description}
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      {p.description}
                     </p>
                   </div>
                 </div>
-
-                {/* Sample */}
-                <div
-                  className={cn(
-                    'rounded-lg px-3 py-2 text-xs',
-                    isSelected
-                      ? 'bg-primary/10 text-foreground'
-                      : 'bg-muted/50 text-muted-foreground',
-                  )}
-                >
-                  💬 {persona.sample}
+                <div className="text-xs italic text-muted-foreground bg-muted/40 rounded-lg p-2 border border-border">
+                  &ldquo;{p.sample}&rdquo;
                 </div>
               </button>
             );
           })}
 
-          {/* Custom Persona Card */}
+          {/* Custom */}
           <button
             onClick={() => updateField('persona', 'custom')}
             className={cn(
-              'sm:col-span-2 group text-start p-4 rounded-2xl border-2 transition-all',
-              'hover:border-primary/50',
-              isCustom ? 'border-primary bg-primary/5' : 'border-dashed border-border bg-card',
+              'text-start p-4 rounded-2xl border-2 transition-all hover:border-primary/50 sm:col-span-2',
+              isCustom ? 'border-primary bg-primary/5' : 'border-border bg-card',
             )}
           >
             <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0 lyn-glow">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center flex-shrink-0">
                 <Wand2 className="w-5 h-5 text-white" />
               </div>
-
-              <div className="flex-1 min-w-0">
+              <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-base">شخصية مخصصة</h4>
-                  {isCustom && (
-                    <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                      <Check className="w-3 h-3" />
-                    </div>
-                  )}
+                  <h4 className="font-bold">شخصية مخصصة</h4>
+                  {isCustom && <Check className="w-4 h-4 text-primary" />}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  اكتب شخصية AI بنفسك — تحكم كامل في الأسلوب والنبرة
+                  اكتب وصف شخصية AI بنفسك
                 </p>
               </div>
             </div>
@@ -144,20 +115,16 @@ export function AIPersonaTab({ data, updateField }) {
         </div>
       </div>
 
-      {/* ── Custom Prompt Editor ── */}
       {isCustom && (
-        <Card className="p-5 animate-lyn-fade-up">
-          <div className="mb-3">
-            <h3 className="font-bold mb-1">نص الشخصية المخصصة</h3>
-            <p className="text-sm text-muted-foreground">
-              اكتب نصاً يصف شخصية AI — مثلاً: "أنت مساعد ودود متخصص في الجيمنج..."
-            </p>
-          </div>
-
+        <Card className="p-5">
+          <label className="font-bold block mb-2">وصف الشخصية المخصصة</label>
+          <p className="text-xs text-muted-foreground mb-3">
+            اكتب كيف تريد AI أن يتصرف، نبرة الردود، الأسلوب، إلخ
+          </p>
           <textarea
-            value={data.customPrompt || ''}
-            onChange={(e) => updateField('customPrompt', e.target.value)}
-            placeholder="مثال: أنت Lyn، مساعد دافئ ومرح يحب المساعدة. تستخدم لغة بسيطة وودودة..."
+            value={customPrompt}
+            onChange={(e) => updateField('custom_prompt', e.target.value)}
+            placeholder="مثال: أنت Lyn — مساعد ودود لسيرفرات الجيمنج. تستخدم لغة بسيطة وودودة..."
             rows={6}
             className={cn(
               'w-full rounded-xl border border-border bg-background px-4 py-3 text-sm',
@@ -167,13 +134,12 @@ export function AIPersonaTab({ data, updateField }) {
             )}
             maxLength={2000}
           />
-
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-muted-foreground">
               💡 كلما كان الوصف أوضح، كانت ردود AI أدق
             </p>
             <span className="text-xs text-muted-foreground num">
-              {data.customPrompt?.length || 0} / 2000
+              {customPrompt?.length || 0} / 2000
             </span>
           </div>
         </Card>
