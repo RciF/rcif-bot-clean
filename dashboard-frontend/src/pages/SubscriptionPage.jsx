@@ -1,336 +1,249 @@
-import { useEffect, useState } from 'react';
-import {
-  CreditCard,
-  Calendar,
-  Check,
-  X,
-  Receipt,
-  Sparkles,
-  Crown,
-  Diamond,
-  Medal,
-} from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { Switch } from '@/components/ui/Switch';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
-import { mock } from '@/lib/mock';
-import { PLANS, PLAN_TIERS, PLAN_ORDER } from '@/lib/plans';
-import { formatDate, formatRelativeTime, cn } from '@/lib/utils';
-import { toast } from 'sonner';
+/**
+ * ═══════════════════════════════════════════════════════════
+ *  Subscription Routes
+ *  /api/subscription/*  /api/payment-requests
+ * ═══════════════════════════════════════════════════════════
+ */
 
-const PLAN_ICONS = {
-  free: Sparkles,
-  silver: Medal,
-  gold: Crown,
-  diamond: Diamond,
-};
+const express = require("express")
+const { asyncHandler, ApiError } = require("../middleware/error")
+const { requireAuth, requireOwner } = require("../middleware/auth")
+const { query } = require("../config/database")
+const { invalidateGuildPlan } = require("../services/guildPlan")
 
-export default function SubscriptionPage() {
-  const [data, setData] = useState(null);
-  const [showRequestDialog, setShowRequestDialog] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState(null);
-  const [transactionId, setTransactionId] = useState('');
+const router = express.Router()
 
-  useEffect(() => {
-    mock.subscriptionInfo().then(setData);
-  }, []);
+// ════════════════════════════════════════════════════════════
+//  GET /api/subscription/:userId
+// ════════════════════════════════════════════════════════════
 
-  const handleSubmitRequest = () => {
-    if (!transactionId.trim()) return;
-    toast.success(`تم إرسال طلب الاشتراك في ${PLANS[selectedPlan].name}`);
-    setTransactionId('');
-    setShowRequestDialog(false);
-    setSelectedPlan(null);
-  };
+router.get(
+  "/subscription/:userId",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (req.user.id !== req.params.userId && req.user.id !== process.env.OWNER_ID) {
+      throw new ApiError("غير مصرح", 403)
+    }
 
-  const handleToggleAutoRenew = (value) => {
-    setData((prev) => ({ ...prev, autoRenew: value }));
-    toast.success(value ? 'تم تفعيل التجديد التلقائي' : 'تم إيقاف التجديد التلقائي');
-  };
+    const r = await query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+      [req.params.userId],
+    )
 
-  if (!data) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-32 rounded-2xl" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-80 rounded-2xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+    if (!r.rows.length) {
+      return res.json({
+        user_id: req.params.userId,
+        plan_id: "free",
+        status: "inactive",
+        expires_at: null,
+      })
+    }
 
-  const currentPlan = PLANS[data.currentPlan];
-  const Icon = PLAN_ICONS[data.currentPlan];
+    const sub = r.rows[0]
 
-  return (
-    <>
-      <SettingsPageHeader
-        icon={<CreditCard />}
-        title="الاشتراك"
-        description="إدارة خطتك ومدفوعاتك"
-      />
+    // فحص انتهاء الاشتراك
+    if (sub.expires_at && new Date(sub.expires_at) < new Date()) {
+      await query(
+        `UPDATE subscriptions SET status = 'expired', updated_at = NOW() WHERE user_id = $1`,
+        [req.params.userId],
+      )
+      sub.status = "expired"
+    }
 
-      {/* Current Plan Card */}
-      <Card className="p-6 mb-4 lyn-gradient-soft border-border">
-        <div className="flex items-start gap-5 flex-wrap">
-          <div className="w-16 h-16 rounded-2xl lyn-gradient flex items-center justify-center flex-shrink-0 lyn-glow">
-            <Icon className="w-8 h-8 text-white" />
-          </div>
+    res.json(sub)
+  }),
+)
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h2 className="text-2xl font-bold">
-                خطة {currentPlan.name} {currentPlan.icon}
-              </h2>
-              <Badge variant={currentPlan.color}>الحالية</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">
-              {currentPlan.description}
-            </p>
+// ════════════════════════════════════════════════════════════
+//  ✅ NEW: GET /api/payment-requests/me
+//  جلب طلبات المستخدم الحالية (سجل المدفوعات)
+// ════════════════════════════════════════════════════════════
 
-            <div className="flex items-center gap-4 flex-wrap text-sm">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <span className="text-muted-foreground">ينتهي:</span>
-                <span className="font-bold">{formatDate(data.expiresAt)}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground">المتبقي:</span>
-                <Badge
-                  variant={data.daysRemaining <= 7 ? 'warning' : 'success'}
-                  size="default"
-                >
-                  <span className="num">{data.daysRemaining}</span> يوم
-                </Badge>
-              </div>
-            </div>
-          </div>
+router.get(
+  "/payment-requests/me",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const r = await query(
+      `SELECT id, plan_id, ref_number, status, notes, created_at, reviewed_at
+       FROM payment_requests
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [req.user.id],
+    )
+    res.json(r.rows)
+  }),
+)
 
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-card/60 backdrop-blur">
-            <div>
-              <div className="text-sm font-medium">التجديد التلقائي</div>
-              <div className="text-xs text-muted-foreground">
-                {data.autoRenew ? 'مفعّل' : 'معطّل'}
-              </div>
-            </div>
-            <Switch
-              checked={data.autoRenew}
-              onCheckedChange={handleToggleAutoRenew}
-            />
-          </div>
-        </div>
-      </Card>
+// ════════════════════════════════════════════════════════════
+//  POST /api/payment-requests
+//  المستخدم يطلب اشتراك جديد
+// ════════════════════════════════════════════════════════════
 
-      {/* Plans Comparison */}
-      <h2 className="text-lg font-bold mb-3">قارن الخطط</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {PLAN_ORDER.map((planId) => {
-          const plan = PLANS[planId];
-          const PlanIcon = PLAN_ICONS[planId];
-          const isCurrent = planId === data.currentPlan;
-          const isPaid = plan.price > 0;
+router.post(
+  "/payment-requests",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { plan_id, ref_number } = req.body
 
-          return (
-            <Card
-              key={planId}
-              className={cn(
-                'p-5 relative transition-all',
-                isCurrent && 'ring-2 ring-primary shadow-lg',
-                !isCurrent && 'hover:border-border/80',
-              )}
-            >
-              {plan.badge && (
-                <div className="absolute -top-2 inset-x-0 flex justify-center">
-                  <Badge variant="lyn" size="sm">
-                    {plan.badge}
-                  </Badge>
-                </div>
-              )}
+    if (!plan_id || !ref_number) {
+      throw new ApiError("plan_id و ref_number مطلوبين", 400)
+    }
 
-              <div className="flex items-center gap-3 mb-3">
-                <div
-                  className={cn(
-                    'w-10 h-10 rounded-xl flex items-center justify-center',
-                    isCurrent ? 'lyn-gradient' : 'bg-muted',
-                  )}
-                >
-                  <PlanIcon
-                    className={cn('w-5 h-5', isCurrent ? 'text-white' : 'text-muted-foreground')}
-                  />
-                </div>
-                <div>
-                  <div className="font-bold">{plan.name}</div>
-                  <div className="text-xs text-muted-foreground">{plan.nameEn}</div>
-                </div>
-              </div>
+    if (!["silver", "gold", "diamond"].includes(plan_id)) {
+      throw new ApiError("الخطة غير صالحة", 400)
+    }
 
-              <div className="mb-4">
-                <div className="text-2xl font-bold lyn-text-gradient num">
-                  {plan.priceLabel}
-                </div>
-              </div>
+    // فحص لو فيه طلب pending
+    const existing = await query(
+      `SELECT id FROM payment_requests WHERE user_id = $1 AND status = 'pending' LIMIT 1`,
+      [req.user.id],
+    )
 
-              <div className="space-y-1.5 mb-4 min-h-[160px]">
-                {plan.features.slice(0, 6).map((feat, i) => (
-                  <div key={i} className="flex items-start gap-1.5 text-xs">
-                    <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-muted-foreground line-clamp-1">{feat}</span>
-                  </div>
-                ))}
-                {plan.features.length > 6 && (
-                  <div className="text-xs text-muted-foreground/60 ps-5">
-                    + {plan.features.length - 6} ميزة أخرى
-                  </div>
-                )}
-              </div>
+    if (existing.rows.length > 0) {
+      throw new ApiError("لديك طلب قيد المراجعة بالفعل", 400, "PENDING_EXISTS")
+    }
 
-              {isCurrent ? (
-                <Button variant="outline" className="w-full" disabled>
-                  خطتك الحالية
-                </Button>
-              ) : isPaid ? (
-                <Button
-                  className="w-full"
-                  variant={planId === 'diamond' ? 'default' : 'outline'}
-                  onClick={() => {
-                    setSelectedPlan(planId);
-                    setShowRequestDialog(true);
-                  }}
-                >
-                  اشترك
-                </Button>
-              ) : (
-                <Button variant="outline" className="w-full" disabled>
-                  مجاني
-                </Button>
-              )}
-            </Card>
-          );
-        })}
-      </div>
+    const r = await query(
+      `INSERT INTO payment_requests (user_id, plan_id, ref_number, status)
+       VALUES ($1, $2, $3, 'pending') RETURNING *`,
+      [req.user.id, plan_id, ref_number],
+    )
 
-      {/* Payment History */}
-      <Card className="p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Receipt className="w-5 h-5 text-primary" />
-          <h2 className="font-bold">سجل المدفوعات</h2>
-        </div>
+    res.json(r.rows[0])
+  }),
+)
 
-        {data.paymentHistory.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">
-            لا توجد مدفوعات سابقة
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {data.paymentHistory.map((payment) => {
-              const plan = PLANS[payment.plan];
-              return (
-                <div
-                  key={payment.id}
-                  className="flex items-center gap-3 p-3 rounded-xl border border-border"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center flex-shrink-0">
-                    <Check className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">
-                      {plan.name} {plan.icon}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      منذ {formatRelativeTime(payment.date)} • TX:{' '}
-                      <span className="ltr font-mono">{payment.txId}</span>
-                    </div>
-                  </div>
-                  <div className="text-end">
-                    <div className="font-bold num">
-                      {payment.amount > 0 ? `${payment.amount} ريال` : 'مجاناً'}
-                    </div>
-                    <Badge variant="success" size="sm">
-                      مكتمل
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+// ════════════════════════════════════════════════════════════
+//  GET /api/admin/payment-requests (Owner only)
+// ════════════════════════════════════════════════════════════
 
-      {/* Subscribe Dialog */}
-      <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
-        <DialogContent>
-          {selectedPlan && (
-            <>
-              <div className="flex justify-center -mt-4 mb-2">
-                <div className="w-16 h-16 rounded-2xl lyn-gradient flex items-center justify-center">
-                  <span className="text-3xl">{PLANS[selectedPlan].icon}</span>
-                </div>
-              </div>
-              <DialogHeader>
-                <DialogTitle className="text-center">
-                  الاشتراك في {PLANS[selectedPlan].name}
-                </DialogTitle>
-                <DialogDescription className="text-center">
-                  ادخل رقم العملية اللي حولت فيها{' '}
-                  <span className="font-bold text-foreground num">
-                    {PLANS[selectedPlan].priceLabel}
-                  </span>
-                </DialogDescription>
-              </DialogHeader>
+router.get(
+  "/admin/payment-requests",
+  requireAuth,
+  requireOwner,
+  asyncHandler(async (req, res) => {
+    const status = req.query.status || "pending"
+    const r = await query(
+      `SELECT * FROM payment_requests WHERE status = $1 ORDER BY created_at DESC`,
+      [status],
+    )
+    res.json(r.rows)
+  }),
+)
 
-              <div className="space-y-3">
-                <div className="bg-muted/40 rounded-xl p-3 text-sm">
-                  <div className="font-semibold mb-1">طرق الدفع المتاحة:</div>
-                  <ul className="text-xs text-muted-foreground space-y-1">
-                    <li>• تحويل بنكي</li>
-                    <li>• STC Pay</li>
-                    <li>• مدى</li>
-                  </ul>
-                </div>
+// ════════════════════════════════════════════════════════════
+//  POST /api/admin/payment-requests/:id/approve
+// ════════════════════════════════════════════════════════════
 
-                <Input
-                  value={transactionId}
-                  onChange={(e) => setTransactionId(e.target.value)}
-                  placeholder="رقم العملية..."
-                  className="num"
-                />
-              </div>
+router.post(
+  "/admin/payment-requests/:id/approve",
+  requireAuth,
+  requireOwner,
+  asyncHandler(async (req, res) => {
+    const { months = 1 } = req.body
 
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowRequestDialog(false)}
-                  className="flex-1"
-                >
-                  إلغاء
-                </Button>
-                <Button
-                  onClick={handleSubmitRequest}
-                  disabled={!transactionId.trim()}
-                  className="flex-1"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  إرسال الطلب
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
+    const reqRow = await query(`SELECT * FROM payment_requests WHERE id = $1`, [req.params.id])
+    if (!reqRow.rows.length) throw new ApiError("طلب غير موجود", 404)
+
+    const payment = reqRow.rows[0]
+    const expiresAt = new Date()
+    expiresAt.setMonth(expiresAt.getMonth() + months)
+
+    // تفعيل الاشتراك
+    await query(
+      `INSERT INTO subscriptions (user_id, plan_id, status, expires_at)
+       VALUES ($1, $2, 'active', $3)
+       ON CONFLICT (user_id) DO UPDATE SET
+         plan_id = $2, status = 'active', expires_at = $3, updated_at = NOW()`,
+      [payment.user_id, payment.plan_id, expiresAt],
+    )
+
+    // تحديث الطلب
+    await query(
+      `UPDATE payment_requests SET status = 'approved', reviewed_at = NOW() WHERE id = $1`,
+      [req.params.id],
+    )
+
+    res.json({ success: true })
+  }),
+)
+
+// ════════════════════════════════════════════════════════════
+//  POST /api/admin/payment-requests/:id/reject
+// ════════════════════════════════════════════════════════════
+
+router.post(
+  "/admin/payment-requests/:id/reject",
+  requireAuth,
+  requireOwner,
+  asyncHandler(async (req, res) => {
+    const { notes } = req.body
+    await query(
+      `UPDATE payment_requests SET status = 'rejected', notes = $1, reviewed_at = NOW() WHERE id = $2`,
+      [notes || null, req.params.id],
+    )
+    res.json({ success: true })
+  }),
+)
+
+// ════════════════════════════════════════════════════════════
+//  POST /api/guild/:guildId/link
+//  ربط الاشتراك بسيرفر
+// ════════════════════════════════════════════════════════════
+
+router.post(
+  "/guild/:guildId/link",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { guildId } = req.params
+
+    // فحص إن المستخدم عنده اشتراك نشط
+    const sub = await query(
+      `SELECT plan_id FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [req.user.id],
+    )
+
+    if (!sub.rows.length) {
+      throw new ApiError("ما عندك اشتراك نشط", 400, "NO_SUBSCRIPTION")
+    }
+
+    // فحص إن المستخدم ما عنده ربط آخر
+    const existing = await query(
+      `SELECT guild_id FROM guild_subscriptions WHERE owner_id = $1`,
+      [req.user.id],
+    )
+
+    if (existing.rows.length > 0 && existing.rows[0].guild_id !== guildId) {
+      throw new ApiError(
+        "اشتراكك مربوط بسيرفر آخر — فك الربط أولاً",
+        400,
+        "ALREADY_LINKED",
+      )
+    }
+
+    await query(
+      `INSERT INTO guild_subscriptions (guild_id, owner_id) VALUES ($1, $2)
+       ON CONFLICT (guild_id) DO UPDATE SET owner_id = $2`,
+      [guildId, req.user.id],
+    )
+
+    invalidateGuildPlan(guildId)
+    res.json({ success: true })
+  }),
+)
+
+router.delete(
+  "/guild/:guildId/link",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    await query(
+      `DELETE FROM guild_subscriptions WHERE guild_id = $1 AND owner_id = $2`,
+      [req.params.guildId, req.user.id],
+    )
+    invalidateGuildPlan(req.params.guildId)
+    res.json({ success: true })
+  }),
+)
+
+module.exports = router
