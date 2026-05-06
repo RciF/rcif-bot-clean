@@ -16,18 +16,17 @@ import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { useGuildSettings } from '@/hooks/useGuildSettings';
 import { usePlanGate } from '@/hooks/usePlanGate';
 import { PLAN_TIERS } from '@/lib/plans';
-import { intToHexColor, hexToIntColor, cn } from '@/lib/utils';
+import { intToHexColor, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { settingsApi } from '@/api';
 import { useGuildStore } from '@/store/guildStore';
 
+// المتغيرات الفعلية اللي بوت Lyn يدعمها (من events/logs/guildMemberAdd.js)
 const VARIABLES = [
-  { key: '{user}',     label: 'منشن العضو',        example: '@أحمد'         },
-  { key: '{username}', label: 'اسم العضو',          example: 'أحمد'          },
-  { key: '{server}',   label: 'اسم السيرفر',        example: 'سيرفر التطوير' },
-  { key: '{count}',    label: 'رقم العضو',          example: '1247'          },
-  { key: '{date}',     label: 'التاريخ',            example: '30/4/2026'     },
-  { key: '{duration}', label: 'مدة بقائه (للوداع)', example: '3 أشهر'        },
+  { key: '{user}',     label: 'منشن العضو',  example: '@أحمد'         },
+  { key: '{username}', label: 'اسم العضو',    example: 'أحمد'          },
+  { key: '{server}',   label: 'اسم السيرفر',  example: 'سيرفر التطوير' },
+  { key: '{count}',    label: 'رقم العضو',    example: '1247'          },
 ];
 
 const replacePreviewVars = (txt) => {
@@ -36,16 +35,14 @@ const replacePreviewVars = (txt) => {
     .replace(/{user}/g, '@أنت')
     .replace(/{username}/g, 'أنت')
     .replace(/{server}/g, 'سيرفر التطوير')
-    .replace(/{count}/g, '1,247')
-    .replace(/{date}/g, '30/4/2026')
-    .replace(/{duration}/g, '3 أشهر');
+    .replace(/{count}/g, '1,247');
 };
 
 export default function WelcomePage() {
   const [activeTab, setActiveTab] = useState('welcome');
   const { selectedGuildId } = useGuildStore();
 
-  const { data, setData, updateField, isLoading, isSaving, isDirty, save, reset } =
+  const { data, updateField, isLoading, isSaving, isDirty, save, reset } =
     useGuildSettings({ section: 'welcome' });
 
   const planGate = usePlanGate('welcome', PLAN_TIERS.SILVER);
@@ -68,24 +65,31 @@ export default function WelcomePage() {
     try {
       await settingsApi.testWelcome(selectedGuildId);
       toast.success('تم إرسال رسالة اختبار!');
-    } catch {
-      toast.error('فشل الاختبار');
+    } catch (err) {
+      if (err?.code === 'PLAN_REQUIRED') {
+        toast.error('تحتاج خطة Silver أو أعلى');
+      } else {
+        toast.error(err?.message || 'فشل الاختبار');
+      }
     }
   };
 
-  const embedPreviewData = data.type === 'embed' ? {
-    title: replacePreviewVars(data.embed?.title),
-    description: replacePreviewVars(data.embed?.description),
-    color: data.embed?.color ? intToHexColor(data.embed.color) : '#9b59b6',
-    footer: { text: replacePreviewVars(data.embed?.footer) },
-  } : null;
+  const embedPreviewData =
+    data.type === 'embed'
+      ? {
+          title: replacePreviewVars(data.embed?.title),
+          description: replacePreviewVars(data.embed?.description),
+          color: data.embed?.color ? intToHexColor(data.embed.color) : '#9b59b6',
+          footer: { text: replacePreviewVars(data.embed?.footer) },
+        }
+      : null;
 
   return (
     <>
       <SettingsPageHeader
         icon={<PartyPopper />}
         title="نظام الترحيب"
-        description="رسائل ترحيب وداع مخصصة للأعضاء"
+        description="رسائل ترحيب ووداع مخصصة للأعضاء"
         plan="silver"
       />
 
@@ -119,7 +123,9 @@ export default function WelcomePage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-bold">تفعيل الترحيب</h3>
-                    <p className="text-sm text-muted-foreground">إرسال رسالة عند انضمام أعضاء جدد</p>
+                    <p className="text-sm text-muted-foreground">
+                      إرسال رسالة عند انضمام أعضاء جدد
+                    </p>
                   </div>
                   <Switch
                     checked={data.enabled}
@@ -129,10 +135,17 @@ export default function WelcomePage() {
                 </div>
               </Card>
 
-              {/* Channel */}
-              <Card className={cn('p-5 space-y-4', !data.enabled && 'opacity-50 pointer-events-none')}>
+              {/* Channel + Type + Message */}
+              <Card
+                className={cn(
+                  'p-5 space-y-4',
+                  !data.enabled && 'opacity-50 pointer-events-none',
+                )}
+              >
                 <div>
-                  <label className="text-sm font-medium mb-2 block">قناة الترحيب</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    قناة الترحيب
+                  </label>
                   <ChannelPicker
                     value={data.welcome_channel_id}
                     onChange={(v) => updateField('welcome_channel_id', v)}
@@ -142,9 +155,27 @@ export default function WelcomePage() {
 
                 <Separator />
 
+                {/* Mention user */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-sm">منشن العضو</h4>
+                    <p className="text-xs text-muted-foreground">
+                      البوت يعمل ping للعضو الجديد فوق الرسالة
+                    </p>
+                  </div>
+                  <Switch
+                    checked={data.mention_user !== false}
+                    onCheckedChange={(v) => updateField('mention_user', v)}
+                  />
+                </div>
+
+                <Separator />
+
                 {/* Message Type */}
                 <div>
-                  <label className="text-sm font-medium mb-2 block">نوع الرسالة</label>
+                  <label className="text-sm font-medium mb-2 block">
+                    نوع الرسالة
+                  </label>
                   <div className="flex gap-2">
                     {['text', 'embed'].map((t) => (
                       <button
@@ -166,15 +197,27 @@ export default function WelcomePage() {
                 {/* Text message */}
                 {data.type === 'text' && (
                   <div>
-                    <label className="text-sm font-medium mb-2 block">رسالة الترحيب</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      رسالة الترحيب
+                    </label>
                     <textarea
                       rows={3}
                       value={data.welcome_message || ''}
-                      onChange={(e) => updateField('welcome_message', e.target.value)}
+                      onChange={(e) =>
+                        updateField('welcome_message', e.target.value)
+                      }
                       placeholder="أهلاً {user} في {server}! 🎉"
                       className="w-full rounded-xl bg-input border border-border px-3 py-2 text-sm focus:outline-none focus:border-primary/50 resize-none"
                     />
-                    <VariablesHelper variables={VARIABLES} onInsert={(k) => updateField('welcome_message', (data.welcome_message || '') + k)} />
+                    <VariablesHelper
+                      variables={VARIABLES}
+                      onInsert={(k) =>
+                        updateField(
+                          'welcome_message',
+                          (data.welcome_message || '') + k,
+                        )
+                      }
+                    />
                   </div>
                 )}
 
@@ -182,37 +225,62 @@ export default function WelcomePage() {
                 {data.type === 'embed' && (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm font-medium mb-1 block">العنوان</label>
+                      <label className="text-sm font-medium mb-1 block">
+                        العنوان
+                      </label>
                       <Input
                         value={data.embed?.title || ''}
-                        onChange={(e) => updateField('embed.title', e.target.value)}
+                        onChange={(e) =>
+                          updateField('embed.title', e.target.value)
+                        }
                         placeholder="مرحباً {user}! 👋"
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium mb-1 block">الوصف</label>
+                      <label className="text-sm font-medium mb-1 block">
+                        الوصف
+                      </label>
                       <textarea
                         rows={3}
                         value={data.embed?.description || ''}
-                        onChange={(e) => updateField('embed.description', e.target.value)}
+                        onChange={(e) =>
+                          updateField('embed.description', e.target.value)
+                        }
                         placeholder="أهلاً وسهلاً في {server}"
                         className="w-full rounded-xl bg-input border border-border px-3 py-2 text-sm focus:outline-none focus:border-primary/50 resize-none"
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium mb-1 block">الفوتر</label>
+                      <label className="text-sm font-medium mb-1 block">
+                        الفوتر
+                      </label>
                       <Input
                         value={data.embed?.footer || ''}
-                        onChange={(e) => updateField('embed.footer', e.target.value)}
+                        onChange={(e) =>
+                          updateField('embed.footer', e.target.value)
+                        }
                         placeholder="العضو رقم {count}"
                       />
                     </div>
-                    <VariablesHelper variables={VARIABLES} onInsert={(k) => updateField('embed.description', (data.embed?.description || '') + k)} />
+                    <VariablesHelper
+                      variables={VARIABLES}
+                      onInsert={(k) =>
+                        updateField(
+                          'embed.description',
+                          (data.embed?.description || '') + k,
+                        )
+                      }
+                    />
                   </div>
                 )}
 
                 {/* Test Button */}
-                <Button variant="outline" onClick={handleTest} className="w-full gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleTest}
+                  className="w-full gap-2"
+                  disabled={!data.enabled}
+                >
                   <Send className="w-4 h-4" />
                   اختبر الرسالة
                 </Button>
@@ -225,8 +293,12 @@ export default function WelcomePage() {
                 <EmbedPreview embed={embedPreviewData} />
               ) : (
                 <Card className="p-5">
-                  <div className="p-4 rounded-xl bg-muted/30 text-sm">
-                    {replacePreviewVars(data.welcome_message) || 'رسالة الترحيب ستظهر هنا...'}
+                  <div className="text-xs text-muted-foreground mb-2">
+                    معاينة
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/30 text-sm whitespace-pre-wrap">
+                    {replacePreviewVars(data.welcome_message) ||
+                      'رسالة الترحيب ستظهر هنا...'}
                   </div>
                 </Card>
               )}
@@ -240,7 +312,9 @@ export default function WelcomePage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-bold">رسالة الوداع</h3>
-                <p className="text-sm text-muted-foreground">تُرسل عند مغادرة أعضاء</p>
+                <p className="text-sm text-muted-foreground">
+                  تُرسل عند مغادرة أعضاء
+                </p>
               </div>
               <Switch
                 checked={data.leave_enabled}
@@ -250,8 +324,14 @@ export default function WelcomePage() {
 
             <Separator />
 
-            <div className={cn(!data.leave_enabled && 'opacity-50 pointer-events-none')}>
-              <label className="text-sm font-medium mb-2 block">قناة الوداع</label>
+            <div
+              className={cn(
+                !data.leave_enabled && 'opacity-50 pointer-events-none',
+              )}
+            >
+              <label className="text-sm font-medium mb-2 block">
+                قناة الوداع
+              </label>
               <ChannelPicker
                 value={data.goodbye_channel_id}
                 onChange={(v) => updateField('goodbye_channel_id', v)}
@@ -259,22 +339,41 @@ export default function WelcomePage() {
               />
             </div>
 
-            <div className={cn(!data.leave_enabled && 'opacity-50 pointer-events-none')}>
-              <label className="text-sm font-medium mb-2 block">رسالة الوداع</label>
+            <div
+              className={cn(
+                !data.leave_enabled && 'opacity-50 pointer-events-none',
+              )}
+            >
+              <label className="text-sm font-medium mb-2 block">
+                رسالة الوداع
+              </label>
               <textarea
                 rows={3}
                 value={data.goodbye_message || ''}
                 onChange={(e) => updateField('goodbye_message', e.target.value)}
-                placeholder="👋 وداعاً {username}، كنت معنا {duration}"
+                placeholder="👋 وداعاً {username}، نشتاقك"
                 className="w-full rounded-xl bg-input border border-border px-3 py-2 text-sm focus:outline-none focus:border-primary/50 resize-none"
               />
-              <VariablesHelper variables={VARIABLES} onInsert={(k) => updateField('goodbye_message', (data.goodbye_message || '') + k)} />
+              <VariablesHelper
+                variables={VARIABLES}
+                onInsert={(k) =>
+                  updateField(
+                    'goodbye_message',
+                    (data.goodbye_message || '') + k,
+                  )
+                }
+              />
             </div>
           </Card>
         </TabsContent>
       </Tabs>
 
-      <SaveBar isDirty={isDirty} isSaving={isSaving} onSave={handleSave} onReset={reset} />
+      <SaveBar
+        isDirty={isDirty}
+        isSaving={isSaving}
+        onSave={handleSave}
+        onReset={reset}
+      />
 
       <PlanLockModal {...planGate.lockModalProps} featureName="نظام الترحيب" />
     </>
