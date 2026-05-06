@@ -11,7 +11,7 @@ import {
   Wand2,
   Palette,
   Send,
-  ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -42,7 +42,9 @@ import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { RolePicker } from '@/components/shared/RolePicker';
 import { EmojiPicker } from '@/components/shared/EmojiPicker';
 import { usePlanGate } from '@/hooks/usePlanGate';
-import { mock } from '@/lib/mock';
+import { useGuildResources } from '@/hooks/useGuildResources';
+import { useGuildStore } from '@/store/guildStore';
+import { settingsApi } from '@/api';
 import { PLAN_TIERS } from '@/lib/plans';
 import { formatRelativeTime, intToHexColor, hexToIntColor, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -64,46 +66,120 @@ const BUTTON_STYLES = [
 const NEW_PANEL_DEFAULT = {
   title: 'لوحة جديدة',
   description: 'اضغط على الأزرار للحصول على الرتب',
-  channelId: null,
+  channel_id: null,
   color: 0x9b59b6,
   exclusive: false,
   buttons: [],
 };
 
+/**
+ * تطبيع الـ panel من الباك اند:
+ *   - buttons يجي JSONB string أحياناً → نحوله array
+ */
+function normalizePanel(p) {
+  let buttons = p.buttons;
+  if (typeof buttons === 'string') {
+    try { buttons = JSON.parse(buttons); } catch { buttons = []; }
+  }
+  if (!Array.isArray(buttons)) buttons = [];
+  return {
+    ...p,
+    buttons,
+  };
+}
+
 export default function ReactionRolesPage() {
+  const { selectedGuildId } = useGuildStore();
   const [panels, setPanels] = useState(null);
   const [editingPanel, setEditingPanel] = useState(null);
   const [previewPanel, setPreviewPanel] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [actioning, setActioning] = useState(false);
 
   const planGate = usePlanGate('reactionRoles', PLAN_TIERS.SILVER);
+  const { channels } = useGuildResources({ types: ['channels'] });
 
-  useEffect(() => {
-    mock.rolePanels().then(setPanels);
-  }, []);
-
-  const handleDelete = () => {
-    setPanels((prev) => prev.filter((p) => p.id !== confirmDelete.id));
-    setConfirmDelete(null);
-    toast.success('تم حذف اللوحة');
+  // ─── Channel name lookup ───
+  const getChannelName = (channelId) => {
+    const ch = channels?.find((c) => c.id === channelId);
+    return ch ? `#${ch.name}` : 'قناة محذوفة';
   };
 
-  const handleSavePanel = (panel) => {
-    if (panel.id) {
-      setPanels((prev) => prev.map((p) => (p.id === panel.id ? panel : p)));
-      toast.success('تم حفظ التعديلات');
-    } else {
-      const newPanel = {
-        ...panel,
-        id: `panel-${Date.now()}`,
-        messageId: `msg-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        channelName: 'جديد',
-      };
-      setPanels((prev) => [...prev, newPanel]);
-      toast.success('تم إنشاء اللوحة');
+  // ─── Load panels ───
+  useEffect(() => {
+    let mounted = true;
+    if (!selectedGuildId) {
+      setPanels([]);
+      return;
     }
-    setEditingPanel(null);
+    setPanels(null);
+    settingsApi
+      .getRolePanels(selectedGuildId)
+      .then((rows) => {
+        if (!mounted) return;
+        const list = (Array.isArray(rows) ? rows : []).map(normalizePanel);
+        setPanels(list);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setPanels([]);
+        toast.error(err.message || 'فشل تحميل اللوحات');
+      });
+    return () => { mounted = false; };
+  }, [selectedGuildId]);
+
+  // ─── Delete ───
+  const handleDelete = async () => {
+    if (!confirmDelete || !selectedGuildId) return;
+    setActioning(true);
+    try {
+      await settingsApi.deleteRolePanel(selectedGuildId, confirmDelete.id);
+      setPanels((prev) => prev.filter((p) => p.id !== confirmDelete.id));
+      setConfirmDelete(null);
+      toast.success('تم حذف اللوحة');
+    } catch (err) {
+      toast.error(err.message || 'فشل الحذف');
+    } finally {
+      setActioning(false);
+    }
+  };
+
+  // ─── Save (create or update) ───
+  const handleSavePanel = async (panel) => {
+    if (!selectedGuildId) return;
+    setActioning(true);
+    const payload = {
+      title: panel.title,
+      description: panel.description,
+      channel_id: panel.channel_id,
+      color: panel.color,
+      exclusive: !!panel.exclusive,
+      buttons: panel.buttons,
+    };
+    try {
+      if (panel.id) {
+        // Update
+        await settingsApi.updateRolePanel(selectedGuildId, panel.id, payload);
+        setPanels((prev) =>
+          prev.map((p) => (p.id === panel.id ? { ...p, ...payload } : p)),
+        );
+        toast.success('تم حفظ التعديلات');
+      } else {
+        // Create
+        const created = await settingsApi.createRolePanel(selectedGuildId, payload);
+        setPanels((prev) => [...(prev || []), normalizePanel(created)]);
+        toast.success('تم إنشاء اللوحة');
+      }
+      setEditingPanel(null);
+    } catch (err) {
+      if (err.code === 'PLAN_REQUIRED') {
+        toast.error('تحتاج خطة Silver أو أعلى');
+      } else {
+        toast.error(err.message || 'فشل الحفظ');
+      }
+    } finally {
+      setActioning(false);
+    }
   };
 
   return (
@@ -114,7 +190,9 @@ export default function ReactionRolesPage() {
         description="لوحات تفاعلية للأعضاء لاختيار رتبهم"
         plan="silver"
         actions={
-          <Button onClick={planGate.gateAction(() => setEditingPanel({ ...NEW_PANEL_DEFAULT }))}>
+          <Button
+            onClick={planGate.gateAction(() => setEditingPanel({ ...NEW_PANEL_DEFAULT }))}
+          >
             <Plus className="w-4 h-4" />
             لوحة جديدة
           </Button>
@@ -130,7 +208,7 @@ export default function ReactionRolesPage() {
         />
       )}
 
-      {!panels ? (
+      {panels === null ? (
         <div className="space-y-3">
           {Array.from({ length: 2 }).map((_, i) => (
             <Skeleton key={i} className="h-32 rounded-2xl" />
@@ -143,7 +221,9 @@ export default function ReactionRolesPage() {
             title="لا توجد لوحات بعد"
             description="ابدأ بإنشاء لوحة رتب جديدة عشان الأعضاء يقدرون يختارون رتبهم"
             action={
-              <Button onClick={planGate.gateAction(() => setEditingPanel({ ...NEW_PANEL_DEFAULT }))}>
+              <Button
+                onClick={planGate.gateAction(() => setEditingPanel({ ...NEW_PANEL_DEFAULT }))}
+              >
                 <Plus className="w-4 h-4" />
                 إنشاء أول لوحة
               </Button>
@@ -153,11 +233,17 @@ export default function ReactionRolesPage() {
       ) : (
         <div className="space-y-3">
           {panels.map((panel) => (
-            <Card key={panel.id} className="p-5 hover:border-border/80 transition-colors">
+            <Card
+              key={panel.id}
+              className="p-5 hover:border-border/80 transition-colors"
+            >
               <div className="flex items-start gap-4">
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: intToHexColor(panel.color) + '20', color: intToHexColor(panel.color) }}
+                  style={{
+                    background: intToHexColor(panel.color || 0x9b59b6) + '20',
+                    color: intToHexColor(panel.color || 0x9b59b6),
+                  }}
                 >
                   <ToggleRight className="w-6 h-6" />
                 </div>
@@ -167,42 +253,70 @@ export default function ReactionRolesPage() {
                     <h3 className="font-bold">{panel.title}</h3>
                     <Badge variant="default" size="sm">
                       <Users className="w-3 h-3" />
-                      <span className="num">{panel.buttons.length}</span> رتب
+                      <span className="num">{panel.buttons?.length || 0}</span> رتب
                     </Badge>
-                    {panel.exclusive && <Badge variant="warning" size="sm">حصري</Badge>}
+                    {panel.exclusive && (
+                      <Badge variant="warning" size="sm">حصري</Badge>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-1 mb-2">{panel.description}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
+                    {panel.description}
+                  </p>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                     <span className="flex items-center gap-1">
                       <Hash className="w-3 h-3" />
-                      {panel.channelName}
+                      {getChannelName(panel.channel_id)}
                     </span>
-                    <span>•</span>
-                    <span>منذ {formatRelativeTime(panel.createdAt)}</span>
+                    {panel.created_at && (
+                      <>
+                        <span>•</span>
+                        <span>منذ {formatRelativeTime(panel.created_at)}</span>
+                      </>
+                    )}
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {panel.buttons.slice(0, 5).map((btn, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-white"
-                        style={{ background: STYLE_COLORS[btn.style] }}
-                      >
-                        <span>{btn.emoji}</span>
-                        <span>{btn.label}</span>
-                      </span>
-                    ))}
-                  </div>
+                  {panel.buttons?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {panel.buttons.slice(0, 5).map((btn, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-white"
+                          style={{ background: STYLE_COLORS[btn.style] || STYLE_COLORS.primary }}
+                        >
+                          <span>{btn.emoji}</span>
+                          <span>{btn.label}</span>
+                        </span>
+                      ))}
+                      {panel.buttons.length > 5 && (
+                        <span className="text-xs text-muted-foreground/70 self-center">
+                          +{panel.buttons.length - 5}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => setPreviewPanel(panel)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPreviewPanel(panel)}
+                  >
                     <Eye className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={planGate.gateAction(() => setEditingPanel(panel))}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={planGate.gateAction(() => setEditingPanel(panel))}
+                  >
                     <Edit3 className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(panel)} className="hover:text-destructive">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmDelete(panel)}
+                    className="hover:text-destructive"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
@@ -218,13 +332,17 @@ export default function ReactionRolesPage() {
       {editingPanel && (
         <PanelDesigner
           panel={editingPanel}
+          saving={actioning}
           onSave={handleSavePanel}
-          onClose={() => setEditingPanel(null)}
+          onClose={() => !actioning && setEditingPanel(null)}
         />
       )}
 
       {/* Preview Modal */}
-      <Dialog open={!!previewPanel} onOpenChange={() => setPreviewPanel(null)}>
+      <Dialog
+        open={!!previewPanel}
+        onOpenChange={() => setPreviewPanel(null)}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>معاينة اللوحة</DialogTitle>
@@ -240,27 +358,33 @@ export default function ReactionRolesPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 mb-2">
                     <span className="font-semibold text-violet-300">Lyn</span>
-                    <span className="text-xs bg-violet-500 text-white px-1.5 py-0.5 rounded">BOT</span>
+                    <span className="text-xs bg-violet-500 text-white px-1.5 py-0.5 rounded">
+                      BOT
+                    </span>
                   </div>
                   <div
                     className="rounded border-s-4 bg-[#2f3136] p-3"
-                    style={{ borderInlineStartColor: intToHexColor(previewPanel.color) }}
+                    style={{
+                      borderInlineStartColor: intToHexColor(previewPanel.color || 0x9b59b6),
+                    }}
                   >
                     <div className="font-bold text-base mb-1">{previewPanel.title}</div>
                     <div className="text-sm text-gray-300">{previewPanel.description}</div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {previewPanel.buttons.map((btn, i) => (
-                      <button
-                        key={i}
-                        className="px-3 py-1.5 rounded text-sm font-medium text-white"
-                        style={{ background: STYLE_COLORS[btn.style] }}
-                      >
-                        <span className="me-1">{btn.emoji}</span>
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
+                  {previewPanel.buttons?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {previewPanel.buttons.map((btn, i) => (
+                        <button
+                          key={i}
+                          className="px-3 py-1.5 rounded text-sm font-medium text-white"
+                          style={{ background: STYLE_COLORS[btn.style] || STYLE_COLORS.primary }}
+                        >
+                          <span className="me-1">{btn.emoji}</span>
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -269,7 +393,10 @@ export default function ReactionRolesPage() {
       </Dialog>
 
       {/* Delete Confirm */}
-      <Dialog open={!!confirmDelete} onOpenChange={() => setConfirmDelete(null)}>
+      <Dialog
+        open={!!confirmDelete}
+        onOpenChange={(v) => !v && !actioning && setConfirmDelete(null)}
+      >
         <DialogContent>
           <div className="flex justify-center -mt-4 mb-2">
             <div className="w-16 h-16 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
@@ -279,14 +406,27 @@ export default function ReactionRolesPage() {
           <DialogHeader>
             <DialogTitle className="text-center">حذف اللوحة؟</DialogTitle>
             <DialogDescription className="text-center">
-              راح يتم حذف لوحة <span className="font-bold text-foreground">{confirmDelete?.title}</span> نهائياً
+              راح يتم حذف لوحة{' '}
+              <span className="font-bold text-foreground">{confirmDelete?.title}</span>{' '}
+              نهائياً
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(null)} className="flex-1">إلغاء</Button>
-            <Button onClick={handleDelete} className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDelete(null)}
+              className="flex-1"
+              disabled={actioning}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={handleDelete}
+              className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={actioning}
+            >
               <Trash2 className="w-4 h-4" />
-              حذف نهائياً
+              {actioning ? 'جاري الحذف...' : 'حذف نهائياً'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -299,7 +439,7 @@ export default function ReactionRolesPage() {
 //  Panel Designer
 // ════════════════════════════════════════════════════════════
 
-function PanelDesigner({ panel, onSave, onClose }) {
+function PanelDesigner({ panel, saving, onSave, onClose }) {
   const [draft, setDraft] = useState(panel);
 
   const update = (key, value) => setDraft((p) => ({ ...p, [key]: value }));
@@ -323,14 +463,11 @@ function PanelDesigner({ panel, onSave, onClose }) {
     );
   };
 
-  const moveButton = (from, to) => {
-    if (to < 0 || to >= draft.buttons.length) return;
-    const next = [...draft.buttons];
-    [next[from], next[to]] = [next[to], next[from]];
-    update('buttons', next);
-  };
-
-  const canSave = draft.title && draft.channelId && draft.buttons.length > 0 && draft.buttons.every((b) => b.roleId);
+  const canSave =
+    draft.title &&
+    draft.channel_id &&
+    draft.buttons.length > 0 &&
+    draft.buttons.every((b) => b.roleId);
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -346,7 +483,6 @@ function PanelDesigner({ panel, onSave, onClose }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Editor */}
           <div className="space-y-4">
-            {/* Embed Settings */}
             <div className="space-y-3">
               <h3 className="font-bold text-sm">الإيمبيد</h3>
 
@@ -378,12 +514,12 @@ function PanelDesigner({ panel, onSave, onClose }) {
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
-                    value={intToHexColor(draft.color)}
+                    value={intToHexColor(draft.color || 0x9b59b6)}
                     onChange={(e) => update('color', hexToIntColor(e.target.value))}
                     className="w-10 h-9 rounded-lg border border-border cursor-pointer"
                   />
                   <Input
-                    value={intToHexColor(draft.color)}
+                    value={intToHexColor(draft.color || 0x9b59b6)}
                     onChange={(e) => update('color', hexToIntColor(e.target.value))}
                     className="flex-1 num"
                   />
@@ -393,15 +529,15 @@ function PanelDesigner({ panel, onSave, onClose }) {
               <div>
                 <label className="text-xs font-medium mb-1.5 block">القناة</label>
                 <ChannelPicker
-                  value={draft.channelId}
-                  onChange={(v) => update('channelId', v)}
+                  value={draft.channel_id}
+                  onChange={(v) => update('channel_id', v)}
                   types={[0, 5]}
                 />
               </div>
 
               <div className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/40">
                 <Switch
-                  checked={draft.exclusive}
+                  checked={!!draft.exclusive}
                   onCheckedChange={(v) => update('exclusive', v)}
                 />
                 <div className="flex-1">
@@ -415,11 +551,16 @@ function PanelDesigner({ panel, onSave, onClose }) {
 
             <Separator />
 
-            {/* Buttons */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-sm">الأزرار ({draft.buttons.length}/25)</h3>
-                <Button size="sm" onClick={addButton} disabled={draft.buttons.length >= 25}>
+                <h3 className="font-bold text-sm">
+                  الأزرار (<span className="num">{draft.buttons.length}</span>/25)
+                </h3>
+                <Button
+                  size="sm"
+                  onClick={addButton}
+                  disabled={draft.buttons.length >= 25}
+                >
                   <Plus className="w-3.5 h-3.5" />
                   زر
                 </Button>
@@ -427,7 +568,10 @@ function PanelDesigner({ panel, onSave, onClose }) {
 
               <div className="space-y-2">
                 {draft.buttons.map((btn, idx) => (
-                  <div key={idx} className="rounded-xl border border-border p-3 space-y-2">
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-border p-3 space-y-2"
+                  >
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-muted-foreground w-6 text-center num">
                         {idx + 1}
@@ -480,30 +624,13 @@ function PanelDesigner({ panel, onSave, onClose }) {
                           ))}
                         </SelectContent>
                       </Select>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => moveButton(idx, idx - 1)}
-                          disabled={idx === 0}
-                          className="w-8 h-8 rounded-lg hover:bg-accent disabled:opacity-30 flex items-center justify-center text-muted-foreground"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          onClick={() => moveButton(idx, idx + 1)}
-                          disabled={idx === draft.buttons.length - 1}
-                          className="w-8 h-8 rounded-lg hover:bg-accent disabled:opacity-30 flex items-center justify-center text-muted-foreground"
-                        >
-                          ↓
-                        </button>
-                      </div>
                     </div>
                   </div>
                 ))}
 
                 {draft.buttons.length === 0 && (
-                  <div className="text-center py-4 text-sm text-muted-foreground border-2 border-dashed border-border rounded-xl">
-                    اضغط "+ زر" لإضافة أول رتبة
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    أضف زر لكل رتبة تبيها
                   </div>
                 )}
               </div>
@@ -511,12 +638,11 @@ function PanelDesigner({ panel, onSave, onClose }) {
           </div>
 
           {/* Preview */}
-          <div className="lg:sticky lg:top-0 lg:self-start space-y-3">
-            <div className="flex items-center gap-2">
+          <div className="lg:sticky lg:top-0 lg:self-start">
+            <div className="flex items-center gap-2 mb-3">
               <Eye className="w-4 h-4 text-muted-foreground" />
-              <h3 className="font-bold text-sm">معاينة مباشرة</h3>
+              <h3 className="font-bold text-sm">معاينة</h3>
             </div>
-
             <div className="rounded-lg bg-[#36393f] p-4 text-white">
               <div className="flex gap-3">
                 <div className="w-10 h-10 rounded-full bg-violet-500 flex items-center justify-center text-white font-bold flex-shrink-0">
@@ -525,11 +651,15 @@ function PanelDesigner({ panel, onSave, onClose }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 mb-2">
                     <span className="font-semibold text-violet-300">Lyn</span>
-                    <span className="text-xs bg-violet-500 text-white px-1.5 py-0.5 rounded">BOT</span>
+                    <span className="text-xs bg-violet-500 text-white px-1.5 py-0.5 rounded">
+                      BOT
+                    </span>
                   </div>
                   <div
                     className="rounded border-s-4 bg-[#2f3136] p-3"
-                    style={{ borderInlineStartColor: intToHexColor(draft.color) }}
+                    style={{
+                      borderInlineStartColor: intToHexColor(draft.color || 0x9b59b6),
+                    }}
                   >
                     <div className="font-bold text-base mb-1">{draft.title}</div>
                     <div className="text-sm text-gray-300">{draft.description}</div>
@@ -540,7 +670,7 @@ function PanelDesigner({ panel, onSave, onClose }) {
                         <button
                           key={i}
                           className="px-3 py-1.5 rounded text-sm font-medium text-white"
-                          style={{ background: STYLE_COLORS[btn.style] }}
+                          style={{ background: STYLE_COLORS[btn.style] || STYLE_COLORS.primary }}
                         >
                           <span className="me-1">{btn.emoji}</span>
                           {btn.label}
@@ -555,12 +685,30 @@ function PanelDesigner({ panel, onSave, onClose }) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="flex-1">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex-1"
+            disabled={saving}
+          >
             إلغاء
           </Button>
-          <Button onClick={() => onSave(draft)} disabled={!canSave} className="flex-1">
-            <Send className="w-4 h-4" />
-            {panel.id ? 'حفظ التعديلات' : 'إنشاء ونشر'}
+          <Button
+            onClick={() => onSave(draft)}
+            disabled={!canSave || saving}
+            className="flex-1"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                جاري الحفظ...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                {panel.id ? 'حفظ التعديلات' : 'إنشاء'}
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
