@@ -1,9 +1,39 @@
+// ══════════════════════════════════════════════════════════════════
+//  guildMemberAdd Event — Welcome System
+//  المسار: events/logs/guildMemberAdd.js
+//
+//  يدعم:
+//   - type: 'text' أو 'embed' (من الداش)
+//   - embed_data: { title, description, color, footer }
+//   - mention_user: تفعيل/تعطيل منشن العضو
+//   - متغيرات: {user} {username} {server} {count}
+//   - استبدال global لكل المتغيرات
+//   - صورة ترحيب canvas مرفقة
+// ══════════════════════════════════════════════════════════════════
+
 const { EmbedBuilder } = require("discord.js")
 const { createCanvas, loadImage } = require("@napi-rs/canvas")
 const databaseSystem = require("../../systems/databaseSystem")
 const protectionSystem = require("../../systems/protectionSystem")
 const statsSystem = require("../../systems/statsSystem")
 const logger = require("../../systems/loggerSystem")
+
+// ──────────────────────────────────────────────────────────────────
+//  Variable replacement (global, supports all variables)
+// ──────────────────────────────────────────────────────────────────
+
+function applyVariables(text, member) {
+  if (!text || typeof text !== "string") return text
+  return text
+    .replace(/\{user\}/g, `<@${member.user.id}>`)
+    .replace(/\{username\}/g, member.user.username)
+    .replace(/\{server\}/g, member.guild.name)
+    .replace(/\{count\}/g, String(member.guild.memberCount))
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  Welcome canvas image
+// ──────────────────────────────────────────────────────────────────
 
 async function generateWelcomeImage(member, guild) {
   const canvas = createCanvas(1000, 350)
@@ -63,6 +93,10 @@ async function generateWelcomeImage(member, guild) {
   return canvas.toBuffer("image/png")
 }
 
+// ──────────────────────────────────────────────────────────────────
+//  Settings loader
+// ──────────────────────────────────────────────────────────────────
+
 async function getWelcomeSettings(guildId) {
   try {
     return await databaseSystem.queryOne(
@@ -73,6 +107,68 @@ async function getWelcomeSettings(guildId) {
     return null
   }
 }
+
+// ──────────────────────────────────────────────────────────────────
+//  Embed data parser (from JSONB column)
+// ──────────────────────────────────────────────────────────────────
+
+function parseEmbedData(raw) {
+  if (!raw) return null
+  if (typeof raw === "object") return raw
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) } catch { return null }
+  }
+  return null
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  Build welcome embed (text mode OR embed mode)
+// ──────────────────────────────────────────────────────────────────
+
+function buildWelcomeEmbed(settings, member) {
+  const isEmbedMode = settings.type === "embed"
+  const embedData = parseEmbedData(settings.embed_data)
+
+  // ── Embed mode: use embed_data from dashboard ──
+  if (isEmbedMode && embedData) {
+    const embed = new EmbedBuilder()
+
+    if (embedData.title) {
+      embed.setTitle(applyVariables(embedData.title, member).slice(0, 256))
+    }
+    if (embedData.description) {
+      embed.setDescription(applyVariables(embedData.description, member).slice(0, 4096))
+    }
+    if (typeof embedData.color === "number") {
+      embed.setColor(embedData.color)
+    } else {
+      embed.setColor(0x00c8ff)
+    }
+    if (embedData.footer) {
+      embed.setFooter({ text: applyVariables(embedData.footer, member).slice(0, 2048) })
+    } else {
+      embed.setFooter({ text: `عضو رقم ${member.guild.memberCount}` })
+    }
+    embed.setTimestamp()
+    return embed
+  }
+
+  // ── Text mode (or fallback): build embed from welcome_message ──
+  const msg = applyVariables(
+    settings.welcome_message || "أهلاً وسهلاً بك!",
+    member
+  )
+
+  return new EmbedBuilder()
+    .setColor(0x00c8ff)
+    .setDescription(msg)
+    .setFooter({ text: `عضو رقم ${member.guild.memberCount}` })
+    .setTimestamp()
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  Event
+// ──────────────────────────────────────────────────────────────────
 
 module.exports = {
   name: "guildMemberAdd",
@@ -88,38 +184,42 @@ module.exports = {
         logger.error("ANTIRAID_FAILED", { error: err.message })
       }
 
-      // 📊 تسجيل snapshot للإحصائيات
+      // 📊 Stats snapshot
       try {
         await statsSystem.recordSnapshot(member.guild.id, member.guild.memberCount, 1, 0)
       } catch {}
 
-      // 👋 نظام الترحيب
+      // 👋 Welcome system
       const settings = await getWelcomeSettings(member.guild.id)
       if (!settings || !settings.enabled) return
 
       const channel = member.guild.channels.cache.get(settings.welcome_channel_id)
       if (!channel) return
 
-      const imageBuffer = await generateWelcomeImage(member, member.guild)
+      // ✅ صورة الترحيب (تُرفق مع الرسالة)
+      let imageBuffer = null
+      try {
+        imageBuffer = await generateWelcomeImage(member, member.guild)
+      } catch (err) {
+        logger.error("WELCOME_IMAGE_FAILED", { error: err.message })
+      }
 
-      let welcomeMsg = settings.welcome_message || "أهلاً وسهلاً بك!"
-      welcomeMsg = welcomeMsg
-        .replace("{user}", `${member}`)
-        .replace("{username}", member.user.username)
-        .replace("{server}", member.guild.name)
-        .replace("{count}", member.guild.memberCount)
+      // ✅ بناء الـ embed (يحترم type + embed_data من الداش)
+      const embed = buildWelcomeEmbed(settings, member)
 
-      const embed = new EmbedBuilder()
-        .setColor(0x00c8ff)
-        .setDescription(welcomeMsg)
-        .setFooter({ text: `عضو رقم ${member.guild.memberCount}` })
-        .setTimestamp()
+      // ✅ منشن العضو (افتراضي: مفعّل، يحترم mention_user من الداش)
+      const shouldMention = settings.mention_user !== false
+      const content = shouldMention ? `${member}` : null
 
-      await channel.send({
-        content: `${member}`,
+      const messagePayload = {
         embeds: [embed],
-        files: [{ attachment: imageBuffer, name: "welcome.png" }]
-      })
+      }
+      if (content) messagePayload.content = content
+      if (imageBuffer) {
+        messagePayload.files = [{ attachment: imageBuffer, name: "welcome.png" }]
+      }
+
+      await channel.send(messagePayload)
 
     } catch (err) {
       logger.error("GUILD_MEMBER_ADD_EVENT_FAILED", { error: err.message })
