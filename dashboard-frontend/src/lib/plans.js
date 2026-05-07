@@ -1,6 +1,11 @@
 /**
- * Lyn Bot Plans — تعريف الخطط والميزات
- * المصدر الوحيد للحقيقة بخصوص ما تقدمه كل خطة
+ * ═══════════════════════════════════════════════════════════
+ *  Lyn Bot Plans — تعريف الخطط والميزات
+ *  المصدر الوحيد للحقيقة بخصوص ما تقدمه كل خطة
+ *
+ *  ⚠️ تحذير: هذا الملف يجب أن يطابق dashboard-backend/plans.js
+ *  أي تعديل في الأسعار/الميزات يجب أن يكون في الملفين معاً
+ * ═══════════════════════════════════════════════════════════
  */
 
 // ════════════════════════════════════════════════════════════
@@ -22,7 +27,7 @@ export const PLAN_ORDER = [
 ];
 
 // ════════════════════════════════════════════════════════════
-//  PLAN METADATA
+//  PLAN METADATA — مطابق للباك إند بالكامل
 // ════════════════════════════════════════════════════════════
 
 export const PLANS = {
@@ -36,6 +41,7 @@ export const PLANS = {
     priceLabel: 'مجاناً',
     badge: null,
     description: 'ابدأ مع الميزات الأساسية',
+    aiMessagesPerDay: 0,
     features: [
       'إدارة الأوامر الأساسية',
       'الإشراف الأساسي (تحذيرات، حظر، كتم)',
@@ -50,8 +56,8 @@ export const PLANS = {
     nameEn: 'Silver',
     icon: '🥈',
     color: 'silver',
-    price: 15,
-    priceLabel: '15 ريال/شهر',
+    price: 29,
+    priceLabel: '29 ريال/شهر',
     badge: 'الأكثر شعبية',
     description: 'للسيرفرات النشطة',
     aiMessagesPerDay: 0,
@@ -74,11 +80,11 @@ export const PLANS = {
     nameEn: 'Gold',
     icon: '🥇',
     color: 'gold',
-    price: 30,
-    priceLabel: '30 ريال/شهر',
+    price: 79,
+    priceLabel: '79 ريال/شهر',
     badge: 'الأقوى',
     description: 'للمحترفين والمجتمعات الكبيرة',
-    aiMessagesPerDay: 10,
+    aiMessagesPerDay: 300,
     features: [
       'كل ميزات الفضي',
       'نظام الحماية الكامل (Anti-Spam/Raid/Nuke)',
@@ -97,17 +103,17 @@ export const PLANS = {
     nameEn: 'Diamond',
     icon: '💎',
     color: 'diamond',
-    price: 60,
-    priceLabel: '60 ريال/شهر',
+    price: 149,
+    priceLabel: '149 ريال/شهر',
     badge: 'الكل في واحد',
     description: 'كل شيء بدون حدود',
-    aiMessagesPerDay: 30,
+    aiMessagesPerDay: 700,
     features: [
       'كل ميزات الذهبي',
       'المُجدوِل المتقدم (Cron)',
       'Real-time updates',
       'دعم أولوية',
-      'حدود AI أعلى (30 رسالة/يوم)',
+      'حدود AI أعلى (700 رسالة/يوم)',
       'بدون حدود استخدام',
     ],
   },
