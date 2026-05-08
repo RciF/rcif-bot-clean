@@ -1,27 +1,45 @@
+// ══════════════════════════════════════════════════════════════════
+//  Button Role Panels — SHARED HELPERS
+//  المسار: commands/roles/_button-role-shared.js
+//
+//  ⚠️ SCHEMA BRIDGE:
+//   البوت (legacy) يخزن أزرار اللوحة في جدول مستقل: button_roles
+//   الداش (الجديد) يخزن الأزرار في عمود JSONB: button_role_panels.buttons
+//   هذا الملف يدمج الاثنين عشان أي لوحة (من أي مصدر) تشتغل.
+//
+//  customId formats المدعومة:
+//   - brole_<numeric_id>      ← لوحات قديمة من البوت (button_roles.id)
+//   - brole_p_<panelId>_<i>   ← لوحات الداش (panel.id + index في buttons[])
+// ══════════════════════════════════════════════════════════════════
+
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const databaseSystem = require("../../systems/databaseSystem")
 
 // ══════════════════════════════════════
-//  DATABASE HELPERS
+//  ENSURE TABLES
 // ══════════════════════════════════════
 
 async function ensureTable() {
+  // الجدول الرئيسي (مشترك مع الداش)
   await databaseSystem.query(`
     CREATE TABLE IF NOT EXISTS button_role_panels (
       id          SERIAL PRIMARY KEY,
       guild_id    TEXT NOT NULL,
-      channel_id  TEXT NOT NULL,
-      message_id  TEXT NOT NULL UNIQUE,
+      channel_id  TEXT,
+      message_id  TEXT UNIQUE,
       title       TEXT NOT NULL DEFAULT 'اختر رتبتك',
       description TEXT,
       color       TEXT DEFAULT 'أزرق',
       image_url   TEXT,
       thumbnail   TEXT,
       exclusive   BOOLEAN DEFAULT false,
-      created_at  TIMESTAMP DEFAULT NOW()
+      buttons     JSONB DEFAULT '[]'::jsonb,
+      created_at  TIMESTAMP DEFAULT NOW(),
+      updated_at  TIMESTAMP DEFAULT NOW()
     );
   `)
 
+  // الجدول القديم (للأوامر — تُحفظ فيه الأزرار من /لوحة-رتب-إضافة)
   await databaseSystem.query(`
     CREATE TABLE IF NOT EXISTS button_roles (
       id          SERIAL PRIMARY KEY,
@@ -37,6 +55,23 @@ async function ensureTable() {
   `)
 }
 
+// ══════════════════════════════════════
+//  JSONB parser
+// ══════════════════════════════════════
+
+function parseButtons(raw) {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === "string") {
+    try { const p = JSON.parse(raw); return Array.isArray(p) ? p : [] } catch { return [] }
+  }
+  return []
+}
+
+// ══════════════════════════════════════
+//  GET PANEL — يعمل مع message_id أو panel.id
+// ══════════════════════════════════════
+
 async function getPanel(messageId) {
   return await databaseSystem.queryOne(
     "SELECT * FROM button_role_panels WHERE message_id = $1",
@@ -44,13 +79,129 @@ async function getPanel(messageId) {
   )
 }
 
-async function getPanelButtons(messageId) {
-  const result = await databaseSystem.query(
-    "SELECT * FROM button_roles WHERE message_id = $1 ORDER BY id ASC",
-    [messageId]
+async function getPanelById(panelId) {
+  const id = parseInt(panelId)
+  if (!isFinite(id)) return null
+  return await databaseSystem.queryOne(
+    "SELECT * FROM button_role_panels WHERE id = $1",
+    [id]
   )
-  return result.rows || []
 }
+
+// ══════════════════════════════════════
+//  GET BUTTONS — bridge بين الجدولين
+//
+//  الإرجاع: array من {id, role_id, label, emoji, color, source}
+//   source: 'legacy' للجدول القديم | 'jsonb' للجدول الجديد
+//   id: للـ legacy = button_roles.id (number)
+//       للـ jsonb  = "p_<panelId>_<index>"
+// ══════════════════════════════════════
+
+async function getPanelButtons(messageId) {
+  const result = []
+
+  // 1) الأزرار من button_roles (legacy — للأوامر)
+  try {
+    const legacy = await databaseSystem.query(
+      "SELECT * FROM button_roles WHERE message_id = $1 ORDER BY id ASC",
+      [messageId]
+    )
+    for (const row of (legacy.rows || [])) {
+      result.push({
+        id: row.id,
+        role_id: row.role_id,
+        label: row.label,
+        emoji: row.emoji,
+        color: row.color || "أزرق",
+        source: "legacy"
+      })
+    }
+  } catch {}
+
+  // 2) الأزرار من button_role_panels.buttons JSONB (الداش)
+  try {
+    const panel = await databaseSystem.queryOne(
+      "SELECT id, buttons FROM button_role_panels WHERE message_id = $1",
+      [messageId]
+    )
+    if (panel) {
+      const arr = parseButtons(panel.buttons)
+      arr.forEach((b, idx) => {
+        if (!b || !b.role_id) return
+        result.push({
+          id: `p_${panel.id}_${idx}`,
+          role_id: b.role_id,
+          label: b.label || "اختر",
+          emoji: b.emoji || null,
+          color: b.color || "أزرق",
+          source: "jsonb"
+        })
+      })
+    }
+  } catch {}
+
+  return result
+}
+
+// ✅ مساعد: ابحث عن زر بالـ customId سواء legacy أو jsonb
+async function findButtonByCustomId(customId) {
+  if (!customId || !customId.startsWith("brole_")) return null
+  const rest = customId.slice("brole_".length)
+
+  // jsonb format: p_<panelId>_<index>
+  if (rest.startsWith("p_")) {
+    const parts = rest.split("_")
+    if (parts.length < 3) return null
+    const panelId = parseInt(parts[1])
+    const idx = parseInt(parts[2])
+    if (!isFinite(panelId) || !isFinite(idx)) return null
+
+    const panel = await getPanelById(panelId)
+    if (!panel) return null
+    const arr = parseButtons(panel.buttons)
+    const b = arr[idx]
+    if (!b || !b.role_id) return null
+
+    return {
+      id: `p_${panelId}_${idx}`,
+      role_id: b.role_id,
+      label: b.label || "اختر",
+      emoji: b.emoji || null,
+      color: b.color || "أزرق",
+      source: "jsonb",
+      panel_message_id: panel.message_id,
+      panel_id: panel.id,
+      panel
+    }
+  }
+
+  // legacy format: numeric id
+  const numericId = parseInt(rest)
+  if (!isFinite(numericId)) return null
+
+  const row = await databaseSystem.queryOne(
+    "SELECT * FROM button_roles WHERE id = $1",
+    [numericId]
+  )
+  if (!row) return null
+
+  const panel = await getPanel(row.message_id)
+  return {
+    id: row.id,
+    role_id: row.role_id,
+    label: row.label,
+    emoji: row.emoji,
+    color: row.color || "أزرق",
+    source: "legacy",
+    panel_message_id: row.message_id,
+    panel_id: panel?.id,
+    panel: panel || null
+  }
+}
+
+// ══════════════════════════════════════
+//  GET ALL PANELS
+// ══════════════════════════════════════
 
 async function getAllPanels(guildId) {
   const result = await databaseSystem.query(
@@ -61,53 +212,88 @@ async function getAllPanels(guildId) {
 }
 
 // ══════════════════════════════════════
-//  COLOR HELPERS
+//  COLOR HELPERS — يدعم رقم (داش) أو نص عربي (بوت)
 // ══════════════════════════════════════
 
+const ARABIC_COLOR_MAP = {
+  "أزرق":   0x5865f2,
+  "أخضر":   0x57f287,
+  "أحمر":   0xed4245,
+  "ذهبي":   0xfbbf24,
+  "بنفسجي": 0xa855f7,
+  "سماوي":  0x00c8ff,
+  "رمادي":  0x4f545c,
+  "أبيض":   0xffffff
+}
+
 function colorToHex(color) {
-  const map = {
-    "أزرق":   0x5865f2,
-    "أخضر":   0x57f287,
-    "أحمر":   0xed4245,
-    "ذهبي":   0xfbbf24,
-    "بنفسجي": 0xa855f7,
-    "سماوي":  0x00c8ff,
-    "رمادي":  0x4f545c,
-    "أبيض":   0xffffff
+  if (typeof color === "number" && isFinite(color)) return color
+  if (typeof color === "string") {
+    if (ARABIC_COLOR_MAP[color] !== undefined) return ARABIC_COLOR_MAP[color]
+    // hex string
+    const trimmed = color.trim().replace(/^#/, "")
+    if (/^[0-9a-fA-F]{6}$/.test(trimmed)) return parseInt(trimmed, 16)
   }
-  return map[color] || 0x5865f2
+  return 0x5865f2
+}
+
+// ══════════════════════════════════════
+//  BUTTON STYLE — يدعم نص عربي/إنجليزي/رقم
+// ══════════════════════════════════════
+
+const ARABIC_STYLE_MAP = {
+  "أزرق":   ButtonStyle.Primary,
+  "بنفسجي": ButtonStyle.Primary,
+  "سماوي":  ButtonStyle.Primary,
+  "أخضر":   ButtonStyle.Success,
+  "أحمر":   ButtonStyle.Danger,
+  "رمادي":  ButtonStyle.Secondary,
+  "ذهبي":   ButtonStyle.Secondary,
+  "أبيض":   ButtonStyle.Secondary
+}
+
+const ENGLISH_STYLE_MAP = {
+  primary: ButtonStyle.Primary,
+  blue: ButtonStyle.Primary,
+  success: ButtonStyle.Success,
+  green: ButtonStyle.Success,
+  danger: ButtonStyle.Danger,
+  red: ButtonStyle.Danger,
+  secondary: ButtonStyle.Secondary,
+  gray: ButtonStyle.Secondary,
+  grey: ButtonStyle.Secondary
 }
 
 function buttonStyle(color) {
-  const map = {
-    "أزرق":   ButtonStyle.Primary,
-    "بنفسجي": ButtonStyle.Primary,
-    "سماوي":  ButtonStyle.Primary,
-    "أخضر":   ButtonStyle.Success,
-    "أحمر":   ButtonStyle.Danger,
-    "رمادي":  ButtonStyle.Secondary,
-    "ذهبي":   ButtonStyle.Secondary,
-    "أبيض":   ButtonStyle.Secondary
+  if (typeof color === "number") {
+    if ([1, 2, 3, 4].includes(color)) return color // ButtonStyle enum
+    return ButtonStyle.Primary
   }
-  return map[color] || ButtonStyle.Primary
+  if (typeof color === "string") {
+    if (ARABIC_STYLE_MAP[color] !== undefined) return ARABIC_STYLE_MAP[color]
+    const lower = color.toLowerCase()
+    if (ENGLISH_STYLE_MAP[lower] !== undefined) return ENGLISH_STYLE_MAP[lower]
+  }
+  return ButtonStyle.Primary
 }
 
 // ══════════════════════════════════════
 //  BUILD PANEL MESSAGE
+//  يستخدم customId المناسب لكل زر حسب source
 // ══════════════════════════════════════
 
 async function buildPanelMessage(panel, buttons) {
   const embed = new EmbedBuilder()
-    .setTitle(panel.title)
+    .setTitle(panel.title || "اختر رتبتك")
     .setColor(colorToHex(panel.color))
     .setTimestamp()
 
   if (panel.description) embed.setDescription(panel.description)
-  if (panel.image_url)   embed.setImage(panel.image_url)
-  if (panel.thumbnail)   embed.setThumbnail(panel.thumbnail)
+  if (panel.image_url) embed.setImage(panel.image_url)
+  if (panel.thumbnail) embed.setThumbnail(panel.thumbnail)
 
-  if (buttons.length === 0) {
-    embed.setFooter({ text: "لا توجد أزرار بعد — استخدم /لوحة-رتب إضافة" })
+  if (!buttons || buttons.length === 0) {
+    embed.setFooter({ text: "لا توجد أزرار بعد" })
   } else {
     embed.setFooter({
       text: panel.exclusive
@@ -117,13 +303,19 @@ async function buildPanelMessage(panel, buttons) {
   }
 
   const components = []
-  for (let i = 0; i < Math.min(buttons.length, 25); i += 5) {
+  const visible = (buttons || []).slice(0, 25)
+
+  for (let i = 0; i < visible.length; i += 5) {
     const row = new ActionRowBuilder()
-    for (const btn of buttons.slice(i, i + 5)) {
+    for (const btn of visible.slice(i, i + 5)) {
+      // ✅ customId: legacy = brole_<id> / jsonb = brole_p_<panelId>_<idx>
+      const customId = `brole_${btn.id}`
+
       const b = new ButtonBuilder()
-        .setCustomId(`brole_${btn.id}`)
-        .setLabel(btn.label)
+        .setCustomId(customId)
+        .setLabel((btn.label || "اختر").slice(0, 80))
         .setStyle(buttonStyle(btn.color))
+
       if (btn.emoji) {
         try { b.setEmoji(btn.emoji) } catch {}
       }
@@ -136,7 +328,7 @@ async function buildPanelMessage(panel, buttons) {
 }
 
 // ══════════════════════════════════════
-//  COLOR CHOICES (مشتركة بين الأوامر)
+//  COLOR CHOICES (للأوامر)
 // ══════════════════════════════════════
 
 const COLOR_CHOICES = [
@@ -154,11 +346,14 @@ const COLOR_CHOICES_NO_GOLD = COLOR_CHOICES.filter(c => c.value !== "ذهبي")
 module.exports = {
   ensureTable,
   getPanel,
+  getPanelById,
   getPanelButtons,
+  findButtonByCustomId,
   getAllPanels,
   colorToHex,
   buttonStyle,
   buildPanelMessage,
+  parseButtons,
   COLOR_CHOICES,
   COLOR_CHOICES_NO_GOLD
 }
