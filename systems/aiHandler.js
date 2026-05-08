@@ -18,6 +18,51 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// ═══════════════════════════════════════════════════════
+//  Persona presets — محقونة في system prompt
+//  IDs مطابقة للداش (AIPersonaTab.jsx)
+// ═══════════════════════════════════════════════════════
+const PERSONA_PRESETS = {
+  friendly: `
+[الشخصية: ودود]
+- نبرة دافئة ومرحبة
+- استخدم إيموجيات بشكل معتدل (😊 🌸 ✨)
+- لغة قريبة من القلب
+- أكثر استخدامًا للسؤال "كيف أقدر أساعدك"
+`,
+  serious: `
+[الشخصية: جدي]
+- نبرة مهنية ومباشرة
+- بدون إيموجيات
+- لغة فصحى/رسمية
+- ركز على الإجابة بدقة بدون حشو
+`,
+  fun: `
+[الشخصية: مرح]
+- خفيف الظل، نكت لطيفة بدون تجاوز
+- استخدم تعبيرات سعودية/خليجية ودودة
+- إيموجيات تعبيرية (😄 🤣 🔥)
+- الردود قصيرة وحيوية
+`,
+  professional: `
+[الشخصية: محترف]
+- متخصص ودقيق
+- مناسب لسيرفرات تعليمية ومهنية
+- لغة فصحى عالية، اقتباسات وتعريفات دقيقة
+- بدون إيموجيات إلا للضرورة
+`
+};
+
+function buildPersonaBlock(persona, customPrompt) {
+  if (persona === "custom" && typeof customPrompt === "string" && customPrompt.trim()) {
+    return `\n[الشخصية المخصصة]\n${customPrompt.trim()}\n`;
+  }
+  if (persona && PERSONA_PRESETS[persona]) {
+    return PERSONA_PRESETS[persona];
+  }
+  return PERSONA_PRESETS.friendly;
+}
+
 class AIHandler {
 
   constructor() {
@@ -25,24 +70,12 @@ class AIHandler {
     this.maxMessageLength = 2000;
     this.maxModelTokens = 800;
 
-    // ═══════════════════════════════════════════════════════
-    //  Response Cache
-    //  Map<cacheKey, { content, expiresAt }>
-    //  - حد أعلى 50 entry
-    //  - TTL = 15 دقيقة
-    //  - الردود اللي استخدمت tools ما تتكاش (لأن نتيجة الأداة قد تتغير)
-    // ═══════════════════════════════════════════════════════
     this.responseCache = new Map();
     this.maxCacheSize = 50;
-    this.cacheTTL = 15 * 60 * 1000; // 15 دقيقة
+    this.cacheTTL = 15 * 60 * 1000;
 
-    // ═══════════════════════════════════════════════════════
-    //  Active Requests
-    //  Map<requestKey, timeoutId> — يمنع تكرار نفس الطلب
-    //  مع timeout كحماية لو OpenAI تعطل
-    // ═══════════════════════════════════════════════════════
     this.activeRequests = new Map();
-    this.activeRequestTTL = 30 * 1000; // 30 ثانية
+    this.activeRequestTTL = 30 * 1000;
 
     this.feedbackMemory = new Map();
   }
@@ -52,10 +85,8 @@ class AIHandler {
   // ═══════════════════════════════════════════════════════
 
   lockRequest(requestKey) {
-    // لو موجود فعلاً، ما نسجل ثاني
     if (this.activeRequests.has(requestKey)) return false;
 
-    // timeout يحرر القفل تلقائياً لو شي علق
     const timeoutId = setTimeout(() => {
       this.activeRequests.delete(requestKey);
     }, this.activeRequestTTL);
@@ -73,18 +104,16 @@ class AIHandler {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  CACHE HELPERS — مع TTL
+  //  CACHE
   // ═══════════════════════════════════════════════════════
 
   getCached(key) {
     const entry = this.responseCache.get(key);
     if (!entry) return null;
-
     if (Date.now() > entry.expiresAt) {
       this.responseCache.delete(key);
       return null;
     }
-
     return entry.content;
   }
 
@@ -93,7 +122,6 @@ class AIHandler {
       const firstKey = this.responseCache.keys().next().value;
       this.responseCache.delete(firstKey);
     }
-
     this.responseCache.set(key, {
       content,
       expiresAt: Date.now() + this.cacheTTL
@@ -105,39 +133,27 @@ class AIHandler {
   // ═══════════════════════════════════════════════════════
 
   updateFeedback(userId, action, success = true) {
-    const data = this.feedbackMemory.get(userId) || {
-      success: 0,
-      fail: 0,
-      lastActions: []
-    };
-
+    const data = this.feedbackMemory.get(userId) || { success: 0, fail: 0, lastActions: [] };
     if (success) data.success++;
     else data.fail++;
-
     data.lastActions.push(action);
     if (data.lastActions.length > 10) data.lastActions.shift();
-
     this.feedbackMemory.set(userId, data);
   }
 
   getFeedbackBias(userId) {
     const data = this.feedbackMemory.get(userId);
     if (!data) return 0;
-
     const total = data.success + data.fail;
     if (total === 0) return 0;
-
     const ratio = data.success / total;
-
     if (ratio > 0.7) return 0.1;
     if (ratio < 0.3) return -0.1;
-
     return 0;
   }
 
   sanitize(text) {
     if (!text) return "";
-
     return String(text)
       .replace(/@everyone/g, "@ everyone")
       .replace(/@here/g, "@ here")
@@ -156,9 +172,15 @@ class AIHandler {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  اختيار الموديل حسب النمط
+  //  اختيار الموديل حسب النمط (مع creativeModel من ai_settings)
   // ═══════════════════════════════════════════════════════
-  chooseModel(mode) {
+
+  chooseModel(mode, opts = {}) {
+    // لو الإعدادات سمحت بالنموذج الإبداعي والمستخدم في mention/reply — رفّع لـ gpt-4o
+    if (opts.creativeModel === true && (mode === "mention" || mode === "smart")) {
+      return "gpt-4o";
+    }
+
     const map = {
       fast: "gpt-4o-mini",
       smart: "gpt-4o-mini",
@@ -168,15 +190,27 @@ class AIHandler {
     return map[mode] || "gpt-4o-mini";
   }
 
-  chooseTemperature(mode) {
-    const map = {
+  chooseTemperature(mode, opts = {}) {
+    // الشخصية المرحة/المخصصة تستحق حرارة أعلى شوي
+    const baseMap = {
       fast: 0.7,
       smart: 0.85,
       creative: 1.0,
       mention: 0.85
     };
-    return map[mode] ?? 0.85;
+    let t = baseMap[mode] ?? 0.85;
+
+    if (opts.persona === "fun") t = Math.min(1.0, t + 0.1);
+    if (opts.persona === "serious" || opts.persona === "professional") {
+      t = Math.max(0.5, t - 0.15);
+    }
+
+    return t;
   }
+
+  // ═══════════════════════════════════════════════════════
+  //  generateAIResponse
+  // ═══════════════════════════════════════════════════════
 
   async generateAIResponse(messages, options = {}) {
     try {
@@ -184,32 +218,27 @@ class AIHandler {
         cacheKey = null,
         mode = "smart",
         guild = null,
-        maxToolRounds = 3
+        maxToolRounds = 3,
+        creativeModel = false,
+        persona = null
       } = options;
 
-      // ✅ FIX: استخدم getCached مع TTL
       if (cacheKey) {
         const cached = this.getCached(cacheKey);
         if (cached) return cached;
       }
 
-      const model = this.chooseModel(mode);
-      const temperature = this.chooseTemperature(mode);
+      const model = this.chooseModel(mode, { creativeModel });
+      const temperature = this.chooseTemperature(mode, { persona });
 
-      // الأدوات متاحة فقط لما يكون عندنا guild
       const tools = guild
         ? aiServerAwarenessSystem.getToolDefinitions(guild)
         : null;
 
       let conversationMessages = [...messages];
       let finalContent = null;
-
-      // ✅ FIX: علم لو استخدمنا أدوات — ما نكاش الجواب
       let usedTools = false;
 
-      // ═══════════════════════════════════════════════
-      //  حلقة Tool Calling — أقصى 3 جولات
-      // ═══════════════════════════════════════════════
       for (let round = 0; round < maxToolRounds; round++) {
         const requestBody = {
           model,
@@ -232,20 +261,17 @@ class AIHandler {
           return null;
         }
 
-        // هل الموديل طلب أدوات؟
         const toolCalls = msg.tool_calls;
 
         if (toolCalls && toolCalls.length > 0 && guild) {
           usedTools = true;
 
-          // أضف رسالة الموديل (اللي فيها tool_calls) للمحادثة
           conversationMessages.push({
             role: "assistant",
             content: msg.content || null,
             tool_calls: toolCalls
           });
 
-          // نفّذ كل أداة
           for (const toolCall of toolCalls) {
             const toolName = toolCall.function?.name;
             const toolArgs = toolCall.function?.arguments;
@@ -273,16 +299,13 @@ class AIHandler {
             });
           }
 
-          // نرجع للحلقة عشان نخلي الموديل يستخدم نتائج الأدوات
           continue;
         }
 
-        // الموديل رد بدون أدوات → انتهينا
         finalContent = msg.content || null;
         break;
       }
 
-      // ✅ FIX: ما نكاش الردود اللي استخدمت tools (نتائجها قد تتغير)
       if (cacheKey && finalContent && !usedTools) {
         this.setCached(cacheKey, finalContent);
       }
@@ -294,6 +317,10 @@ class AIHandler {
       return null;
     }
   }
+
+  // ═══════════════════════════════════════════════════════
+  //  buildSystemPrompt
+  // ═══════════════════════════════════════════════════════
 
   async buildSystemPrompt(userId, message, context = {}) {
     try {
@@ -340,7 +367,7 @@ class AIHandler {
         logger.error("IDENTITY_BUILD_FAILED", { error: err.message });
       }
 
-      // 4) الشخصية
+      // 4) الشخصية الأساسية (ديناميكية)
       let personalityPrompt = "";
       try {
         personalityPrompt = aiPersonalitySystem.getSystemPrompt?.({
@@ -354,13 +381,14 @@ class AIHandler {
         logger.error("PERSONALITY_BUILD_FAILED", { error: err.message });
       }
 
+      // 4.5) ✅ شخصية الداش (persona/custom_prompt)
+      const personaBlock = buildPersonaBlock(context.persona, context.customPrompt);
+
       // 5) الذاكرة طويلة المدى
       let memories = [];
       try {
         const rawMemories = await aiMemorySystem.searchRelevantMemories?.(userId, message);
-        if (Array.isArray(rawMemories)) {
-          memories = rawMemories;
-        }
+        if (Array.isArray(rawMemories)) memories = rawMemories;
       } catch (err) {
         logger.error("MEMORY_FETCH_FAILED", { error: err.message });
       }
@@ -369,9 +397,7 @@ class AIHandler {
       let knowledge = [];
       try {
         const rawKnowledge = await aiKnowledgeSystem.searchKnowledge?.(message, userId);
-        if (Array.isArray(rawKnowledge)) {
-          knowledge = rawKnowledge;
-        }
+        if (Array.isArray(rawKnowledge)) knowledge = rawKnowledge;
       } catch (err) {
         logger.error("KNOWLEDGE_FETCH_FAILED", { error: err.message });
       }
@@ -380,14 +406,10 @@ class AIHandler {
       let socialScore = 0;
       try {
         const relation = await aiSocialAwarenessSystem.getOrLoadRelationship?.(userId, context.user?.id);
-        if (relation && relation.score) {
-          socialScore = relation.score;
-        }
-      } catch (err) {
-        // صامت
-      }
+        if (relation && relation.score) socialScore = relation.score;
+      } catch (err) {}
 
-      // 8) بناء السياق الموحد عبر aiContextSystem
+      // 8) السياق الموحد
       let contextBlock = "";
       try {
         contextBlock = aiContextSystem.buildContext({
@@ -406,7 +428,7 @@ class AIHandler {
         logger.error("CONTEXT_BUILD_FAILED", { error: err.message });
       }
 
-      // 9) توجيهات الأدوات — إجبار صارم على الاستخدام
+      // 9) توجيهات الأدوات
       const toolsGuide = guild.id ? `
 [⚠️ قواعد صارمة — قراءة إلزامية]
 
@@ -435,25 +457,27 @@ class AIHandler {
 - قناة: الصيغة <#123456> (تظهر كلون أزرق في Discord)
 - رتبة: الصيغة <@&123456>
 
-مثال:
-المستخدم: "فين قناة عام؟"
-→ تستدعي find_channel("عام")
-→ ترجع: { mention: "<#111>" }
-→ ردك: "قناة <#111> هنا يا صاحبي"
-
-❌ ممنوع تقول "قناة عام موجودة" فقط — لازم <#id>
 ❌ ممنوع تخمّن أن قناة/رتبة موجودة بدون استدعاء الأداة
 ` : "";
 
-      // 10) دمج كل شي في system prompt واحد
+      // 9.5) قيد طول الرد (لو الداش حدّدته)
+      const lengthBlock = (typeof context.maxResponseLength === "number" && context.maxResponseLength > 0)
+        ? `\n[قيد الطول]\n- التزم بألا يتجاوز ردك ${context.maxResponseLength} حرف.\n- اختصر بدون فقدان المعنى.\n`
+        : "";
+
+      // 10) دمج كل شي
       const systemPrompt = `
 ${identityPrompt}
 
 ${personalityPrompt}
 
+${personaBlock}
+
 ${contextBlock}
 
 ${toolsGuide}
+
+${lengthBlock}
 
 [معلومات الجلسة]
 المستخدم: ${user.username || "مجهول"}
@@ -469,11 +493,14 @@ ${toolsGuide}
     }
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  askAI
+  // ═══════════════════════════════════════════════════════
+
   async askAI(userId, message, context = {}) {
     let requestKey;
 
     try {
-
       const cleanMessage = this.sanitize(message);
       if (!cleanMessage) return "رسالتك غير واضحة.";
 
@@ -482,7 +509,6 @@ ${toolsGuide}
 
       requestKey = `${userId}:${cleanMessage}`;
 
-      // ✅ FIX: lockRequest يفحص ويسجل + timeout كحماية
       if (!this.lockRequest(requestKey)) {
         return "⏳ انتظر لحظة...";
       }
@@ -498,23 +524,35 @@ ${toolsGuide}
         { role: "user", content: cleanMessage }
       ];
 
-      const cacheKey = this.buildCacheKey(userId, cleanMessage, "", "");
+      const cacheKey = this.buildCacheKey(userId, cleanMessage, context.persona || "", "");
+
+      // ✅ تحديد المود — triggerType (mention/reply/always) يأخذ الأولوية لو موجود
+      const mode = context.triggerType
+        ? (context.triggerType === "mention" ? "mention" : "smart")
+        : (context.model || "smart");
 
       let reply = await this.generateAIResponse(messages, {
         cacheKey,
-        mode: context.model || "smart",
+        mode,
         guild: context.guild || null,
-        user: context.user || null
+        user: context.user || null,
+        creativeModel: context.creativeModel === true,
+        persona: context.persona || null
       });
 
       this.releaseRequest(requestKey);
 
-      if (!reply) {
-        return "❌ حصل خطأ في الرد";
-      }
+      if (!reply) return "❌ حصل خطأ في الرد";
 
       reply = this.sanitize(reply);
       reply = aiResponseFormatterSystem.formatResponse(reply);
+
+      // ✅ احترام max_response_length من الداش
+      if (typeof context.maxResponseLength === "number" && context.maxResponseLength > 0) {
+        if (reply.length > context.maxResponseLength) {
+          reply = reply.slice(0, context.maxResponseLength).trim();
+        }
+      }
 
       await memoryManager.addMessage(userId, "user", cleanMessage, guildId, channelId);
       await memoryManager.addMessage(userId, "assistant", reply, guildId, channelId);
@@ -525,9 +563,7 @@ ${toolsGuide}
           type: "conversation",
           memory: cleanMessage.slice(0, 200)
         });
-      } catch (err) {
-        // صامت — الذاكرة اختيارية
-      }
+      } catch (err) {}
 
       this.updateFeedback(userId, "answer", true);
 
@@ -535,15 +571,10 @@ ${toolsGuide}
 
     } catch (error) {
       logger.error("AI_HANDLER_ERROR", { error: error.message });
-
-      if (requestKey) {
-        this.releaseRequest(requestKey);
-      }
-
+      if (requestKey) this.releaseRequest(requestKey);
       return "❌ حصل خطأ في الذكاء الاصطناعي";
     }
   }
-
 }
 
 module.exports = new AIHandler();
