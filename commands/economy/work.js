@@ -6,6 +6,7 @@ const {
   WORK_JOBS,
   formatPriceExact
 } = require("../../config/economyConfig")
+const economySettings = require("../../utils/economySettingsHelper")
 
 function getWorkLevel(xp) {
   let level = 1
@@ -25,10 +26,39 @@ function getRandomJob(level) {
   return jobs[Math.floor(Math.random() * jobs.length)]
 }
 
+// ══════════════════════════════════════════════════════════
+//  حساب نطاق المكافأة:
+//  - لو الداش حدد work_reward.min/max → نطبق scale حسب المستوى الوظيفي
+//    بحيث: المستوى 1 = الـ min الأساسي، المستوى 5 = الـ max الأساسي
+//  - وإلا → نستخدم levelData.minPay/maxPay من economyConfig
+// ══════════════════════════════════════════════════════════
+
+function computePayRange(workReward, levelData, currentLevel) {
+  // defaults: level data
+  let minPay = levelData.minPay
+  let maxPay = levelData.maxPay
+
+  // لو الداش حدد work_reward — نطبقه كأساس مع modifier حسب المستوى
+  if (workReward && typeof workReward.min === "number" && typeof workReward.max === "number") {
+    const baseMin = workReward.min
+    const baseMax = workReward.max
+    const range = baseMax - baseMin
+
+    // multiplier حسب المستوى (1.0x للمبتدئ → 3.0x للـ CEO)
+    const levelMultipliers = { 1: 1.0, 2: 1.4, 3: 1.9, 4: 2.4, 5: 3.0 }
+    const mult = levelMultipliers[currentLevel] || 1.0
+
+    minPay = Math.floor(baseMin * mult)
+    maxPay = Math.floor((baseMin + range) * mult)
+  }
+
+  return { minPay, maxPay }
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("عمل")
-    .setDescription("اشتغل واكسب كوينز — كل 12 ساعة")
+    .setDescription("اشتغل واكسب كوينز")
     .setDMPermission(false),
 
   helpMeta: {
@@ -39,11 +69,11 @@ module.exports = {
     relatedCommands: ["يومي", "رصيد"],
     examples: ["/عمل"],
     notes: [
-      "تقدر تشتغل مرة كل 12 ساعة",
       "كل عمل يعطيك +1 خبرة",
       "كلما ترقيت، راتبك أعلى",
       "5 مستويات: مبتدئ ← متدرب ← محترف ← خبير ← CEO",
-      "10% فرصة مضاعفة المكافأة"
+      "10% فرصة مضاعفة المكافأة",
+      "صاحب السيرفر يقدر يغير المكافأة والكولداون من الداش"
     ]
   },
 
@@ -54,14 +84,36 @@ module.exports = {
       }
 
       const userId = interaction.user.id
+      const guildId = interaction.guild.id
       const now = Date.now()
 
-      // ✅ إنشاء المستخدم إذا ما موجود
+      // ✅ إعدادات الداش
+      const settings = await economySettings.getSettings(guildId)
+
+      if (!settings.enabled) {
+        return interaction.reply({
+          content: "❌ نظام الاقتصاد معطّل في هذا السيرفر.",
+          ephemeral: true
+        })
+      }
+
+      const symbol = settings.currency_symbol
+      const currencyName = settings.currency_name
+
+      // ✅ الكولداون: يفضّل work_reward.cooldown ثم work_cooldown_ms ثم WORK_COOLDOWN الافتراضي
+      let cooldownMs = WORK_COOLDOWN
+      if (settings.work_reward?.cooldown && settings.work_reward.cooldown > 0) {
+        cooldownMs = settings.work_reward.cooldown * 1000
+      } else if (settings.work_cooldown_ms && settings.work_cooldown_ms > 0) {
+        cooldownMs = settings.work_cooldown_ms
+      }
+
+      // ✅ إنشاء المستخدم لو ما موجود — يحترم starting_balance
       await database.query(
         `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory, work_xp, work_level)
-         VALUES ($1, 0, 0, 0, '[]', 0, 1)
+         VALUES ($1, $2, 0, 0, '[]', 0, 1)
          ON CONFLICT (user_id) DO NOTHING`,
-        [userId]
+        [userId, settings.starting_balance || 0]
       )
 
       const user = await database.queryOne(
@@ -69,11 +121,11 @@ module.exports = {
         [userId]
       )
 
-      // ✅ تحقق من الكولداون
+      // ✅ الكولداون
       const timeSinceLast = now - (Number(user.last_work) || 0)
 
-      if (timeSinceLast < WORK_COOLDOWN) {
-        const remaining = WORK_COOLDOWN - timeSinceLast
+      if (timeSinceLast < cooldownMs) {
+        const remaining = cooldownMs - timeSinceLast
         const hours = Math.floor(remaining / (60 * 60 * 1000))
         const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000))
 
@@ -84,20 +136,26 @@ module.exports = {
           .addFields(
             { name: "⏰ الوقت المتبقي", value: `**${hours}** ساعة و **${minutes}** دقيقة`, inline: false }
           )
-          .setFooter({ text: `رصيدك: ${formatPriceExact(user.coins)} كوين` })
+          .setFooter({ text: `رصيدك: ${formatPriceExact(user.coins)} ${currencyName}` })
           .setTimestamp()
 
         return interaction.reply({ embeds: [embed], ephemeral: true })
       }
 
-      // ✅ حساب المستوى الحالي
+      // ✅ المستوى الحالي + الوظيفة
       const currentXp = user.work_xp || 0
       const currentLevel = getWorkLevel(currentXp)
       const levelData = WORK_LEVELS[currentLevel]
       const job = getRandomJob(currentLevel)
 
-      // ✅ المكافأة حسب المستوى
-      let reward = Math.floor(Math.random() * (levelData.maxPay - levelData.minPay + 1)) + levelData.minPay
+      // ✅ المكافأة — تطبّق work_reward من الداش لو موجود
+      const { minPay, maxPay } = computePayRange(
+        settings.work_reward,
+        levelData,
+        currentLevel
+      )
+
+      let reward = Math.floor(Math.random() * (maxPay - minPay + 1)) + minPay
       let bonusText = ""
 
       if (Math.random() < 0.10) {
@@ -110,9 +168,9 @@ module.exports = {
       const newLevel = getWorkLevel(newXp)
 
       const result = await database.queryOne(
-        `UPDATE economy_users 
+        `UPDATE economy_users
          SET coins = coins + $1, last_work = $2, work_xp = $3, work_level = $4
-         WHERE user_id = $5 
+         WHERE user_id = $5
          RETURNING coins`,
         [reward, now, newXp, newLevel, userId]
       )
@@ -128,20 +186,24 @@ module.exports = {
         xpBar = "█".repeat(progress) + "░".repeat(10 - progress)
       }
 
+      // ✅ نطاق راتب المستوى الجديد (للترقية)
+      const newLevelData = WORK_LEVELS[newLevel]
+      const newRange = computePayRange(settings.work_reward, newLevelData, newLevel)
+
       // ✅ Embed
       const embed = new EmbedBuilder()
         .setColor(leveledUp ? 0xf59e0b : 0x3b82f6)
-        .setTitle(leveledUp ? `🎉 ترقية وظيفية! ${WORK_LEVELS[newLevel].emoji} ${WORK_LEVELS[newLevel].title}` : job.title)
+        .setTitle(leveledUp ? `🎉 ترقية وظيفية! ${newLevelData.emoji} ${newLevelData.title}` : job.title)
         .setDescription(
           leveledUp
-            ? `تهانينا! ترقيت من **${levelData.title}** إلى **${WORK_LEVELS[newLevel].title}**!\nراتبك الجديد: **${formatPriceExact(WORK_LEVELS[newLevel].minPay)} - ${formatPriceExact(WORK_LEVELS[newLevel].maxPay)}** كوين${bonusText}`
+            ? `تهانينا! ترقيت من **${levelData.title}** إلى **${newLevelData.title}**!\nراتبك الجديد: **${formatPriceExact(newRange.minPay)} - ${formatPriceExact(newRange.maxPay)}** ${currencyName}${bonusText}`
             : `${job.desc} وكسبت فلوس!${bonusText}`
         )
         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 128 }))
         .addFields(
-          { name: "💰 الأجر", value: `**+${formatPriceExact(reward)}** كوين`, inline: true },
-          { name: "💳 رصيدك", value: `**${formatPriceExact(newBalance)}** كوين`, inline: true },
-          { name: "📊 المستوى الوظيفي", value: `${WORK_LEVELS[newLevel].emoji} **${WORK_LEVELS[newLevel].title}** (Lv.${newLevel})`, inline: false },
+          { name: `${symbol} الأجر`, value: `**+${formatPriceExact(reward)}** ${currencyName}`, inline: true },
+          { name: "💳 رصيدك", value: `**${formatPriceExact(newBalance)}** ${currencyName}`, inline: true },
+          { name: "📊 المستوى الوظيفي", value: `${newLevelData.emoji} **${newLevelData.title}** (Lv.${newLevel})`, inline: false },
         )
 
       if (nextLevelXp) {
@@ -158,8 +220,10 @@ module.exports = {
         })
       }
 
+      // ✅ Footer ديناميكي حسب الكولداون
+      const cooldownHours = Math.floor(cooldownMs / (60 * 60 * 1000))
       embed
-        .setFooter({ text: "تقدر تشتغل كل 12 ساعة" })
+        .setFooter({ text: `تقدر تشتغل كل ${cooldownHours} ساعة` })
         .setTimestamp()
 
       return interaction.reply({ embeds: [embed] })

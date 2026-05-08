@@ -29,7 +29,8 @@ const DEFAULTS = {
   starting_balance: 0,
   daily_reward: { min: 100, max: 500 },
   weekly_reward: { min: 1000, max: 5000 },
-  message_reward: { min: 1, max: 5, cooldown: 60 }
+  message_reward: { min: 1, max: 5, cooldown: 60 },
+  work_reward: { min: 50, max: 300, cooldown: 43200 }
 }
 
 // ══════════════════════════════════════
@@ -112,6 +113,7 @@ async function getSettings(guildId) {
     daily_reward: normalizeRewardRange(row?.daily_reward, DEFAULTS.daily_reward),
     weekly_reward: normalizeRewardRange(row?.weekly_reward, DEFAULTS.weekly_reward),
     message_reward: normalizeMessageReward(row?.message_reward, DEFAULTS.message_reward),
+    work_reward: normalizeMessageReward(row?.work_reward, DEFAULTS.work_reward),
     work_cooldown_ms: row?.work_cooldown != null
       ? Math.max(0, parseInt(row.work_cooldown)) * 1000
       : null // null = استخدم WORK_COOLDOWN من economyConfig
