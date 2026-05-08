@@ -1,14 +1,14 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js")
 const { CATEGORIES, CARS, PROPERTIES, INFRASTRUCTURE, ALL_ITEMS, formatPrice, formatPriceExact } = require("../../config/economyConfig")
 const fridaySaleSystem = require("../../systems/fridaySaleSystem")
+const economySettings = require("../../utils/economySettingsHelper")
+const economyShop = require("../../utils/economyShopHelper")
 
-// تجميع العناصر حسب الفئة
 function getItemsByCategory(categoryId) {
   return Object.values(ALL_ITEMS).filter(item => item.category === categoryId)
 }
 
-// بناء Embed لفئة معينة
-function buildCategoryEmbed(categoryId, interaction) {
+function buildCategoryEmbed(categoryId, interaction, currencyName = "كوين") {
   const category = CATEGORIES[categoryId]
   const items = getItemsByCategory(categoryId)
 
@@ -28,8 +28,8 @@ function buildCategoryEmbed(categoryId, interaction) {
     const reqText = item.requiresText || "بدون شروط"
 
     embed.addFields({
-      name: `${item.emoji} ${item.name} — ${formatPrice(item.price)} كوين`,
-      value: `💰 \`${priceText}\` كوين\n📋 ${item.description}\n🔒 ${reqText}`,
+      name: `${item.emoji} ${item.name} — ${formatPrice(item.price)} ${currencyName}`,
+      value: `💰 \`${priceText}\` ${currencyName}\n📋 ${item.description}\n🔒 ${reqText}`,
       inline: false
     })
   }
@@ -37,7 +37,49 @@ function buildCategoryEmbed(categoryId, interaction) {
   return embed
 }
 
-// ألوان الفئات
+async function buildCustomShopEmbed(guildId, interaction, currencyName = "كوين") {
+  const items = await economyShop.getGuildShopItems(guildId)
+  if (items.length === 0) return null
+
+  const embed = new EmbedBuilder()
+    .setColor(0xec4899)
+    .setTitle("🛒 متجر السيرفر")
+    .setDescription(`عناصر مخصصة من إدارة السيرفر — **${items.length}** عنصر`)
+    .setFooter({ text: `طلب من: ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
+    .setTimestamp()
+
+  for (const item of items.slice(0, 20)) {
+    const stockText = item.stock === -1
+      ? "♾️ غير محدود"
+      : item.stock > 0
+        ? `📦 متبقي: ${item.stock}`
+        : "❌ نفد"
+
+    let typeText = ""
+    if (item.type === "role") typeText = "🎭 رتبة"
+    else if (item.type === "tool") typeText = "🔧 أداة"
+    else typeText = "📦 عنصر"
+
+    const desc = item.description || "—"
+
+    embed.addFields({
+      name: `${item.emoji} ${item.name} — ${formatPrice(item.price)} ${currencyName}`,
+      value: `💰 \`${formatPriceExact(item.price)}\` ${currencyName}\n${typeText} • ${stockText}\n📋 ${desc}`,
+      inline: false
+    })
+  }
+
+  if (items.length > 20) {
+    embed.addFields({
+      name: "ℹ️ ملاحظة",
+      value: `يوجد ${items.length - 20} عنصر إضافي. استخدم \`/شراء\` للبحث عنهم.`,
+      inline: false
+    })
+  }
+
+  return embed
+}
+
 function getCategoryColor(categoryId) {
   const colors = {
     car_economy: 0x22c55e,
@@ -46,12 +88,12 @@ function getCategoryColor(categoryId) {
     car_super: 0xef4444,
     house: 0xf59e0b,
     infrastructure: 0x06b6d4,
+    custom_shop: 0xec4899,
   }
   return colors[categoryId] || 0x64748b
 }
 
-// Embed الصفحة الرئيسية
-async function buildMainEmbed(interaction) {
+async function buildMainEmbed(interaction, currencyName) {
   const embed = new EmbedBuilder()
     .setColor(0xf59e0b)
     .setTitle("🏪 المتجر")
@@ -59,7 +101,6 @@ async function buildMainEmbed(interaction) {
     .setFooter({ text: `طلب من: ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
     .setTimestamp()
 
-  // ✅ عروض الجمعة
   if (fridaySaleSystem.isFriday()) {
     const sales = await fridaySaleSystem.getSales()
 
@@ -68,7 +109,7 @@ async function buildMainEmbed(interaction) {
         const item = ALL_ITEMS[s.item_id]
         if (!item) return null
         const discountedPrice = fridaySaleSystem.applyDiscount(item.price, s.discount)
-        return `${item.emoji} **${item.name}** — ~~${formatPrice(item.price)}~~ **${formatPrice(discountedPrice)}** كوين (-${s.discount}%)`
+        return `${item.emoji} **${item.name}** — ~~${formatPrice(item.price)}~~ **${formatPrice(discountedPrice)}** ${currencyName} (-${s.discount}%)`
       }).filter(Boolean).join("\n")
 
       embed.addFields({
@@ -79,7 +120,6 @@ async function buildMainEmbed(interaction) {
     }
   }
 
-  // عرض ملخص كل فئة
   const sortedCategories = Object.entries(CATEGORIES).sort((a, b) => a[1].order - b[1].order)
 
   for (const [catId, cat] of sortedCategories) {
@@ -89,16 +129,29 @@ async function buildMainEmbed(interaction) {
 
     embed.addFields({
       name: `${cat.name}`,
-      value: `📦 ${items.length} عنصر\n💰 من ${formatPrice(minPrice)} إلى ${formatPrice(maxPrice)} كوين`,
+      value: `📦 ${items.length} عنصر\n💰 من ${formatPrice(minPrice)} إلى ${formatPrice(maxPrice)} ${currencyName}`,
       inline: true
     })
+  }
+
+  // ✅ قسم متجر السيرفر المخصص
+  if (interaction.guild) {
+    const customItems = await economyShop.getGuildShopItems(interaction.guild.id)
+    if (customItems.length > 0) {
+      const minPrice = Math.min(...customItems.map(i => i.price))
+      const maxPrice = Math.max(...customItems.map(i => i.price))
+      embed.addFields({
+        name: "🛒 متجر السيرفر",
+        value: `📦 ${customItems.length} عنصر مخصص\n💰 من ${formatPrice(minPrice)} إلى ${formatPrice(maxPrice)} ${currencyName}`,
+        inline: true
+      })
+    }
   }
 
   return embed
 }
 
-// قائمة اختيار الفئات
-function buildCategoryMenu() {
+async function buildCategoryMenu(guildId) {
   const sortedCategories = Object.entries(CATEGORIES).sort((a, b) => a[1].order - b[1].order)
 
   const options = sortedCategories.map(([catId, cat]) => {
@@ -111,6 +164,19 @@ function buildCategoryMenu() {
     }
   })
 
+  // ✅ إضافة خيار متجر السيرفر لو فيه عناصر
+  if (guildId) {
+    const customItems = await economyShop.getGuildShopItems(guildId)
+    if (customItems.length > 0) {
+      options.push({
+        label: "متجر السيرفر",
+        description: `${customItems.length} عنصر مخصص`,
+        value: "custom_shop",
+        emoji: "🛒"
+      })
+    }
+  }
+
   const menu = new StringSelectMenuBuilder()
     .setCustomId("shop_category")
     .setPlaceholder("🏪 اختر فئة...")
@@ -122,7 +188,7 @@ function buildCategoryMenu() {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("متجر")
-    .setDescription("تصفح المتجر واشترِ سيارات وعقارات وبنية تحتية")
+    .setDescription("تصفح المتجر واشترِ سيارات وعقارات وعناصر مخصصة")
     .setDMPermission(false)
     .addStringOption(option =>
       option
@@ -135,16 +201,17 @@ module.exports = {
           { name: "🚘 سيارات فاخرة", value: "car_luxury" },
           { name: "🏎️ سيارات فائقة الفخامة", value: "car_super" },
           { name: "🏠 عقارات", value: "house" },
-          { name: "🛣️ بنية تحتية", value: "infrastructure" }
+          { name: "🛣️ بنية تحتية", value: "infrastructure" },
+          { name: "🛒 متجر السيرفر", value: "custom_shop" }
         )
     ),
 
   helpMeta: {
     category: "economy",
     aliases: ["shop", "store", "متجر"],
-    description: "تصفح المتجر — سيارات، عقارات، بنية تحتية، وأدوات",
+    description: "تصفح المتجر — سيارات، عقارات، بنية تحتية، وأدوات مخصصة",
     options: [
-      { name: "النوع", description: "نوع المنتجات (سيارات/عقارات/أدوات/الكل)", required: false }
+      { name: "الفئة", description: "نوع المنتجات", required: false }
     ],
     requirements: {
       botRoleHierarchy: false,
@@ -155,30 +222,43 @@ module.exports = {
     relatedCommands: ["شراء", "بيع", "ممتلكاتي", "رصيد"],
     examples: [
       "/متجر",
-      "/متجر النوع:🚗 سيارات",
-      "/متجر النوع:🏠 عقارات"
+      "/متجر الفئة:🚗 سيارات",
+      "/متجر الفئة:🛒 متجر السيرفر"
     ],
     notes: [
-      "الأسعار ثابتة عالمياً",
-      "كل جمعة فيه عروض عشوائية بخصم 10-40%",
-      "يعرض رصيدك الحالي عشان تعرف وش تقدر تشتري"
+      "متجر السيرفر يحتوي عناصر يضيفها صاحب السيرفر من الداش",
+      "كل جمعة فيه عروض عشوائية بخصم 10-40% على العناصر العالمية"
     ]
   },
 
   async execute(interaction) {
     try {
+      const settings = await economySettings.getSettings(interaction.guild?.id)
+      const currencyName = settings.currency_name
+
       const categoryChoice = interaction.options.getString("الفئة")
 
       if (categoryChoice) {
-        const embed = buildCategoryEmbed(categoryChoice, interaction)
-        if (!embed) {
-          return interaction.reply({ content: "❌ فئة غير موجودة.", ephemeral: true })
+        let embed
+        if (categoryChoice === "custom_shop") {
+          embed = await buildCustomShopEmbed(interaction.guild?.id, interaction, currencyName)
+          if (!embed) {
+            return interaction.reply({
+              content: "❌ متجر السيرفر فاضي. صاحب السيرفر يقدر يضيف عناصر من الداش.",
+              ephemeral: true
+            })
+          }
+        } else {
+          embed = buildCategoryEmbed(categoryChoice, interaction, currencyName)
+          if (!embed) {
+            return interaction.reply({ content: "❌ فئة غير موجودة.", ephemeral: true })
+          }
         }
         return interaction.reply({ embeds: [embed] })
       }
 
-      const mainEmbed = await buildMainEmbed(interaction)
-      const menu = buildCategoryMenu()
+      const mainEmbed = await buildMainEmbed(interaction, currencyName)
+      const menu = await buildCategoryMenu(interaction.guild?.id)
 
       const response = await interaction.reply({
         embeds: [mainEmbed],
@@ -193,7 +273,12 @@ module.exports = {
       collector.on("collect", async (i) => {
         try {
           const selectedCategory = i.values[0]
-          const embed = buildCategoryEmbed(selectedCategory, interaction)
+          let embed
+          if (selectedCategory === "custom_shop") {
+            embed = await buildCustomShopEmbed(interaction.guild?.id, interaction, currencyName)
+          } else {
+            embed = buildCategoryEmbed(selectedCategory, interaction, currencyName)
+          }
 
           if (!embed) {
             return i.update({ content: "❌ فئة غير موجودة.", embeds: [], components: [] })
@@ -208,9 +293,7 @@ module.exports = {
       collector.on("end", async () => {
         try {
           await interaction.editReply({ components: [] })
-        } catch {
-          // الرسالة ممكن تكون انحذفت
-        }
+        } catch {}
       })
 
     } catch (err) {
