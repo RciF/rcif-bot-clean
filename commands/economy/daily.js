@@ -1,13 +1,14 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
-const { DAILY_REWARD, DAILY_COOLDOWN, formatPriceExact } = require("../../config/economyConfig")
+const { DAILY_COOLDOWN, formatPriceExact } = require("../../config/economyConfig")
+const economySettings = require("../../utils/economySettingsHelper")
 
 // ══════════════════════════════════════════════════════════════════
 //  STREAK CONFIG
 // ══════════════════════════════════════════════════════════════════
 
-const STREAK_WINDOW = 48 * 60 * 60 * 1000  // 48 ساعة — لو ما استلم خلالها ينكسر الـ streak
-const STREAK_BONUS_PER_DAY = 0.10           // +10% لكل يوم
+const STREAK_WINDOW = 48 * 60 * 60 * 1000
+const STREAK_BONUS_PER_DAY = 0.10
 
 const STREAK_MILESTONES = {
     7:  { multiplier: 2.0,  label: "🎉 أسبوع كامل!",   color: 0xf59e0b },
@@ -22,18 +23,14 @@ const STREAK_MILESTONES = {
 // ══════════════════════════════════════════════════════════════════
 
 function getStreakMultiplier(streak) {
-    // تحقق من الـ milestones أولاً (من الأعلى للأدنى)
     const milestoneKeys = Object.keys(STREAK_MILESTONES)
         .map(Number)
         .sort((a, b) => b - a)
 
     for (const key of milestoneKeys) {
-        if (streak >= key) {
-            return STREAK_MILESTONES[key].multiplier
-        }
+        if (streak >= key) return STREAK_MILESTONES[key].multiplier
     }
 
-    // بونص تراكمي +10% لكل يوم (حد أقصى 90% قبل الـ milestones)
     const bonus = Math.min(streak * STREAK_BONUS_PER_DAY, 0.9)
     return 1 + bonus
 }
@@ -44,9 +41,7 @@ function getMilestoneInfo(streak) {
         .sort((a, b) => b - a)
 
     for (const key of milestoneKeys) {
-        if (streak === key) {
-            return STREAK_MILESTONES[key]
-        }
+        if (streak === key) return STREAK_MILESTONES[key]
     }
     return null
 }
@@ -57,9 +52,7 @@ function getNextMilestone(streak) {
         .sort((a, b) => a - b)
 
     for (const key of milestoneKeys) {
-        if (streak < key) {
-            return { days: key, remaining: key - streak }
-        }
+        if (streak < key) return { days: key, remaining: key - streak }
     }
     return null
 }
@@ -98,7 +91,7 @@ module.exports = {
         relatedCommands: ["رصيد", "عمل", "متجر"],
         examples: ["/يومي"],
         notes: [
-            "المكافأة الأساسية + بونص عشوائي حتى +50%",
+            "المكافأة عشوائية بين الحد الأدنى والأقصى (يحددها صاحب السيرفر)",
             "كل يوم متتالي يزيد المكافأة +10%",
             "يوم 7 = x2 | يوم 14 = x2.5 | يوم 30 = x3 | يوم 60 = x4 | يوم 100 = x5",
             "لو ما استلمت خلال 48 ساعة ينكسر الـ Streak",
@@ -113,14 +106,28 @@ module.exports = {
             }
 
             const userId = interaction.user.id
+            const guildId = interaction.guild.id
             const now = Date.now()
 
-            // ✅ جلب أو إنشاء المستخدم (مع دعم أعمدة الـ streak)
+            // ✅ إعدادات الاقتصاد من الداش
+            const settings = await economySettings.getSettings(guildId)
+
+            if (!settings.enabled) {
+                return interaction.reply({
+                    content: "❌ نظام الاقتصاد معطّل في هذا السيرفر.",
+                    ephemeral: true
+                })
+            }
+
+            const symbol = settings.currency_symbol
+            const currencyName = settings.currency_name
+
+            // ✅ جلب أو إنشاء المستخدم — يحترم starting_balance
             await database.query(
                 `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory, streak, streak_last_day)
-                 VALUES ($1, 0, 0, 0, '[]', 0, 0)
+                 VALUES ($1, $2, 0, 0, '[]', 0, 0)
                  ON CONFLICT (user_id) DO NOTHING`,
-                [userId]
+                [userId, settings.starting_balance || 0]
             )
 
             const userResult = await database.query(
@@ -129,7 +136,6 @@ module.exports = {
             )
             const user = userResult.rows[0]
 
-            // ✅ FIX: تحقق من وجود الـ user (نظرياً مستحيل بعد الـ INSERT لكن نحتاط)
             if (!user) {
                 return interaction.reply({
                     content: "❌ ما قدرت أجلب بيانات المستخدم. حاول مرة ثانية.",
@@ -166,7 +172,7 @@ module.exports = {
                             inline: true
                         }
                     )
-                    .setFooter({ text: `رصيدك الحالي: ${formatPriceExact(user.coins)} كوين` })
+                    .setFooter({ text: `رصيدك الحالي: ${formatPriceExact(user.coins)} ${currencyName}` })
                     .setTimestamp()
 
                 return interaction.reply({ embeds: [embed], ephemeral: true })
@@ -180,30 +186,31 @@ module.exports = {
             let streakBroken = false
 
             if (lastDay === 0) {
-                // أول مرة
                 newStreak = 1
             } else {
                 const timeSinceLastDay = now - lastDay
 
                 if (timeSinceLastDay <= STREAK_WINDOW) {
-                    // ضمن الـ 48 ساعة — يكمل الـ streak
                     newStreak = currentStreak + 1
                 } else {
-                    // انكسر الـ streak
                     newStreak = 1
                     streakBroken = currentStreak > 1
                 }
             }
 
             // ══════════════════════════════════════════════════════
-            //  حساب المكافأة
+            //  حساب المكافأة — من إعدادات الداش
             // ══════════════════════════════════════════════════════
 
-            const baseReward      = DAILY_REWARD
-            const randomBonus     = Math.floor(Math.random() * DAILY_REWARD * 0.5)
+            // المكافأة الأساسية = رقم عشوائي بين min و max من الداش
+            const baseReward = economySettings.randomReward(settings.daily_reward)
+
+            // بونص عشوائي إضافي (حتى 50% من الـ baseReward)
+            const randomBonus = Math.floor(Math.random() * baseReward * 0.5)
+
             const streakMultiplier = getStreakMultiplier(newStreak)
             const totalBeforeStreak = baseReward + randomBonus
-            const finalReward     = Math.floor(totalBeforeStreak * streakMultiplier)
+            const finalReward = Math.floor(totalBeforeStreak * streakMultiplier)
             const streakBonusAmount = finalReward - totalBeforeStreak
 
             // ✅ تحديث قاعدة البيانات
@@ -228,7 +235,6 @@ module.exports = {
             const nextMilestone = getNextMilestone(newStreak)
             const streakEmoji  = getStreakEmoji(newStreak)
 
-            // لون الـ embed حسب الـ milestone أو الـ streak
             let embedColor = 0x22c55e
             if (milestone)          embedColor = milestone.color
             else if (newStreak >= 7) embedColor = 0xf59e0b
@@ -236,38 +242,35 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor(embedColor)
-                .setTitle(milestone ? `${milestone.label} — المكافأة اليومية` : "🎁 المكافأة اليومية")
+                .setTitle(milestone ? `${milestone.label} — المكافأة اليومية` : `${symbol} المكافأة اليومية`)
                 .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 128 }))
 
-            // ── الحقول الأساسية ──
             embed.addFields(
                 {
-                    name: "💰 المكافأة الأساسية",
-                    value: `**+${formatPriceExact(baseReward)}** كوين`,
+                    name: `${symbol} المكافأة الأساسية`,
+                    value: `**+${formatPriceExact(baseReward)}** ${currencyName}`,
                     inline: true
                 },
                 {
                     name: "🎲 بونص عشوائي",
-                    value: `**+${formatPriceExact(randomBonus)}** كوين`,
+                    value: `**+${formatPriceExact(randomBonus)}** ${currencyName}`,
                     inline: true
                 },
                 {
                     name: "💳 رصيدك الجديد",
-                    value: `**${formatPriceExact(newBalance)}** كوين`,
+                    value: `**${formatPriceExact(newBalance)}** ${currencyName}`,
                     inline: true
                 }
             )
 
-            // ── بونص الـ Streak (لو أكبر من 0) ──
             if (streakBonusAmount > 0) {
                 embed.addFields({
                     name: `${streakEmoji} بونص السلسلة (x${streakMultiplier.toFixed(1)})`,
-                    value: `**+${formatPriceExact(streakBonusAmount)}** كوين إضافي`,
+                    value: `**+${formatPriceExact(streakBonusAmount)}** ${currencyName} إضافي`,
                     inline: false
                 })
             }
 
-            // ── معلومات الـ Streak ──
             let streakText = `**${newStreak}** يوم متتالي`
             if (milestone) streakText += ` 🎊`
 
@@ -277,7 +280,6 @@ module.exports = {
                 inline: true
             })
 
-            // ── الـ Milestone القادم ──
             if (nextMilestone) {
                 embed.addFields({
                     name: "🎯 الهدف القادم",
@@ -292,15 +294,13 @@ module.exports = {
                 })
             }
 
-            // ── إشعار انكسار الـ Streak ──
             if (streakBroken) {
                 embed.setDescription(`> ⚠️ انكسرت سلسلتك القديمة! ابدأ من جديد.`)
             }
 
-            // ── المجموع الكلي ──
             embed.addFields({
                 name: "📊 إجمالي المكافأة",
-                value: `**${formatPriceExact(finalReward)}** كوين`,
+                value: `**${formatPriceExact(finalReward)}** ${currencyName}`,
                 inline: false
             })
 
