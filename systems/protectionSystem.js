@@ -1,44 +1,37 @@
+// ══════════════════════════════════════════════════════════════════
+//  PROTECTION SYSTEM
+//  المسار: systems/protectionSystem.js
+//
+//  يدعم schemas مزدوجة:
+//   1) Flat (legacy): antispam_enabled, antispam_max_messages, ...
+//   2) JSONB (الداش): anti_spam:{enabled,maxMessages,timeWindow,action,muteDuration},
+//      anti_raid:{...}, anti_nuke:{...}, whitelist:{members,roles}, log_channel
+//
+//  normalizeSettings() يحوّل JSONB ⟶ flat بشفافية، فيظل كل المنطق يعمل بدون تغيير.
+// ══════════════════════════════════════════════════════════════════
+
 const { EmbedBuilder, PermissionFlagsBits } = require("discord.js")
 const databaseSystem = require("./databaseSystem")
 const logger = require("./loggerSystem")
 const scheduler = require("./schedulerSystem")
 
 // ═══════════════════════════════════════════════════
-//  IN-MEMORY TRACKERS
+//  TRACKERS
 // ═══════════════════════════════════════════════════
 
-// Anti-Spam: { guildId_userId -> [timestamps] }
 const spamTracker = new Map()
-
-// Anti-Raid: { guildId -> [timestamps] }
 const raidTracker = new Map()
-
-// Anti-Nuke: { guildId_executorId -> { channelDeletes, roleDeletes, bans, timestamps } }
 const nukeTracker = new Map()
-
-// Settings cache: { guildId -> settings }
 const settingsCache = new Map()
-const CACHE_TTL = 2 * 60 * 1000 // دقيقتين
+const CACHE_TTL = 2 * 60 * 1000
 
-// Raid lockdown state: { guildId -> { active: true, autoLiftTimer: timeoutId|null } }
-// ⚠️ لاحظ: هذي in-memory فقط. لو البوت يُعاد تشغيله أثناء lockdown،
-//   القنوات تبقى مقفولة في Discord لكن الـ state يضيع.
-//   الحل المستقبلي: حفظ في DB. الحل الحالي: على الأدمن يفك يدوياً.
 const lockdownState = new Map()
-
-const LOCKDOWN_AUTO_LIFT_MS = 10 * 60 * 1000 // 10 دقائق
+const LOCKDOWN_AUTO_LIFT_MS = 10 * 60 * 1000
 
 // ═══════════════════════════════════════════════════
-//  JSON HELPER — حماية للقراءة من DB
+//  JSON HELPER
 // ═══════════════════════════════════════════════════
 
-/**
- * يحوّل قيمة من DB إلى array.
- * يدعم:
- *  - array أصلاً (JSONB من Postgres)
- *  - string JSON (TEXT من Postgres)
- *  - null/undefined → []
- */
 function parseJSONArray(value) {
   if (Array.isArray(value)) return value
   if (!value) return []
@@ -51,6 +44,115 @@ function parseJSONArray(value) {
     }
   }
   return []
+}
+
+function parseJSONObject(value) {
+  if (!value) return null
+  if (typeof value === "object" && !Array.isArray(value)) return value
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value)
+      return (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed : null
+    } catch { return null }
+  }
+  return null
+}
+
+// ═══════════════════════════════════════════════════
+//  NORMALIZE — يدمج schema الداش (JSONB) مع schema الحقول الـ flat
+//  يفضّل القيم الـ flat لو موجودة (لأن الأوامر بتحفظها فيها)
+//  ويستخدم JSONB كـ fallback
+// ═══════════════════════════════════════════════════
+
+function normalizeSettings(raw) {
+  if (!raw) return null
+
+  const data = { ...raw }
+
+  // الداش JSONB (لو موجودة)
+  const antiSpam = parseJSONObject(raw.anti_spam)
+  const antiRaid = parseJSONObject(raw.anti_raid)
+  const antiNuke = parseJSONObject(raw.anti_nuke)
+  const whitelist = parseJSONObject(raw.whitelist)
+
+  // ── Anti-Spam ──
+  if (antiSpam) {
+    if (data.antispam_enabled === undefined || data.antispam_enabled === null) {
+      data.antispam_enabled = antiSpam.enabled === true
+    }
+    if (data.antispam_max_messages == null) {
+      data.antispam_max_messages = parseInt(antiSpam.maxMessages) || 5
+    }
+    if (data.antispam_interval_ms == null) {
+      // الداش: timeWindow بالثواني / البوت: interval_ms بالملي ثانية
+      const tw = parseInt(antiSpam.timeWindow)
+      data.antispam_interval_ms = isFinite(tw) ? tw * 1000 : 3000
+    }
+    if (data.antispam_action == null) {
+      data.antispam_action = antiSpam.action || "mute"
+    }
+    if (data.antispam_mute_duration == null) {
+      const md = parseInt(antiSpam.muteDuration)
+      data.antispam_mute_duration = isFinite(md) ? md : 300000
+    }
+  }
+
+  // ── Anti-Raid ──
+  if (antiRaid) {
+    if (data.antiraid_enabled === undefined || data.antiraid_enabled === null) {
+      data.antiraid_enabled = antiRaid.enabled === true
+    }
+    if (data.antiraid_join_threshold == null) {
+      data.antiraid_join_threshold = parseInt(antiRaid.maxJoins) || 10
+    }
+    if (data.antiraid_join_interval_ms == null) {
+      const tw = parseInt(antiRaid.timeWindow)
+      data.antiraid_join_interval_ms = isFinite(tw) ? tw * 1000 : 10000
+    }
+    if (data.antiraid_action == null) {
+      data.antiraid_action = antiRaid.action || "lockdown"
+    }
+  }
+
+  // ── Anti-Nuke ──
+  if (antiNuke) {
+    if (data.antinuke_enabled === undefined || data.antinuke_enabled === null) {
+      data.antinuke_enabled = antiNuke.enabled === true
+    }
+    if (data.antinuke_channel_delete_threshold == null) {
+      data.antinuke_channel_delete_threshold = parseInt(antiNuke.maxChannelDeletes) || 3
+    }
+    if (data.antinuke_role_delete_threshold == null) {
+      data.antinuke_role_delete_threshold = parseInt(antiNuke.maxRoleDeletes) || 3
+    }
+    if (data.antinuke_ban_threshold == null) {
+      data.antinuke_ban_threshold = parseInt(antiNuke.maxBans) || 3
+    }
+    if (data.antinuke_action == null) {
+      data.antinuke_action = antiNuke.action || "ban"
+    }
+  }
+
+  // ── Whitelist ──
+  let wlUsers = parseJSONArray(raw.whitelist_users)
+  let wlRoles = parseJSONArray(raw.whitelist_roles)
+  if (whitelist) {
+    if (wlUsers.length === 0 && Array.isArray(whitelist.members)) {
+      wlUsers = whitelist.members
+    }
+    if (wlRoles.length === 0 && Array.isArray(whitelist.roles)) {
+      wlRoles = whitelist.roles
+    }
+  }
+  data.whitelist_users = wlUsers
+  data.whitelist_roles = wlRoles
+
+  // ── Log channel ──
+  if (!data.log_channel_id && raw.log_channel) {
+    data.log_channel_id = raw.log_channel
+  }
+
+  return data
 }
 
 // ═══════════════════════════════════════════════════
@@ -69,13 +171,7 @@ async function getSettings(guildId) {
       [guildId]
     )
 
-    let data = result || null
-
-    // ✅ FIX: فك تشفير JSON للـ whitelist
-    if (data) {
-      data.whitelist_users = parseJSONArray(data.whitelist_users)
-      data.whitelist_roles = parseJSONArray(data.whitelist_roles)
-    }
+    const data = normalizeSettings(result)
 
     settingsCache.set(guildId, { data, time: Date.now() })
     return data
@@ -129,7 +225,6 @@ async function saveSettings(guildId, data) {
       JSON.stringify(data.whitelist_users ?? [])
     ])
 
-    // مسح الكاش
     settingsCache.delete(guildId)
     return true
   } catch (err) {
@@ -145,7 +240,6 @@ async function saveSettings(guildId, data) {
 function isWhitelisted(settings, userId, memberRoles) {
   if (!settings) return false
 
-  // ✅ FIX: نتأكد إنها arrays فعلياً (parseJSONArray في getSettings)
   const whitelistUsers = Array.isArray(settings.whitelist_users) ? settings.whitelist_users : []
   const whitelistRoles = Array.isArray(settings.whitelist_roles) ? settings.whitelist_roles : []
 
@@ -232,13 +326,11 @@ async function checkSpam(message) {
     const timestamps = spamTracker.get(key)
     timestamps.push(now)
 
-    // نظف القديم
     const filtered = timestamps.filter(t => now - t < interval)
     spamTracker.set(key, filtered)
 
     if (filtered.length < maxMessages) return
 
-    // تجاوز الحد!
     spamTracker.delete(key)
 
     const action = settings.antispam_action || "mute"
@@ -260,14 +352,12 @@ async function checkSpam(message) {
 
     if (!actionDone) return
 
-    // حذف رسائل الـ Spam
     try {
       const msgs = await message.channel.messages.fetch({ limit: 20 })
       const spamMsgs = msgs.filter(m => m.author.id === message.author.id)
       await message.channel.bulkDelete(spamMsgs, true).catch(() => {})
     } catch {}
 
-    // لوق
     const embed = new EmbedBuilder()
       .setColor(0xef4444)
       .setTitle("🛡️ Anti-Spam — تم اكتشاف فلد")
@@ -319,16 +409,14 @@ async function checkRaid(member) {
     raidTracker.set(guildId, filtered)
 
     if (filtered.length < threshold) return
-    if (isInLockdown(guildId)) return // بالفعل في lockdown
+    if (isInLockdown(guildId)) return
 
-    // RAID مكتشف!
     raidTracker.delete(guildId)
     const action = settings.antiraid_action || "lockdown"
 
     if (action === "lockdown") {
       await activateLockdown(member.guild, settings)
     } else if (action === "kick") {
-      // طرد الأعضاء الجدد اللي دخلوا في الـ interval
       const recentMembers = member.guild.members.cache.filter(m => {
         return m.joinedTimestamp && now - m.joinedTimestamp < interval
       })
@@ -361,7 +449,6 @@ async function checkRaid(member) {
 
 async function activateLockdown(guild, settings) {
   try {
-    // ✅ FIX: حماية من lockdown مكرر
     const existing = lockdownState.get(guild.id)
     if (existing?.active) {
       logger.warn("LOCKDOWN_ALREADY_ACTIVE", { guild: guild.id })
@@ -369,9 +456,8 @@ async function activateLockdown(guild, settings) {
     }
 
     const everyoneRole = guild.roles.everyone
-    const textChannels = guild.channels.cache.filter(c => c.type === 0) // GuildText
+    const textChannels = guild.channels.cache.filter(c => c.type === 0)
 
-    // ✅ FIX: parallel بدل sequential — أسرع بكثير في السيرفرات الكبيرة
     await Promise.allSettled(
       [...textChannels.values()].map(channel =>
         channel.permissionOverwrites.edit(everyoneRole, {
@@ -380,7 +466,6 @@ async function activateLockdown(guild, settings) {
       )
     )
 
-    // ✅ FIX: نخزن timer ID في state عشان نقدر نلغيه
     const autoLiftTimer = setTimeout(() => {
       deactivateLockdown(guild, settings).catch(err =>
         logger.error("LOCKDOWN_AUTO_LIFT_FAILED", { error: err.message })
@@ -405,7 +490,6 @@ async function deactivateLockdown(guild, settings) {
   try {
     const state = lockdownState.get(guild.id)
 
-    // ✅ FIX: ألغي الـ auto-lift timer لو موجود (يمنع double-deactivation)
     if (state?.autoLiftTimer) {
       clearTimeout(state.autoLiftTimer)
     }
@@ -415,7 +499,6 @@ async function deactivateLockdown(guild, settings) {
     const everyoneRole = guild.roles.everyone
     const textChannels = guild.channels.cache.filter(c => c.type === 0)
 
-    // ✅ FIX: parallel
     await Promise.allSettled(
       [...textChannels.values()].map(channel =>
         channel.permissionOverwrites.edit(everyoneRole, {
@@ -448,18 +531,15 @@ function isInLockdown(guildId) {
 // ═══════════════════════════════════════════════════
 
 async function checkNuke(guild, executorId, actionType) {
-  // actionType: 'channelDelete' | 'roleDelete' | 'ban'
   try {
     if (!guild) return
 
     const settings = await getSettings(guild.id)
     if (!settings?.antinuke_enabled) return
 
-    // تحقق الـ whitelist
     const member = guild.members.cache.get(executorId)
     if (member && isWhitelisted(settings, executorId, member.roles.cache)) return
 
-    // مالك السيرفر محمي دائماً
     if (executorId === guild.ownerId) return
 
     const key = `${guild.id}_${executorId}`
@@ -476,12 +556,10 @@ async function checkNuke(guild, executorId, actionType) {
 
     const data = nukeTracker.get(key)
 
-    // أضف الحدث
     if (actionType === "channelDelete") data.channelDeletes.push(now)
     if (actionType === "roleDelete") data.roleDeletes.push(now)
     if (actionType === "ban") data.bans.push(now)
 
-    // نظف القديم
     data.channelDeletes = data.channelDeletes.filter(t => now - t < interval)
     data.roleDeletes = data.roleDeletes.filter(t => now - t < interval)
     data.bans = data.bans.filter(t => now - t < interval)
@@ -497,7 +575,6 @@ async function checkNuke(guild, executorId, actionType) {
 
     if (!exceeded) return
 
-    // Nuke مكتشف!
     nukeTracker.delete(key)
 
     const action = settings.antinuke_action || "ban"
@@ -561,8 +638,7 @@ async function checkNuke(guild, executorId, actionType) {
 }
 
 // ═══════════════════════════════════════════════════
-//  CLEANUP — كل 5 دقائق عبر scheduler
-//  (مو setInterval خام عشان graceful shutdown يقدر يوقفه)
+//  CLEANUP
 // ═══════════════════════════════════════════════════
 
 scheduler.register(
