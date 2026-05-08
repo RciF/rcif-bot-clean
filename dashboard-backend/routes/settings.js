@@ -18,6 +18,7 @@ const { auditLog } = require("../middleware/audit")
 const { query, transaction } = require("../config/database")
 const { getGuildPlan } = require("../services/guildPlan")
 const { hasAccess, PLAN_TIERS } = require("../plans")
+const botApi = require("../utils/botApi")
 
 const router = express.Router({ mergeParams: true })
 
@@ -507,6 +508,18 @@ router.post(
   requirePlan(PLAN_TIERS.GOLD),
   auditLog("tickets.deploy_panel"),
   asyncHandler(async (req, res) => {
+    const result = await botApi.deployTicketPanel(req.params.guildId)
+    if (!result.ok) {
+      throw new ApiError(
+        result.error === "no_panel_channel"
+          ? "حدد قناة اللوحة أولاً"
+          : result.error === "channel_not_found"
+            ? "القناة غير موجودة"
+            : "فشل نشر اللوحة",
+        400,
+        result.error || "DEPLOY_FAILED"
+      )
+    }
     res.json({ success: true, message: "تم نشر اللوحة" })
   }),
 )
@@ -666,13 +679,27 @@ router.delete(
   requireGuildAdmin,
   auditLog("mod.unban"),
   asyncHandler(async (req, res) => {
+    // ✅ فك الحظر فعلياً في Discord أولاً
+    const botResult = await botApi.unbanUser(
+      req.params.guildId,
+      req.params.userId,
+      `Unbanned by ${req.user?.username || "dashboard"}`
+    )
+
+    // احذف من moderation_bans (الـ event guildBanRemove سيحذفها أيضاً تلقائياً)
     await query(
       `DELETE FROM moderation_bans WHERE guild_id = $1 AND user_id = $2`,
       [req.params.guildId, req.params.userId],
     )
-    res.json({ success: true })
+
+    res.json({
+      success: true,
+      bot_synced: botResult.ok,
+      was_banned: botResult.was_banned !== false
+    })
   }),
 )
+
 
 router.get(
   "/moderation/mutes",

@@ -105,6 +105,7 @@ export const settingsApi = {
   getBans: (g) => apiClient.get(`/api/guild/${g}/moderation/bans`),
   unban: (g, uid) => apiClient.delete(`/api/guild/${g}/moderation/bans/${uid}`),
   getMutes: (g) => apiClient.get(`/api/guild/${g}/moderation/mutes`),
+  unmute: (g, uid) => apiClient.delete(`/api/guild/${g}/moderation/mutes/${uid}`),
 
   // Events
   getEvents: (g) => apiClient.get(`/api/guild/${g}/events`),
