@@ -4,18 +4,43 @@ const logger = require("../systems/loggerSystem");
 let pool = null;
 
 /**
- * يفكك DATABASE_URL لمكوناته (يحل مشكلة pg مع Supabase Pooler
- * لما اليوزر فيه نقطة مثل postgres.xxx).
+ * يحاول قراءة المتغيرات المنفصلة DB_HOST/DB_USER/...
+ * وإذا ما لقيها يفكّك DATABASE_URL.
+ *
+ * المتغيرات المنفصلة أأمن مع Supabase Pooler لأن pg
+ * أحياناً يخسر الباسوورد عند reconnect لو جاي من URL.
  */
-function parseConnectionString(connectionString) {
+function resolveConfig(connectionString) {
+    // أولاً جرّب المتغيرات المنفصلة
+    const sepHost = process.env.DB_HOST;
+    const sepUser = process.env.DB_USER;
+    const sepPass = process.env.DB_PASSWORD;
+
+    if (sepHost && sepUser && sepPass) {
+        return {
+            host: sepHost,
+            port: parseInt(process.env.DB_PORT || "5432", 10),
+            user: sepUser,
+            password: String(sepPass),
+            database: process.env.DB_NAME || "postgres",
+            source: "env_vars"
+        };
+    }
+
+    // fallback: فكّك DATABASE_URL
+    if (!connectionString) {
+        throw new Error("DATABASE_CONNECTION_STRING_MISSING");
+    }
+
     try {
         const url = new URL(connectionString);
         return {
             user: decodeURIComponent(url.username),
-            password: decodeURIComponent(url.password),
+            password: String(decodeURIComponent(url.password)),
             host: url.hostname,
             port: parseInt(url.port || "5432", 10),
             database: url.pathname.replace(/^\//, "") || "postgres",
+            source: "url"
         };
     } catch (err) {
         logger.error("DATABASE_URL_PARSE_FAILED", { error: err.message });
@@ -25,30 +50,23 @@ function parseConnectionString(connectionString) {
 
 function initDatabase(connectionString) {
 
-    if (!connectionString) {
-        throw new Error("DATABASE_CONNECTION_STRING_MISSING");
-    }
-
     if (pool) {
         return pool;
     }
 
-    const config = parseConnectionString(connectionString);
+    const config = resolveConfig(connectionString);
 
     pool = new Pool({
-        user: config.user,
-        password: config.password,
         host: config.host,
         port: config.port,
+        user: config.user,
+        password: config.password,
         database: config.database,
         ssl: { rejectUnauthorized: false },
         max: 10,
         idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 10000,
-        // مهم للـ Supabase Pooler (PgBouncer transaction mode)
-        statement_timeout: 30000,
         keepAlive: true,
-        // نضمن تمرير الباسوورد كـ string دائماً
         application_name: "lyn-bot"
     });
 
@@ -58,18 +76,12 @@ function initDatabase(connectionString) {
         });
     });
 
-    pool.on("connect", (client) => {
-        // نسجل لما يفتح اتصال جديد للتأكد إن اليوزر صح
-        logger.debug("DATABASE_NEW_CONNECTION", {
-            user: config.user
-        });
-    });
-
     logger.info("DATABASE_POOL_INITIALIZED", {
         host: config.host,
         user: config.user,
         database: config.database,
-        port: config.port
+        port: config.port,
+        source: config.source
     });
 
     return pool;
