@@ -3,6 +3,26 @@ const logger = require("../systems/loggerSystem");
 
 let pool = null;
 
+/**
+ * يفكك DATABASE_URL لمكوناته عشان نتحايل على bug في pg library
+ * مع Supabase Pooler (لما اليوزر فيه نقطة مثل postgres.xxx).
+ */
+function parseConnectionString(connectionString) {
+    try {
+        const url = new URL(connectionString);
+        return {
+            user: decodeURIComponent(url.username),
+            password: decodeURIComponent(url.password),
+            host: url.hostname,
+            port: parseInt(url.port || "5432", 10),
+            database: url.pathname.replace(/^\//, "") || "postgres",
+        };
+    } catch (err) {
+        logger.error("DATABASE_URL_PARSE_FAILED", { error: err.message });
+        throw err;
+    }
+}
+
 function initDatabase(connectionString) {
 
     if (!connectionString) {
@@ -13,11 +33,18 @@ function initDatabase(connectionString) {
         return pool;
     }
 
+    const config = parseConnectionString(connectionString);
+
     pool = new Pool({
-        connectionString,
+        user: config.user,
+        password: config.password,
+        host: config.host,
+        port: config.port,
+        database: config.database,
+        ssl: { rejectUnauthorized: false },
         max: 15,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000
+        connectionTimeoutMillis: 10000
     });
 
     pool.on("error", (err) => {
@@ -26,7 +53,11 @@ function initDatabase(connectionString) {
         });
     });
 
-    logger.info("DATABASE_POOL_INITIALIZED");
+    logger.info("DATABASE_POOL_INITIALIZED", {
+        host: config.host,
+        user: config.user,
+        database: config.database
+    });
 
     return pool;
 }
@@ -45,7 +76,6 @@ async function query(text, params = []) {
 
         const duration = Date.now() - start;
 
-        // 🔥 slow query tracking
         if (duration > 300) {
             logger.warn("DATABASE_SLOW_QUERY", {
                 duration,
