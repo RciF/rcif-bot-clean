@@ -1,36 +1,40 @@
+// ══════════════════════════════════════════════════════════════════
+//  Button Role Interaction Handler
+//  المسار: commands/roles/button-role-handler.js
+//
+//  يُستدعى من events/interactionCreate.js عند customId يبدأ بـ brole_
+//  يدعم الـ formats:
+//    - brole_<numeric>      ← legacy (button_roles table)
+//    - brole_p_<id>_<idx>   ← dashboard (button_role_panels.buttons JSONB)
+// ══════════════════════════════════════════════════════════════════
+
 const { EmbedBuilder } = require("discord.js")
-const databaseSystem = require("../../systems/databaseSystem")
-const {
-  getPanel,
-  getPanelButtons
-} = require("./_button-role-shared")
+const { findButtonByCustomId, getPanelButtons } = require("./_button-role-shared")
+const logger = require("../../systems/loggerSystem")
 
-// ══════════════════════════════════════
-//  BUTTON INTERACTION HANDLER
-//  يُستدعى من events/interactionCreate.js
-//  عند customId يبدأ بـ brole_
-// ══════════════════════════════════════
-
-module.exports.handleButtonRoleInteraction = async function(interaction) {
+module.exports.handleButtonRoleInteraction = async function (interaction) {
   try {
-    const btnId = parseInt(interaction.customId.replace("brole_", ""))
-    if (isNaN(btnId)) return
+    if (!interaction.customId?.startsWith("brole_")) return
 
-    const btnData = await databaseSystem.queryOne(
-      "SELECT * FROM button_roles WHERE id = $1",
-      [btnId]
-    )
+    // ✅ ابحث عن الزر (legacy أو jsonb)
+    const btnData = await findButtonByCustomId(interaction.customId)
 
     if (!btnData) {
-      return interaction.reply({ content: "❌ هذا الزر لم يعد موجوداً.", ephemeral: true })
+      return interaction.reply({
+        content: "❌ هذا الزر لم يعد موجوداً.",
+        ephemeral: true
+      })
     }
 
-    const guild  = interaction.guild
+    const guild = interaction.guild
     const member = interaction.member
-    const role   = guild.roles.cache.get(btnData.role_id)
+    const role = guild.roles.cache.get(btnData.role_id)
 
     if (!role) {
-      return interaction.reply({ content: "❌ الرتبة غير موجودة.", ephemeral: true })
+      return interaction.reply({
+        content: "❌ الرتبة غير موجودة (تم حذفها).",
+        ephemeral: true
+      })
     }
 
     const botMember = guild.members.me
@@ -41,13 +45,19 @@ module.exports.handleButtonRoleInteraction = async function(interaction) {
       })
     }
 
+    if (role.managed) {
+      return interaction.reply({
+        content: "❌ هذه الرتبة مُدارة من تكامل خارجي ولا يمكن إعطاؤها يدوياً.",
+        ephemeral: true
+      })
+    }
+
     const hasRole = member.roles.cache.has(role.id)
 
     // ── وضع الحصري: نزيل باقي رتب اللوحة قبل الإضافة ──
-    if (!hasRole) {
-      const panel = await getPanel(btnData.message_id)
-      if (panel?.exclusive) {
-        const allButtons = await getPanelButtons(btnData.message_id)
+    if (!hasRole && btnData.panel?.exclusive && btnData.panel_message_id) {
+      try {
+        const allButtons = await getPanelButtons(btnData.panel_message_id)
         for (const btn of allButtons) {
           if (btn.role_id !== role.id && member.roles.cache.has(btn.role_id)) {
             try {
@@ -55,6 +65,8 @@ module.exports.handleButtonRoleInteraction = async function(interaction) {
             } catch {}
           }
         }
+      } catch (err) {
+        logger.error("BUTTON_ROLE_EXCLUSIVE_FAILED", { error: err.message })
       }
     }
 
@@ -82,9 +94,15 @@ module.exports.handleButtonRoleInteraction = async function(interaction) {
     }
 
   } catch (err) {
-    console.error("[BUTTON-ROLE-HANDLER ERROR]", err)
+    logger.error("BUTTON_ROLE_HANDLER_FAILED", {
+      error: err.message,
+      stack: err.stack
+    })
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "❌ حدث خطأ.", ephemeral: true }).catch(() => {})
+      await interaction.reply({
+        content: "❌ حدث خطأ.",
+        ephemeral: true
+      }).catch(() => {})
     }
   }
 }
