@@ -122,6 +122,10 @@ function pushCommand(filePath, commands) {
     const eventReminderSystem = require("./systems/eventReminderSystem")
     eventReminderSystem.startScheduler(client)
 
+    // ✅ المُجدوِل من الداش (scheduled_tasks)
+    const scheduledTasksRunner = require("./systems/scheduledTasksRunner")
+    scheduledTasksRunner.start(client)
+
     // ✅ Auto-close scheduler للتذاكر الخاملة
     const ticketSystem = require("./systems/ticketSystem")
     ticketSystem.startAutoCloseScheduler(client)
