@@ -4,8 +4,8 @@ const logger = require("../systems/loggerSystem");
 let pool = null;
 
 /**
- * يفكك DATABASE_URL لمكوناته عشان نتحايل على bug في pg library
- * مع Supabase Pooler (لما اليوزر فيه نقطة مثل postgres.xxx).
+ * يفكك DATABASE_URL لمكوناته (يحل مشكلة pg مع Supabase Pooler
+ * لما اليوزر فيه نقطة مثل postgres.xxx).
  */
 function parseConnectionString(connectionString) {
     try {
@@ -42,9 +42,14 @@ function initDatabase(connectionString) {
         port: config.port,
         database: config.database,
         ssl: { rejectUnauthorized: false },
-        max: 15,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 10000
+        max: 10,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
+        // مهم للـ Supabase Pooler (PgBouncer transaction mode)
+        statement_timeout: 30000,
+        keepAlive: true,
+        // نضمن تمرير الباسوورد كـ string دائماً
+        application_name: "lyn-bot"
     });
 
     pool.on("error", (err) => {
@@ -53,10 +58,18 @@ function initDatabase(connectionString) {
         });
     });
 
+    pool.on("connect", (client) => {
+        // نسجل لما يفتح اتصال جديد للتأكد إن اليوزر صح
+        logger.debug("DATABASE_NEW_CONNECTION", {
+            user: config.user
+        });
+    });
+
     logger.info("DATABASE_POOL_INITIALIZED", {
         host: config.host,
         user: config.user,
-        database: config.database
+        database: config.database,
+        port: config.port
     });
 
     return pool;
