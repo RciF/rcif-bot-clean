@@ -2,16 +2,13 @@ const { Pool } = require("pg");
 const logger = require("../systems/loggerSystem");
 
 let pool = null;
+let dbConfig = null;
 
 /**
- * يحاول قراءة المتغيرات المنفصلة DB_HOST/DB_USER/...
- * وإذا ما لقيها يفكّك DATABASE_URL.
- *
- * المتغيرات المنفصلة أأمن مع Supabase Pooler لأن pg
- * أحياناً يخسر الباسوورد عند reconnect لو جاي من URL.
+ * يقرأ الإعدادات من المتغيرات المنفصلة DB_HOST/DB_USER/...
+ * مع fallback لـ DATABASE_URL.
  */
 function resolveConfig(connectionString) {
-    // أولاً جرّب المتغيرات المنفصلة
     const sepHost = process.env.DB_HOST;
     const sepUser = process.env.DB_USER;
     const sepPass = process.env.DB_PASSWORD;
@@ -27,7 +24,6 @@ function resolveConfig(connectionString) {
         };
     }
 
-    // fallback: فكّك DATABASE_URL
     if (!connectionString) {
         throw new Error("DATABASE_CONNECTION_STRING_MISSING");
     }
@@ -48,45 +44,57 @@ function resolveConfig(connectionString) {
     }
 }
 
+/**
+ * يبني pool جديد. يُستدعى عند الـ init وعند الحاجة لإعادة بناء.
+ */
+function buildPool() {
+    const newPool = new Pool({
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.user,
+        password: dbConfig.password,
+        database: dbConfig.database,
+        ssl: { rejectUnauthorized: false },
+        max: 5,
+        idleTimeoutMillis: 5000,
+        connectionTimeoutMillis: 10000,
+        keepAlive: false,
+        application_name: "lyn-bot"
+    });
+
+    newPool.on("error", (err) => {
+        logger.error("DATABASE_POOL_ERROR", {
+            error: err.message
+        });
+        // ما نسوي شي إضافي - الـ pool يدير نفسه
+    });
+
+    return newPool;
+}
+
 function initDatabase(connectionString) {
 
     if (pool) {
         return pool;
     }
 
-    const config = resolveConfig(connectionString);
-
-    pool = new Pool({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password,
-        database: config.database,
-        ssl: { rejectUnauthorized: false },
-        max: 10,
-        idleTimeoutMillis: 10000,
-        connectionTimeoutMillis: 10000,
-        keepAlive: true,
-        application_name: "lyn-bot"
-    });
-
-    pool.on("error", (err) => {
-        logger.error("DATABASE_POOL_ERROR", {
-            error: err.message
-        });
-    });
+    dbConfig = resolveConfig(connectionString);
+    pool = buildPool();
 
     logger.info("DATABASE_POOL_INITIALIZED", {
-        host: config.host,
-        user: config.user,
-        database: config.database,
-        port: config.port,
-        source: config.source
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port,
+        source: dbConfig.source
     });
 
     return pool;
 }
 
+/**
+ * تنفيذ query - مع إعادة محاولة واحدة لو فشل بسبب auth/connection
+ */
 async function query(text, params = []) {
 
     if (!pool) {
@@ -111,6 +119,30 @@ async function query(text, params = []) {
         return result;
 
     } catch (error) {
+        const isAuthError = /password authentication failed|SASL/i.test(error.message);
+        const isConnError = /ECONNRESET|ETIMEDOUT|Connection terminated/i.test(error.message);
+
+        // لو الخطأ auth أو connection، نعيد بناء الـ pool ونحاول مرة وحدة
+        if (isAuthError || isConnError) {
+            logger.warn("DATABASE_REBUILDING_POOL", { reason: error.message });
+
+            try {
+                const oldPool = pool;
+                pool = buildPool();
+                // نقفل القديم بالخلفية
+                oldPool.end().catch(() => {});
+
+                // نحاول الـ query مرة أخيرة على pool الجديد
+                const retryResult = await pool.query(text, params);
+                return retryResult;
+            } catch (retryError) {
+                logger.error("DATABASE_QUERY_FAILED", {
+                    error: retryError.message,
+                    sql: typeof text === "string" ? text.slice(0, 200) : "invalid"
+                });
+                throw retryError;
+            }
+        }
 
         logger.error("DATABASE_QUERY_FAILED", {
             error: error.message,
