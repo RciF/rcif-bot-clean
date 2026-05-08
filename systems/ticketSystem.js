@@ -1,3 +1,19 @@
+// ══════════════════════════════════════════════════════════════════
+//  TICKET SYSTEM
+//  المسار: systems/ticketSystem.js
+//
+//  يدعم schemas مزدوجة:
+//   1) Flat (أوامر البوت):
+//      category_id, log_channel_id, support_role_id, welcome_message,
+//      max_open_tickets, auto_close_hours, transcript_enabled, enabled
+//   2) JSONB (الداش):
+//      panel: {title, description, color, buttons:[{label,emoji,categoryId,style}]}
+//      panel_channel: TEXT
+//      transcripts: {enabled, channel}
+//
+//  normalizeSettings() يدمج الـ JSONB في الحقول flat بشفافية.
+// ══════════════════════════════════════════════════════════════════
+
 const {
   EmbedBuilder,
   ActionRowBuilder,
@@ -30,10 +46,6 @@ const TICKET_STATUS = {
   locked: "مقفلة"
 }
 
-// ══════════════════════════════════════
-//  نظام الأولوية الحقيقي
-// ══════════════════════════════════════
-
 const PRIORITY_CONFIG = {
   low: {
     label: "🟢 عادية",
@@ -58,7 +70,6 @@ const PRIORITY_CONFIG = {
   }
 }
 
-// الدالة القديمة للتوافق (deprecated)
 const PRIORITY_LABELS = {
   low:    "🟢 عادية",
   normal: "🟡 متوسطة",
@@ -66,8 +77,58 @@ const PRIORITY_LABELS = {
   urgent: "🔴 عالية"
 }
 
-// Discord limit: max 50 channels per category
 const MAX_CHANNELS_PER_CATEGORY = 50
+
+// ══════════════════════════════════════
+//  JSON HELPERS
+// ══════════════════════════════════════
+
+function parseJsonObject(raw) {
+  if (!raw) return null
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      return (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed : null
+    } catch { return null }
+  }
+  return null
+}
+
+// ══════════════════════════════════════
+//  NORMALIZE — bridge بين schemas
+// ══════════════════════════════════════
+
+function normalizeSettings(raw) {
+  if (!raw) return null
+  const data = { ...raw }
+
+  const panel = parseJsonObject(raw.panel)
+  const transcripts = parseJsonObject(raw.transcripts)
+
+  // ── transcripts JSONB يحدد transcript_enabled + log_channel_id ──
+  if (transcripts) {
+    if (data.transcript_enabled === undefined || data.transcript_enabled === null) {
+      data.transcript_enabled = transcripts.enabled !== false
+    }
+    // قناة الـ transcript = قناة اللوق (لو ما حُدّدت بعد)
+    if (!data.log_channel_id && transcripts.channel) {
+      data.log_channel_id = transcripts.channel
+    }
+  }
+
+  // ── panel JSONB → keep as object للـ deployPanel ──
+  if (panel) {
+    data._panel = panel
+  }
+
+  // ── panel_channel → flat field ──
+  if (raw.panel_channel) {
+    data._panel_channel = raw.panel_channel
+  }
+
+  return data
+}
 
 // ══════════════════════════════════════
 //  SETTINGS HELPERS
@@ -79,7 +140,7 @@ async function getSettings(guildId) {
       "SELECT * FROM ticket_settings WHERE guild_id = $1",
       [guildId]
     )
-    return result || null
+    return normalizeSettings(result)
   } catch (error) {
     logger.error("TICKET_GET_SETTINGS_FAILED", { error: error.message })
     return null
@@ -116,6 +177,49 @@ async function saveSettings(guildId, data) {
   } catch (error) {
     logger.error("TICKET_SAVE_SETTINGS_FAILED", { error: error.message })
     return false
+  }
+}
+
+// ══════════════════════════════════════
+//  Deploy panel من إعدادات الداش
+//  يُستدعى من API: POST /api/guild/:id/tickets/panel/deploy
+//  ويرسل اللوحة في panel_channel (لو موجود)
+// ══════════════════════════════════════
+
+async function deployPanel(guild) {
+  try {
+    const settings = await getSettings(guild.id)
+    if (!settings) return { ok: false, error: "no_settings" }
+
+    const channelId = settings._panel_channel
+    if (!channelId) return { ok: false, error: "no_panel_channel" }
+
+    const channel = guild.channels.cache.get(channelId)
+    if (!channel || !channel.isTextBased?.()) return { ok: false, error: "channel_not_found" }
+
+    const perms = channel.permissionsFor(guild.members.me)
+    if (!perms?.has(["ViewChannel", "SendMessages", "EmbedLinks"])) {
+      return { ok: false, error: "missing_permissions" }
+    }
+
+    const panelData = settings._panel || {}
+    const embed = new EmbedBuilder()
+      .setTitle((panelData.title || "🎫 لوحة التذاكر").slice(0, 256))
+      .setDescription(
+        (panelData.description ||
+          "اضغط الزر أدناه لفتح تذكرة جديدة. سيتم إنشاء قناة خاصة بك مع فريق الدعم.").slice(0, 4096)
+      )
+      .setColor(typeof panelData.color === "number" ? panelData.color : 0x9b59b6)
+      .setTimestamp()
+
+    // الزر الافتراضي (ticket_open) — يفتح قائمة الفئات
+    const components = [buildOpenButton()]
+
+    await channel.send({ embeds: [embed], components })
+    return { ok: true }
+  } catch (err) {
+    logger.error("TICKET_DEPLOY_PANEL_FAILED", { error: err.message })
+    return { ok: false, error: err.message }
   }
 }
 
@@ -190,55 +294,48 @@ async function updateTicket(channelId, data) {
 async function getTicketCount(guildId) {
   try {
     const result = await databaseSystem.queryOne(
-      "SELECT COUNT(*) as total FROM tickets WHERE guild_id = $1",
+      "SELECT COUNT(*)::INT AS count FROM tickets WHERE guild_id = $1",
       [guildId]
     )
-    return parseInt(result?.total || 0)
-  } catch (error) {
+    return result?.count || 0
+  } catch {
     return 0
   }
 }
 
-// ✅ FIX: query واحد بدل 3 (تحسين أداء)
 async function getTicketStats(guildId) {
   try {
     const result = await databaseSystem.queryOne(`
       SELECT
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE status = 'open')   AS open,
-        COUNT(*) FILTER (WHERE status = 'closed') AS closed
-      FROM tickets
-      WHERE guild_id = $1
+        COUNT(*)::INT AS total,
+        COUNT(*) FILTER (WHERE status = 'open')::INT AS open,
+        COUNT(*) FILTER (WHERE status = 'closed')::INT AS closed,
+        COUNT(*) FILTER (WHERE status = 'locked')::INT AS locked
+      FROM tickets WHERE guild_id = $1
     `, [guildId])
-
-    return {
-      total:  parseInt(result?.total  || 0),
-      open:   parseInt(result?.open   || 0),
-      closed: parseInt(result?.closed || 0)
-    }
-  } catch (error) {
-    return { total: 0, open: 0, closed: 0 }
+    return result || { total: 0, open: 0, closed: 0, locked: 0 }
+  } catch {
+    return { total: 0, open: 0, closed: 0, locked: 0 }
   }
 }
 
 // ══════════════════════════════════════
-//  EMBED BUILDERS
+//  BUILDERS
 // ══════════════════════════════════════
 
-function buildSetupEmbed(guild) {
+function buildSetupEmbed(guild, panelData = null) {
+  const title = panelData?.title || "🎫 نظام التذاكر"
+  const description = panelData?.description ||
+    "**مرحباً بكم في نظام تذاكر الدعم!**\n\n" +
+    "اضغط الزر أدناه لفتح تذكرة جديدة.\n" +
+    "سيتم إنشاء قناة خاصة بك مع فريق الدعم."
+
   return new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle("🎫 نظام التذاكر")
-    .setDescription(
-      "**هل تحتاج مساعدة؟** اضغط الزر أدناه لفتح تذكرة جديدة.\n\n" +
-      "📌 **التعليمات:**\n" +
-      "• اختر تصنيف التذكرة المناسب\n" +
-      "• اشرح مشكلتك بوضوح\n" +
-      "• انتظر رد فريق الدعم\n" +
-      "• لا تفتح أكثر من تذكرة لنفس المشكلة"
-    )
-    .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
-    .setFooter({ text: `${guild.name} • نظام التذاكر`, iconURL: guild.iconURL({ dynamic: true }) })
+    .setTitle(title.slice(0, 256))
+    .setDescription(description.slice(0, 4096))
+    .setColor(typeof panelData?.color === "number" ? panelData.color : 0x9b59b6)
+    .setThumbnail(guild.iconURL({ dynamic: true, size: 128 }))
+    .setFooter({ text: "Lyn — نظام تذاكر متطور" })
     .setTimestamp()
 }
 
@@ -268,7 +365,6 @@ function buildCategoryMenu() {
   return new ActionRowBuilder().addComponents(menu)
 }
 
-// قائمة تغيير الأولوية (للستاف فقط)
 function buildPriorityMenu() {
   const options = Object.entries(PRIORITY_CONFIG).map(([key, p]) => ({
     label: p.label,
@@ -298,12 +394,16 @@ function buildTicketWelcomeEmbed(user, category, ticketNumber, welcomeMessage, p
   const cat = TICKET_CATEGORIES[category] || TICKET_CATEGORIES.other
   const prio = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.low
 
+  const personalizedMsg = (welcomeMessage || "مرحباً! فريق الدعم سيكون معك قريباً.")
+    .replace(/\{user\}/g, `<@${user.id}>`)
+    .replace(/\{username\}/g, user.username)
+
   return new EmbedBuilder()
     .setColor(prio.color)
     .setTitle(`${cat.emoji} تذكرة #${ticketNumber} — ${cat.label}`)
     .setDescription(
       `مرحباً ${user}!\n\n` +
-      `${welcomeMessage}\n\n` +
+      `${personalizedMsg}\n\n` +
       "**📝 من فضلك اشرح مشكلتك أو طلبك بالتفصيل.**"
     )
     .addFields(
@@ -333,7 +433,7 @@ function buildTicketControlButtons(isLocked = false) {
 
     new ButtonBuilder()
       .setCustomId("ticket_claim")
-      .setLabel("استلام التذكرة")
+      .setLabel("استلام")
       .setEmoji("🙋")
       .setStyle(ButtonStyle.Success),
 
@@ -343,45 +443,21 @@ function buildTicketControlButtons(isLocked = false) {
       .setEmoji("📜")
       .setStyle(ButtonStyle.Secondary)
   )
-
   return row1
 }
 
-// زر تغيير الأولوية منفصل (للستاف)
 function buildPriorityButton() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("ticket_change_priority")
       .setLabel("تغيير الأولوية")
       .setEmoji("🎯")
-      .setStyle(ButtonStyle.Primary)
-  )
-}
-
-function buildCloseConfirmButtons() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("ticket_close_confirm")
-      .setLabel("تأكيد الإغلاق")
-      .setEmoji("✅")
-      .setStyle(ButtonStyle.Danger),
-
-    new ButtonBuilder()
-      .setCustomId("ticket_close_cancel")
-      .setLabel("إلغاء")
-      .setEmoji("❌")
       .setStyle(ButtonStyle.Secondary)
   )
 }
 
 function buildAfterCloseButtons() {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("ticket_transcript")
-      .setLabel("حفظ المحادثة")
-      .setEmoji("📜")
-      .setStyle(ButtonStyle.Primary),
-
     new ButtonBuilder()
       .setCustomId("ticket_reopen")
       .setLabel("إعادة فتح")
@@ -390,36 +466,579 @@ function buildAfterCloseButtons() {
 
     new ButtonBuilder()
       .setCustomId("ticket_delete")
-      .setLabel("حذف التذكرة")
+      .setLabel("حذف نهائي")
       .setEmoji("🗑️")
       .setStyle(ButtonStyle.Danger)
   )
 }
 
 // ══════════════════════════════════════
-//  TRANSCRIPT GENERATOR
+//  IS STAFF
+// ══════════════════════════════════════
+
+async function isStaff(interaction) {
+  if (interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) return true
+  if (interaction.member?.permissions?.has(PermissionFlagsBits.ManageChannels)) return true
+
+  const settings = await getSettings(interaction.guild.id)
+  if (settings?.support_role_id && interaction.member?.roles?.cache?.has(settings.support_role_id)) {
+    return true
+  }
+  return false
+}
+
+// ══════════════════════════════════════
+//  BUTTON HANDLERS
+// ══════════════════════════════════════
+
+async function handleOpenButton(interaction) {
+  try {
+    const settings = await getSettings(interaction.guild.id)
+    if (!settings || !settings.enabled) {
+      return interaction.reply({
+        content: "❌ نظام التذاكر معطّل في هذا السيرفر.",
+        ephemeral: true
+      })
+    }
+
+    const openTickets = await getOpenTickets(interaction.guild.id, interaction.user.id)
+    const maxOpen = settings.max_open_tickets || 1
+
+    if (openTickets.length >= maxOpen) {
+      return interaction.reply({
+        content: `❌ لديك ${openTickets.length} تذكرة مفتوحة بالفعل. أغلق إحداها قبل فتح جديدة.`,
+        ephemeral: true
+      })
+    }
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle("📂 اختر تصنيف التذكرة")
+          .setDescription("حدد التصنيف المناسب لطلبك من القائمة أدناه:")
+      ],
+      components: [buildCategoryMenu()],
+      ephemeral: true
+    })
+  } catch (error) {
+    logger.error("TICKET_OPEN_BUTTON_FAILED", { error: error.message })
+    if (!interaction.replied) {
+      await interaction.reply({ content: "❌ حدث خطأ.", ephemeral: true }).catch(() => {})
+    }
+  }
+}
+
+async function handleCategorySelect(interaction) {
+  try {
+    const category = interaction.values[0]
+    const guild = interaction.guild
+    const user = interaction.user
+
+    await interaction.deferReply({ ephemeral: true })
+
+    const settings = await getSettings(guild.id)
+    if (!settings) {
+      return interaction.editReply({ content: "❌ نظام التذاكر غير معدّ." })
+    }
+
+    const ticketNumber = (await getTicketCount(guild.id)) + 1
+    const ticketName = `تذكرة-${ticketNumber}`
+
+    const channelOptions = {
+      name: ticketName,
+      type: ChannelType.GuildText,
+      topic: `🎫 تذكرة #${ticketNumber} | ${user.tag} | ${TICKET_CATEGORIES[category]?.label || "أخرى"}`,
+      permissionOverwrites: [
+        {
+          id: guild.roles.everyone.id,
+          deny: [PermissionFlagsBits.ViewChannel]
+        },
+        {
+          id: user.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.AttachFiles,
+            PermissionFlagsBits.EmbedLinks
+          ]
+        },
+        {
+          id: guild.members.me.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ManageChannels,
+            PermissionFlagsBits.ManageMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.AttachFiles,
+            PermissionFlagsBits.EmbedLinks
+          ]
+        }
+      ]
+    }
+
+    if (settings?.category_id) {
+      channelOptions.parent = settings.category_id
+    }
+
+    if (settings?.support_role_id) {
+      channelOptions.permissionOverwrites.push({
+        id: settings.support_role_id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.AttachFiles,
+          PermissionFlagsBits.ManageMessages
+        ]
+      })
+    }
+
+    const ticketChannel = await guild.channels.create(channelOptions)
+
+    const ticket = await createTicket({
+      guild_id: guild.id,
+      channel_id: ticketChannel.id,
+      user_id: user.id,
+      category
+    })
+
+    if (!ticket) {
+      await ticketChannel.delete().catch(() => {})
+      return interaction.editReply({ content: "❌ فشل في حفظ بيانات التذكرة." })
+    }
+
+    const welcomeMessage = settings?.welcome_message || "مرحباً! فريق الدعم سيكون معك قريباً."
+
+    const welcomeEmbed = buildTicketWelcomeEmbed(user, category, ticket.id, welcomeMessage, "low")
+    const controlButtons = buildTicketControlButtons(false)
+    const priorityButton = buildPriorityButton()
+
+    await ticketChannel.send({
+      content: `${user} مرحباً بك في تذكرتك!${settings?.support_role_id ? ` | <@&${settings.support_role_id}>` : ""}`,
+      embeds: [welcomeEmbed],
+      components: [controlButtons, priorityButton]
+    })
+
+    await interaction.editReply({
+      content: `✅ تم إنشاء تذكرتك بنجاح! ${ticketChannel}`
+    })
+
+    await sendLog(guild, ticket, "open", user, {})
+
+    logger.success("TICKET_CREATED", {
+      ticketId: ticket.id,
+      userId: user.id,
+      guildId: guild.id,
+      category
+    })
+
+  } catch (error) {
+    logger.error("TICKET_CATEGORY_SELECT_FAILED", { error: error.message })
+
+    let errorMessage = "❌ حدث خطأ أثناء إنشاء التذكرة."
+    if (error.code === 50035 || error.message?.includes("Maximum number")) {
+      errorMessage = "❌ تم الوصول للحد الأقصى من القنوات في السيرفر أو الكاتيقوري."
+    } else if (error.code === 50013 || error.message?.includes("Missing Permissions")) {
+      errorMessage = "❌ البوت ما عنده صلاحيات كافية لإنشاء قناة."
+    }
+
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: errorMessage }).catch(() => {})
+    }
+  }
+}
+
+async function handleCloseButton(interaction) {
+  try {
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) {
+      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
+    }
+
+    const isOwner = ticket.user_id === interaction.user.id
+    const isStaffMember = await isStaff(interaction)
+
+    if (!isOwner && !isStaffMember) {
+      return interaction.reply({ content: "❌ غير مصرح.", ephemeral: true })
+    }
+
+    const confirmRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("ticket_close_confirm")
+        .setLabel("نعم، أغلق")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId("ticket_close_cancel")
+        .setLabel("إلغاء")
+        .setStyle(ButtonStyle.Secondary)
+    )
+
+    await interaction.reply({
+      content: "هل أنت متأكد من إغلاق التذكرة؟",
+      components: [confirmRow],
+      ephemeral: true
+    })
+  } catch (error) {
+    logger.error("TICKET_CLOSE_BUTTON_FAILED", { error: error.message })
+  }
+}
+
+async function handleCloseConfirm(interaction) {
+  try {
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) return
+
+    await interaction.update({ content: "🔒 جاري الإغلاق...", components: [] })
+
+    await updateTicket(interaction.channel.id, {
+      status: "closed",
+      closed_at: new Date(),
+      closed_by: interaction.user.id
+    })
+
+    const transcriptData = ticket.transcript_enabled !== false
+      ? await generateTranscript(interaction.channel, ticket)
+      : { transcript: null, messageCount: 0 }
+
+    const closedEmbed = new EmbedBuilder()
+      .setColor(0xef4444)
+      .setTitle("🔒 تم إغلاق التذكرة")
+      .addFields(
+        { name: "👤 أُغلقت بواسطة", value: `${interaction.user}`, inline: true },
+        { name: "💬 عدد الرسائل", value: `${transcriptData.messageCount}`, inline: true }
+      )
+      .setTimestamp()
+
+    await interaction.channel.send({
+      embeds: [closedEmbed],
+      components: [buildAfterCloseButtons()]
+    })
+
+    await interaction.channel.setName(`مغلقة-${ticket.id}`).catch(() => {})
+
+    await sendLog(interaction.guild, ticket, "close", interaction.user, {
+      messageCount: transcriptData.messageCount,
+      duration: formatDuration(ticket.created_at, Date.now())
+    })
+
+  } catch (error) {
+    logger.error("TICKET_CLOSE_CONFIRM_FAILED", { error: error.message })
+  }
+}
+
+async function handleCloseCancel(interaction) {
+  await interaction.update({ content: "✅ تم الإلغاء.", components: [] })
+}
+
+async function handleLockButton(interaction) {
+  try {
+    if (!await isStaff(interaction)) {
+      return interaction.reply({ content: "❌ غير مصرح.", ephemeral: true })
+    }
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) return
+
+    await updateTicket(interaction.channel.id, { status: "locked" })
+
+    await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
+      SendMessages: false
+    }).catch(() => {})
+
+    await interaction.reply({
+      embeds: [new EmbedBuilder().setColor(0xf59e0b).setDescription("🔐 تم قفل التذكرة")]
+    })
+
+    await sendLog(interaction.guild, ticket, "lock", interaction.user, {})
+  } catch (error) {
+    logger.error("TICKET_LOCK_FAILED", { error: error.message })
+  }
+}
+
+async function handleUnlockButton(interaction) {
+  try {
+    if (!await isStaff(interaction)) {
+      return interaction.reply({ content: "❌ غير مصرح.", ephemeral: true })
+    }
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) return
+
+    await updateTicket(interaction.channel.id, { status: "open" })
+
+    await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
+      SendMessages: true
+    }).catch(() => {})
+
+    await interaction.reply({
+      embeds: [new EmbedBuilder().setColor(0x3b82f6).setDescription("🔓 تم فتح القفل")]
+    })
+
+    await sendLog(interaction.guild, ticket, "unlock", interaction.user, {})
+  } catch (error) {
+    logger.error("TICKET_UNLOCK_FAILED", { error: error.message })
+  }
+}
+
+async function handleClaimButton(interaction) {
+  try {
+    if (!await isStaff(interaction)) {
+      return interaction.reply({ content: "❌ غير مصرح.", ephemeral: true })
+    }
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) return
+
+    if (ticket.claimed_by) {
+      return interaction.reply({
+        content: `⚠️ التذكرة مستلمة بالفعل من <@${ticket.claimed_by}>.`,
+        ephemeral: true
+      })
+    }
+
+    await updateTicket(interaction.channel.id, { claimed_by: interaction.user.id })
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xa855f7)
+          .setDescription(`🙋 تم استلام التذكرة بواسطة ${interaction.user}`)
+      ]
+    })
+
+    await sendLog(interaction.guild, ticket, "claim", interaction.user, {})
+  } catch (error) {
+    logger.error("TICKET_CLAIM_FAILED", { error: error.message })
+  }
+}
+
+async function handleTranscriptButton(interaction) {
+  try {
+    if (!await isStaff(interaction) && interaction.user.id !== (await getTicketByChannel(interaction.channel.id))?.user_id) {
+      return interaction.reply({ content: "❌ غير مصرح.", ephemeral: true })
+    }
+
+    await interaction.deferReply({ ephemeral: true })
+
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) {
+      return interaction.editReply({ content: "❌ ليست قناة تذكرة." })
+    }
+
+    const { transcript, messageCount } = await generateTranscript(interaction.channel, ticket)
+
+    await interaction.editReply({
+      content: `📜 تم إنشاء سجل المحادثة (${messageCount} رسالة)`,
+      files: [{
+        attachment: Buffer.from(transcript, "utf-8"),
+        name: `ticket-${ticket.id}.txt`
+      }]
+    })
+
+    await sendLog(interaction.guild, ticket, "transcript", interaction.user, { messageCount })
+  } catch (error) {
+    logger.error("TICKET_TRANSCRIPT_FAILED", { error: error.message })
+  }
+}
+
+async function handleDeleteButton(interaction) {
+  try {
+    if (!await isStaff(interaction)) {
+      return interaction.reply({ content: "❌ غير مصرح.", ephemeral: true })
+    }
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) return
+
+    await sendLog(interaction.guild, ticket, "delete", interaction.user, {})
+
+    await interaction.reply({ content: "🗑️ سيتم حذف القناة خلال 5 ثوان..." })
+    setTimeout(() => {
+      interaction.channel.delete("Ticket deleted").catch(() => {})
+    }, 5000)
+  } catch (error) {
+    logger.error("TICKET_DELETE_FAILED", { error: error.message })
+  }
+}
+
+async function handleReopenButton(interaction) {
+  try {
+    if (!await isStaff(interaction)) {
+      return interaction.reply({ content: "❌ غير مصرح.", ephemeral: true })
+    }
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) return
+
+    await updateTicket(interaction.channel.id, { status: "open", closed_at: null })
+
+    await interaction.channel.setName(`تذكرة-${ticket.id}`).catch(() => {})
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x06b6d4)
+          .setTitle("🔓 تم إعادة فتح التذكرة")
+      ],
+      components: [buildTicketControlButtons(false), buildPriorityButton()]
+    })
+
+    await sendLog(interaction.guild, ticket, "reopen", interaction.user, {})
+  } catch (error) {
+    logger.error("TICKET_REOPEN_FAILED", { error: error.message })
+  }
+}
+
+// ══════════════════════════════════════
+//  PRIORITY HANDLERS
+// ══════════════════════════════════════
+
+async function handleChangePriorityButton(interaction) {
+  try {
+    const ticket = await getTicketByChannel(interaction.channel.id)
+    if (!ticket) {
+      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
+    }
+
+    const staff = await isStaff(interaction)
+    if (!staff) {
+      return interaction.reply({ content: "❌ فقط فريق الدعم يقدر يغير الأولوية.", ephemeral: true })
+    }
+
+    if (ticket.status === "closed") {
+      return interaction.reply({ content: "❌ التذكرة مغلقة، لا يمكن تغيير أولويتها.", ephemeral: true })
+    }
+
+    const currentPrio = PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.low
+
+    const embed = new EmbedBuilder()
+      .setColor(currentPrio.color)
+      .setTitle("🎯 تغيير أولوية التذكرة")
+      .setDescription(
+        `الأولوية الحالية: **${currentPrio.emoji} ${currentPrio.shortLabel}**\n\nاختر الأولوية الجديدة:`
+      )
+
+    await interaction.reply({
+      embeds: [embed],
+      components: [buildPriorityMenu()],
+      ephemeral: true
+    })
+  } catch (error) {
+    logger.error("TICKET_CHANGE_PRIORITY_FAILED", { error: error.message })
+  }
+}
+
+async function handlePrioritySelect(interaction) {
+  try {
+    const newPriority = interaction.values[0]
+    const ticket = await getTicketByChannel(interaction.channel.id)
+
+    if (!ticket) {
+      return interaction.update({ content: "❌ هذه ليست قناة تذكرة.", embeds: [], components: [] })
+    }
+
+    const staff = await isStaff(interaction)
+    if (!staff) {
+      return interaction.update({ content: "❌ غير مصرح.", embeds: [], components: [] })
+    }
+
+    if (!PRIORITY_CONFIG[newPriority]) {
+      return interaction.update({ content: "❌ أولوية غير صالحة.", embeds: [], components: [] })
+    }
+
+    const oldPriority = ticket.priority || "low"
+    const oldPrioConfig = PRIORITY_CONFIG[oldPriority] || PRIORITY_CONFIG.low
+    const newPrioConfig = PRIORITY_CONFIG[newPriority]
+
+    if (oldPriority === newPriority) {
+      return interaction.update({
+        content: `⚠️ الأولوية هي نفسها بالفعل: **${newPrioConfig.emoji} ${newPrioConfig.shortLabel}**`,
+        embeds: [],
+        components: []
+      })
+    }
+
+    await updateTicket(interaction.channel.id, { priority: newPriority })
+    await updateWelcomeEmbedPriority(interaction.channel, ticket, newPriority)
+
+    const announceEmbed = new EmbedBuilder()
+      .setColor(newPrioConfig.color)
+      .setTitle("🎯 تم تغيير الأولوية")
+      .addFields(
+        { name: "من", value: `${oldPrioConfig.emoji} ${oldPrioConfig.shortLabel}`, inline: true },
+        { name: "إلى", value: `${newPrioConfig.emoji} ${newPrioConfig.shortLabel}`, inline: true },
+        { name: "بواسطة", value: `${interaction.user}`, inline: true }
+      )
+      .setTimestamp()
+
+    await interaction.channel.send({ embeds: [announceEmbed] })
+
+    await interaction.update({
+      content: `✅ تم تغيير الأولوية إلى **${newPrioConfig.emoji} ${newPrioConfig.shortLabel}**`,
+      embeds: [],
+      components: []
+    })
+
+    ticket.priority = oldPriority
+    await sendLog(interaction.guild, ticket, "priority_change", interaction.user, {
+      oldPriority,
+      newPriority
+    })
+  } catch (error) {
+    logger.error("TICKET_PRIORITY_SELECT_FAILED", { error: error.message })
+  }
+}
+
+async function updateWelcomeEmbedPriority(channel, ticket, newPriority) {
+  try {
+    const messages = await channel.messages.fetch({ limit: 50 })
+    const welcomeMsg = messages.find(m =>
+      m.author.id === channel.client.user.id &&
+      m.embeds.length > 0 &&
+      m.embeds[0]?.title?.includes(`تذكرة #${ticket.id}`)
+    )
+
+    if (!welcomeMsg) return
+
+    const settings = await getSettings(channel.guild.id)
+    const welcomeMessage = settings?.welcome_message || "مرحباً! فريق الدعم سيكون معك قريباً."
+    const user = await channel.client.users.fetch(ticket.user_id)
+
+    const newEmbed = buildTicketWelcomeEmbed(
+      user,
+      ticket.category,
+      ticket.id,
+      welcomeMessage,
+      newPriority
+    )
+
+    await welcomeMsg.edit({ embeds: [newEmbed] })
+  } catch (error) {
+    logger.error("TICKET_UPDATE_WELCOME_PRIORITY_FAILED", { error: error.message })
+  }
+}
+
+// ══════════════════════════════════════
+//  TRANSCRIPT
 // ══════════════════════════════════════
 
 async function generateTranscript(channel, ticket) {
   try {
-    const messages = []
+    const allMessages = []
     let lastId = null
 
-    for (let i = 0; i < 5; i++) {
+    while (true) {
       const options = { limit: 100 }
       if (lastId) options.before = lastId
 
-      const fetched = await channel.messages.fetch(options)
-      if (fetched.size === 0) break
+      const batch = await channel.messages.fetch(options)
+      if (batch.size === 0) break
 
-      messages.push(...fetched.values())
-      lastId = fetched.last().id
+      allMessages.push(...batch.values())
+      lastId = batch.last().id
 
-      if (fetched.size < 100) break
+      if (batch.size < 100) break
     }
 
-    messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp)
-
+    const messages = allMessages.reverse()
     const cat = TICKET_CATEGORIES[ticket.category] || TICKET_CATEGORIES.other
     const prio = PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.low
 
@@ -472,11 +1091,18 @@ async function generateTranscript(channel, ticket) {
     transcript += "═══════════════════════════════════════════\n"
 
     return { transcript, messageCount: messages.length }
-
   } catch (error) {
-    logger.error("TICKET_TRANSCRIPT_FAILED", { error: error.message })
+    logger.error("TICKET_TRANSCRIPT_BUILD_FAILED", { error: error.message })
     return { transcript: "فشل في إنشاء السجل", messageCount: 0 }
   }
+}
+
+function formatDuration(start, end) {
+  const ms = new Date(end).getTime() - new Date(start).getTime()
+  const hours = Math.floor(ms / (1000 * 60 * 60))
+  const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60))
+  if (hours > 0) return `${hours} ساعة و ${minutes} دقيقة`
+  return `${minutes} دقيقة`
 }
 
 // ══════════════════════════════════════
@@ -548,828 +1174,33 @@ async function sendLog(guild, ticket, action, executor, extra = {}) {
       const oldP = PRIORITY_CONFIG[extra.oldPriority] || PRIORITY_CONFIG.low
       const newP = PRIORITY_CONFIG[extra.newPriority] || PRIORITY_CONFIG.low
       embed.addFields({
-        name: "🔄 تغيير الأولوية",
+        name: "🎯 التغيير",
         value: `${oldP.emoji} ${oldP.shortLabel} → ${newP.emoji} ${newP.shortLabel}`,
         inline: false
       })
     }
 
     await logChannel.send({ embeds: [embed] })
-
   } catch (error) {
     logger.error("TICKET_LOG_FAILED", { error: error.message })
   }
 }
 
-function formatDuration(start, end) {
-  const diff = (end || Date.now()) - new Date(start).getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (days > 0) return `${days} يوم ${hours % 24} ساعة`
-  if (hours > 0) return `${hours} ساعة ${minutes % 60} دقيقة`
-  return `${minutes} دقيقة`
-}
-
 // ══════════════════════════════════════
-//  PERMISSION CHECKS
-// ══════════════════════════════════════
-
-async function isStaff(interaction) {
-  const settings = await getSettings(interaction.guild.id)
-
-  if (interaction.user.id === interaction.guild.ownerId) return true
-
-  if (interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) return true
-
-  if (settings?.support_role_id) {
-    return interaction.member.roles.cache.has(settings.support_role_id)
-  }
-
-  return false
-}
-
-// ══════════════════════════════════════
-//  BUTTON HANDLERS
-// ══════════════════════════════════════
-
-async function handleOpenButton(interaction) {
-  try {
-    if (!interaction.guild) {
-      return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
-    }
-
-    const settings = await getSettings(interaction.guild.id)
-
-    if (settings && !settings.enabled) {
-      return interaction.reply({ content: "❌ نظام التذاكر معطل حالياً.", ephemeral: true })
-    }
-
-    const maxOpen = settings?.max_open_tickets || 1
-    const openTickets = await getOpenTickets(interaction.guild.id, interaction.user.id)
-
-    if (openTickets.length >= maxOpen) {
-      const channelMention = openTickets[0]?.channel_id ? `<#${openTickets[0].channel_id}>` : ""
-      return interaction.reply({
-        content: `❌ عندك تذكرة مفتوحة بالفعل! ${channelMention}\nأغلقها أولاً قبل فتح تذكرة جديدة.`,
-        ephemeral: true
-      })
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle("📂 اختر تصنيف التذكرة")
-      .setDescription("اختر التصنيف المناسب لمشكلتك من القائمة أدناه:")
-      .setFooter({ text: "سيتم إنشاء قناة خاصة لتذكرتك" })
-
-    const menu = buildCategoryMenu()
-
-    await interaction.reply({
-      embeds: [embed],
-      components: [menu],
-      ephemeral: true
-    })
-
-  } catch (error) {
-    logger.error("TICKET_OPEN_BUTTON_FAILED", { error: error.message })
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "❌ حدث خطأ أثناء فتح التذكرة", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-async function handleCategorySelect(interaction) {
-  try {
-    const category = interaction.values[0]
-    const guild = interaction.guild
-    const user = interaction.user
-    const settings = await getSettings(guild.id)
-
-    const maxOpen = settings?.max_open_tickets || 1
-    const openTickets = await getOpenTickets(guild.id, user.id)
-
-    if (openTickets.length >= maxOpen) {
-      return interaction.update({
-        content: "❌ عندك تذكرة مفتوحة بالفعل!",
-        embeds: [],
-        components: []
-      })
-    }
-
-    // ✅ FIX: فحص حد القنوات في الكاتيقوري قبل الإنشاء
-    if (settings?.category_id) {
-      const category_channel = guild.channels.cache.get(settings.category_id)
-      if (category_channel && category_channel.type === ChannelType.GuildCategory) {
-        const channelsInCategory = guild.channels.cache.filter(c => c.parentId === settings.category_id).size
-        if (channelsInCategory >= MAX_CHANNELS_PER_CATEGORY) {
-          return interaction.update({
-            content: `❌ كاتيقوري التذاكر ممتلئ (${MAX_CHANNELS_PER_CATEGORY}/${MAX_CHANNELS_PER_CATEGORY} قناة).\nأبلغ الإدارة لتنظيف التذاكر القديمة.`,
-            embeds: [],
-            components: []
-          })
-        }
-      }
-    }
-
-    await interaction.update({
-      content: "⏳ جاري إنشاء التذكرة...",
-      embeds: [],
-      components: []
-    })
-
-    const ticketNumber = (await getTicketCount(guild.id)) + 1
-    const ticketName = `تذكرة-${ticketNumber}`
-
-    const channelOptions = {
-      name: ticketName,
-      type: ChannelType.GuildText,
-      topic: `🎫 تذكرة #${ticketNumber} | ${user.tag} | ${TICKET_CATEGORIES[category]?.label || "أخرى"}`,
-      permissionOverwrites: [
-        {
-          id: guild.roles.everyone.id,
-          deny: [PermissionFlagsBits.ViewChannel]
-        },
-        {
-          id: user.id,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory,
-            PermissionFlagsBits.AttachFiles,
-            PermissionFlagsBits.EmbedLinks
-          ]
-        },
-        {
-          id: guild.members.me.id,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ManageChannels,
-            PermissionFlagsBits.ManageMessages,
-            PermissionFlagsBits.ReadMessageHistory,
-            PermissionFlagsBits.AttachFiles,
-            PermissionFlagsBits.EmbedLinks
-          ]
-        }
-      ]
-    }
-
-    if (settings?.category_id) {
-      channelOptions.parent = settings.category_id
-    }
-
-    if (settings?.support_role_id) {
-      channelOptions.permissionOverwrites.push({
-        id: settings.support_role_id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.AttachFiles,
-          PermissionFlagsBits.ManageMessages
-        ]
-      })
-    }
-
-    const ticketChannel = await guild.channels.create(channelOptions)
-
-    const ticket = await createTicket({
-      guild_id: guild.id,
-      channel_id: ticketChannel.id,
-      user_id: user.id,
-      category: category
-    })
-
-    if (!ticket) {
-      await ticketChannel.delete().catch(() => {})
-      return interaction.editReply({ content: "❌ فشل في حفظ بيانات التذكرة." })
-    }
-
-    const welcomeMessage = settings?.welcome_message || "مرحباً! فريق الدعم سيكون معك قريباً."
-
-    // الـ embed مع الأولوية الافتراضية (low = عادية)
-    const welcomeEmbed = buildTicketWelcomeEmbed(user, category, ticket.id, welcomeMessage, "low")
-    const controlButtons = buildTicketControlButtons(false)
-    const priorityButton = buildPriorityButton()
-
-    await ticketChannel.send({
-      content: `${user} مرحباً بك في تذكرتك!${settings?.support_role_id ? ` | <@&${settings.support_role_id}>` : ""}`,
-      embeds: [welcomeEmbed],
-      components: [controlButtons, priorityButton]
-    })
-
-    await interaction.editReply({
-      content: `✅ تم إنشاء تذكرتك بنجاح! ${ticketChannel}`
-    })
-
-    await sendLog(guild, ticket, "open", user, {})
-
-    logger.success("TICKET_CREATED", {
-      ticketId: ticket.id,
-      userId: user.id,
-      guildId: guild.id,
-      category
-    })
-
-  } catch (error) {
-    logger.error("TICKET_CATEGORY_SELECT_FAILED", { error: error.message })
-
-    // ✅ FIX: رسالة خطأ أوضح حسب نوع الفشل
-    let errorMessage = "❌ حدث خطأ أثناء إنشاء التذكرة."
-    if (error.code === 50035 || error.message?.includes("Maximum number")) {
-      errorMessage = "❌ تم الوصول للحد الأقصى من القنوات في السيرفر أو الكاتيقوري."
-    } else if (error.code === 50013 || error.message?.includes("Missing Permissions")) {
-      errorMessage = "❌ البوت ما عنده صلاحيات كافية لإنشاء قناة."
-    }
-
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: errorMessage }).catch(() => {})
-    }
-  }
-}
-
-// ══════════════════════════════════════
-//  معالج زر تغيير الأولوية (يظهر القائمة)
-// ══════════════════════════════════════
-
-async function handleChangePriorityButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    // فقط الستاف يقدر يغير الأولوية
-    const staff = await isStaff(interaction)
-    if (!staff) {
-      return interaction.reply({ content: "❌ فقط فريق الدعم يقدر يغير الأولوية.", ephemeral: true })
-    }
-
-    if (ticket.status === "closed") {
-      return interaction.reply({ content: "❌ التذكرة مغلقة، لا يمكن تغيير أولويتها.", ephemeral: true })
-    }
-
-    const currentPrio = PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.low
-
-    const embed = new EmbedBuilder()
-      .setColor(currentPrio.color)
-      .setTitle("🎯 تغيير أولوية التذكرة")
-      .setDescription(
-        `الأولوية الحالية: **${currentPrio.emoji} ${currentPrio.shortLabel}**\n\nاختر الأولوية الجديدة:`
-      )
-      .addFields(
-        { name: "🟢 عادية", value: "مشكلة بسيطة، لا تستعجل", inline: true },
-        { name: "🟡 متوسطة", value: "مشكلة تحتاج اهتمام قريب", inline: true },
-        { name: "🔴 عالية", value: "مشكلة عاجلة، تدخل فوري", inline: true }
-      )
-
-    const priorityMenu = buildPriorityMenu()
-
-    await interaction.reply({
-      embeds: [embed],
-      components: [priorityMenu],
-      ephemeral: true
-    })
-
-  } catch (error) {
-    logger.error("TICKET_CHANGE_PRIORITY_FAILED", { error: error.message })
-    if (!interaction.replied) {
-      await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-// ══════════════════════════════════════
-//  معالج اختيار الأولوية من القائمة
-// ══════════════════════════════════════
-
-async function handlePrioritySelect(interaction) {
-  try {
-    const newPriority = interaction.values[0]
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.update({ content: "❌ هذه ليست قناة تذكرة.", embeds: [], components: [] })
-    }
-
-    const staff = await isStaff(interaction)
-    if (!staff) {
-      return interaction.update({ content: "❌ غير مصرح.", embeds: [], components: [] })
-    }
-
-    if (!PRIORITY_CONFIG[newPriority]) {
-      return interaction.update({ content: "❌ أولوية غير صالحة.", embeds: [], components: [] })
-    }
-
-    const oldPriority = ticket.priority || "low"
-    const oldPrioConfig = PRIORITY_CONFIG[oldPriority] || PRIORITY_CONFIG.low
-    const newPrioConfig = PRIORITY_CONFIG[newPriority]
-
-    if (oldPriority === newPriority) {
-      return interaction.update({
-        content: `⚠️ الأولوية هي نفسها بالفعل: **${newPrioConfig.emoji} ${newPrioConfig.shortLabel}**`,
-        embeds: [],
-        components: []
-      })
-    }
-
-    // تحديث قاعدة البيانات
-    await updateTicket(interaction.channel.id, { priority: newPriority })
-
-    // تحديث الـ embed الرئيسي في القناة
-    await updateWelcomeEmbedPriority(interaction.channel, ticket, newPriority)
-
-    // رسالة تأكيد في القناة
-    const announceEmbed = new EmbedBuilder()
-      .setColor(newPrioConfig.color)
-      .setTitle("🎯 تم تغيير الأولوية")
-      .addFields(
-        { name: "من", value: `${oldPrioConfig.emoji} ${oldPrioConfig.shortLabel}`, inline: true },
-        { name: "إلى", value: `${newPrioConfig.emoji} ${newPrioConfig.shortLabel}`, inline: true },
-        { name: "بواسطة", value: `${interaction.user}`, inline: true }
-      )
-      .setTimestamp()
-
-    await interaction.channel.send({ embeds: [announceEmbed] })
-
-    // تأكيد للستاف
-    await interaction.update({
-      content: `✅ تم تغيير الأولوية إلى **${newPrioConfig.emoji} ${newPrioConfig.shortLabel}**`,
-      embeds: [],
-      components: []
-    })
-
-    // لوق
-    ticket.priority = oldPriority // للمقارنة في اللوق
-    await sendLog(interaction.guild, ticket, "priority_change", interaction.user, {
-      oldPriority,
-      newPriority
-    })
-
-    logger.success("TICKET_PRIORITY_CHANGED", {
-      ticketId: ticket.id,
-      oldPriority,
-      newPriority,
-      changedBy: interaction.user.id
-    })
-
-  } catch (error) {
-    logger.error("TICKET_PRIORITY_SELECT_FAILED", { error: error.message })
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: "❌ حدث خطأ." }).catch(() => {})
-    } else {
-      await interaction.reply({ content: "❌ حدث خطأ.", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-// ══════════════════════════════════════
-//  تحديث الـ Embed الرئيسي بالأولوية الجديدة
-// ══════════════════════════════════════
-
-async function updateWelcomeEmbedPriority(channel, ticket, newPriority) {
-  try {
-    const newPrioConfig = PRIORITY_CONFIG[newPriority] || PRIORITY_CONFIG.low
-
-    // جلب أول رسالة للبوت في القناة (اللي فيها الـ embed الترحيبي)
-    const messages = await channel.messages.fetch({ limit: 20 })
-    const botMessage = messages.find(m =>
-      m.author.id === channel.guild.members.me?.id &&
-      m.embeds.length > 0 &&
-      m.embeds[0]?.fields?.some(f => f.name === "🎯 الأولوية")
-    )
-
-    if (!botMessage) return
-
-    const oldEmbed = botMessage.embeds[0]
-    if (!oldEmbed) return
-
-    // بناء embed جديد مع تحديث الأولوية واللون
-    const newEmbed = EmbedBuilder.from(oldEmbed)
-      .setColor(newPrioConfig.color)
-
-    // تحديث حقل الأولوية
-    const newFields = oldEmbed.fields.map(field => {
-      if (field.name === "🎯 الأولوية") {
-        return { name: "🎯 الأولوية", value: `${newPrioConfig.emoji} ${newPrioConfig.shortLabel}`, inline: true }
-      }
-      return field
-    })
-
-    newEmbed.setFields(newFields)
-
-    await botMessage.edit({ embeds: [newEmbed] })
-
-  } catch (error) {
-    logger.error("TICKET_UPDATE_EMBED_PRIORITY_FAILED", { error: error.message })
-  }
-}
-
-async function handleCloseButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    if (ticket.status === "closed") {
-      return interaction.reply({ content: "❌ هذه التذكرة مغلقة بالفعل.", ephemeral: true })
-    }
-
-    const staff = await isStaff(interaction)
-    if (ticket.user_id !== interaction.user.id && !staff) {
-      return interaction.reply({ content: "❌ فقط صاحب التذكرة أو فريق الدعم يقدر يغلقها.", ephemeral: true })
-    }
-
-    const confirmEmbed = new EmbedBuilder()
-      .setColor(0xef4444)
-      .setTitle("⚠️ تأكيد إغلاق التذكرة")
-      .setDescription("هل أنت متأكد من إغلاق هذه التذكرة؟\nسيتم حفظ المحادثة وإرسالها لقناة اللوق.")
-
-    const confirmButtons = buildCloseConfirmButtons()
-
-    await interaction.reply({
-      embeds: [confirmEmbed],
-      components: [confirmButtons]
-    })
-
-  } catch (error) {
-    logger.error("TICKET_CLOSE_BUTTON_FAILED", { error: error.message })
-    if (!interaction.replied) {
-      await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-async function handleCloseConfirm(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket || ticket.status === "closed") {
-      return interaction.update({ content: "❌ التذكرة مغلقة بالفعل.", embeds: [], components: [] })
-    }
-
-    await interaction.update({
-      content: "⏳ جاري إغلاق التذكرة وحفظ المحادثة...",
-      embeds: [],
-      components: []
-    })
-
-    const settings = await getSettings(interaction.guild.id)
-
-    let transcriptData = { transcript: "", messageCount: 0 }
-    if (settings?.transcript_enabled !== false) {
-      transcriptData = await generateTranscript(interaction.channel, ticket)
-    }
-
-    await updateTicket(interaction.channel.id, {
-      status: "closed",
-      closed_by: interaction.user.id,
-      closed_at: new Date().toISOString(),
-      message_count: transcriptData.messageCount
-    })
-
-    try {
-      await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
-        SendMessages: false,
-        ViewChannel: true
-      })
-    } catch {
-      // ممكن العضو طلع من السيرفر
-    }
-
-    const duration = formatDuration(ticket.created_at, Date.now())
-
-    if (settings?.log_channel_id && transcriptData.transcript) {
-      const logChannel = interaction.guild.channels.cache.get(settings.log_channel_id)
-
-      if (logChannel) {
-        const buffer = Buffer.from(transcriptData.transcript, "utf-8")
-
-        await logChannel.send({
-          files: [{
-            attachment: buffer,
-            name: `transcript-${ticket.id}.txt`
-          }]
-        }).catch(() => {})
-      }
-    }
-
-    await sendLog(interaction.guild, ticket, "close", interaction.user, {
-      messageCount: transcriptData.messageCount,
-      duration
-    })
-
-    const closedEmbed = new EmbedBuilder()
-      .setColor(0xef4444)
-      .setTitle("🔒 تم إغلاق التذكرة")
-      .addFields(
-        { name: "🔒 أُغلقت بواسطة", value: `${interaction.user}`, inline: true },
-        { name: "💬 عدد الرسائل", value: `${transcriptData.messageCount}`, inline: true },
-        { name: "⏱️ مدة التذكرة", value: duration, inline: true }
-      )
-      .setTimestamp()
-
-    const afterCloseButtons = buildAfterCloseButtons()
-
-    await interaction.channel.send({
-      embeds: [closedEmbed],
-      components: [afterCloseButtons]
-    })
-
-    await interaction.channel.setName(`مغلقة-${ticket.id}`).catch(() => {})
-
-    logger.success("TICKET_CLOSED", { ticketId: ticket.id, closedBy: interaction.user.id })
-
-  } catch (error) {
-    logger.error("TICKET_CLOSE_CONFIRM_FAILED", { error: error.message })
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: "❌ حدث خطأ أثناء الإغلاق." }).catch(() => {})
-    }
-  }
-}
-
-async function handleCloseCancel(interaction) {
-  try {
-    await interaction.update({
-      content: "✅ تم إلغاء الإغلاق. التذكرة لا تزال مفتوحة.",
-      embeds: [],
-      components: []
-    })
-  } catch (error) {
-    logger.error("TICKET_CLOSE_CANCEL_FAILED", { error: error.message })
-  }
-}
-
-async function handleLockButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    const staff = await isStaff(interaction)
-    if (!staff) {
-      return interaction.reply({ content: "❌ فقط فريق الدعم يقدر يقفل التذكرة.", ephemeral: true })
-    }
-
-    await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
-      SendMessages: false
-    })
-
-    await updateTicket(interaction.channel.id, { status: "locked" })
-
-    const embed = new EmbedBuilder()
-      .setColor(0xf59e0b)
-      .setTitle("🔐 تم قفل التذكرة")
-      .setDescription(`تم قفل التذكرة بواسطة ${interaction.user}\nصاحب التذكرة لا يمكنه الكتابة حالياً.`)
-      .setTimestamp()
-
-    const controlButtons = buildTicketControlButtons(true)
-    const priorityButton = buildPriorityButton()
-
-    await interaction.update({ components: [controlButtons, priorityButton] })
-    await interaction.channel.send({ embeds: [embed] })
-
-    await sendLog(interaction.guild, ticket, "lock", interaction.user)
-
-  } catch (error) {
-    logger.error("TICKET_LOCK_FAILED", { error: error.message })
-    if (!interaction.replied) {
-      await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-async function handleUnlockButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    const staff = await isStaff(interaction)
-    if (!staff) {
-      return interaction.reply({ content: "❌ فقط فريق الدعم يقدر يفتح القفل.", ephemeral: true })
-    }
-
-    await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
-      SendMessages: true
-    })
-
-    await updateTicket(interaction.channel.id, { status: "open" })
-
-    const embed = new EmbedBuilder()
-      .setColor(0x3b82f6)
-      .setTitle("🔓 تم فتح القفل")
-      .setDescription(`تم فتح قفل التذكرة بواسطة ${interaction.user}`)
-      .setTimestamp()
-
-    const controlButtons = buildTicketControlButtons(false)
-    const priorityButton = buildPriorityButton()
-
-    await interaction.update({ components: [controlButtons, priorityButton] })
-    await interaction.channel.send({ embeds: [embed] })
-
-    await sendLog(interaction.guild, ticket, "unlock", interaction.user)
-
-  } catch (error) {
-    logger.error("TICKET_UNLOCK_FAILED", { error: error.message })
-    if (!interaction.replied) {
-      await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-async function handleClaimButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    const staff = await isStaff(interaction)
-    if (!staff) {
-      return interaction.reply({ content: "❌ فقط فريق الدعم يقدر يستلم التذكرة.", ephemeral: true })
-    }
-
-    if (ticket.claimed_by) {
-      return interaction.reply({
-        content: `⚠️ هذه التذكرة مستلمة بالفعل بواسطة <@${ticket.claimed_by}>`,
-        ephemeral: true
-      })
-    }
-
-    await updateTicket(interaction.channel.id, { claimed_by: interaction.user.id })
-
-    const embed = new EmbedBuilder()
-      .setColor(0xa855f7)
-      .setTitle("🙋 تم استلام التذكرة")
-      .setDescription(`${interaction.user} استلم هذه التذكرة وسيتابعها.`)
-      .setTimestamp()
-
-    await interaction.reply({ embeds: [embed] })
-
-    await sendLog(interaction.guild, ticket, "claim", interaction.user)
-
-  } catch (error) {
-    logger.error("TICKET_CLAIM_FAILED", { error: error.message })
-    if (!interaction.replied) {
-      await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-async function handleTranscriptButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    await interaction.deferReply({ ephemeral: true })
-
-    const { transcript, messageCount } = await generateTranscript(interaction.channel, ticket)
-    const buffer = Buffer.from(transcript, "utf-8")
-
-    await interaction.editReply({
-      content: `📜 سجل المحادثة — ${messageCount} رسالة`,
-      files: [{
-        attachment: buffer,
-        name: `transcript-${ticket.id}.txt`
-      }]
-    })
-
-    await sendLog(interaction.guild, ticket, "transcript", interaction.user, { messageCount })
-
-  } catch (error) {
-    logger.error("TICKET_TRANSCRIPT_BUTTON_FAILED", { error: error.message })
-    if (interaction.deferred) {
-      await interaction.editReply({ content: "❌ فشل في إنشاء السجل." }).catch(() => {})
-    }
-  }
-}
-
-async function handleDeleteButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    const staff = await isStaff(interaction)
-    if (!staff) {
-      return interaction.reply({ content: "❌ فقط فريق الدعم يقدر يحذف التذكرة.", ephemeral: true })
-    }
-
-    await interaction.reply({
-      content: "🗑️ سيتم حذف هذه القناة خلال 5 ثواني..."
-    })
-
-    await sendLog(interaction.guild, ticket, "delete", interaction.user)
-
-    // ✅ FIX: .unref() عشان graceful shutdown
-    const deleteTimer = setTimeout(async () => {
-      try {
-        await interaction.channel.delete(`حذف تذكرة #${ticket.id} بواسطة ${interaction.user.tag}`)
-      } catch (err) {
-        logger.error("TICKET_CHANNEL_DELETE_FAILED", { error: err.message })
-      }
-    }, 5000)
-    deleteTimer.unref?.()
-
-  } catch (error) {
-    logger.error("TICKET_DELETE_FAILED", { error: error.message })
-    if (!interaction.replied) {
-      await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-async function handleReopenButton(interaction) {
-  try {
-    const ticket = await getTicketByChannel(interaction.channel.id)
-
-    if (!ticket) {
-      return interaction.reply({ content: "❌ هذه ليست قناة تذكرة.", ephemeral: true })
-    }
-
-    if (ticket.status === "open") {
-      return interaction.reply({ content: "⚠️ التذكرة مفتوحة بالفعل.", ephemeral: true })
-    }
-
-    try {
-      await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
-        SendMessages: true,
-        ViewChannel: true
-      })
-    } catch {
-      // ممكن العضو طلع
-    }
-
-    await updateTicket(interaction.channel.id, {
-      status: "open",
-      closed_at: null,
-      closed_by: null,
-      close_reason: null
-    })
-
-    await interaction.channel.setName(`تذكرة-${ticket.id}`).catch(() => {})
-
-    const embed = new EmbedBuilder()
-      .setColor(0x06b6d4)
-      .setTitle("🔓 تم إعادة فتح التذكرة")
-      .setDescription(`تم إعادة فتح التذكرة بواسطة ${interaction.user}`)
-      .setTimestamp()
-
-    const controlButtons = buildTicketControlButtons(false)
-    const priorityButton = buildPriorityButton()
-
-    await interaction.update({ components: [] })
-    await interaction.channel.send({
-      embeds: [embed],
-      components: [controlButtons, priorityButton]
-    })
-
-    await sendLog(interaction.guild, ticket, "reopen", interaction.user)
-
-  } catch (error) {
-    logger.error("TICKET_REOPEN_FAILED", { error: error.message })
-    if (!interaction.replied) {
-      await interaction.reply({ content: "❌ حدث خطأ", ephemeral: true }).catch(() => {})
-    }
-  }
-}
-
-// ══════════════════════════════════════
-//  ✅ FIX: AUTO-CLOSE SCHEDULER
-//  ════════════════════════════════════
-//  يفحص كل ساعة التذاكر اللي ما فيها نشاط
-//  منذ auto_close_hours ساعة ويغلقها تلقائياً.
-//
-//  الـ "نشاط" = آخر رسالة في القناة (last_message_id)
-//  الـ "إغلاق" = نفس عملية handleCloseConfirm لكن
-//  بدون تفاعل مستخدم.
+//  AUTO CLOSE
 // ══════════════════════════════════════
 
 async function autoCloseInactiveTickets(client) {
   try {
-    // جلب كل التذاكر المفتوحة
-    const result = await databaseSystem.query(
-      "SELECT * FROM tickets WHERE status = 'open'"
-    )
-    const openTickets = result?.rows || []
+    const result = await databaseSystem.query(`
+      SELECT t.*, ts.auto_close_hours, ts.transcript_enabled
+      FROM tickets t
+      LEFT JOIN ticket_settings ts ON ts.guild_id = t.guild_id
+      WHERE t.status = 'open'
+      AND t.created_at < NOW() - (COALESCE(ts.auto_close_hours, 48) || ' hours')::INTERVAL
+    `)
 
-    if (openTickets.length === 0) return
-
+    const openTickets = result.rows || []
     let closedCount = 0
 
     for (const ticket of openTickets) {
@@ -1379,74 +1210,48 @@ async function autoCloseInactiveTickets(client) {
 
         const channel = guild.channels.cache.get(ticket.channel_id)
         if (!channel) {
-          // القناة محذوفة — ضع التذكرة على closed
           await updateTicket(ticket.channel_id, {
             status: "closed",
-            closed_at: new Date().toISOString(),
-            close_reason: "channel_deleted"
+            closed_at: new Date(),
+            closed_by: client.user.id
           })
           continue
         }
 
-        const settings = await getSettings(ticket.guild_id)
-        const autoCloseHours = settings?.auto_close_hours || 48
-        const inactivityThreshold = autoCloseHours * 60 * 60 * 1000
-
-        // فحص آخر نشاط في القناة
-        let lastActivity = new Date(ticket.created_at).getTime()
-
-        if (channel.lastMessageId) {
-          try {
-            const lastMsg = await channel.messages.fetch(channel.lastMessageId)
-            if (lastMsg) {
-              lastActivity = Math.max(lastActivity, lastMsg.createdTimestamp)
-            }
-          } catch {
-            // الرسالة محذوفة — استخدم created_at
-          }
-        }
-
-        const timeSinceLastActivity = Date.now() - lastActivity
-        if (timeSinceLastActivity < inactivityThreshold) continue
-
-        // ✅ التذكرة خاملة — أغلقها
-        let transcriptData = { transcript: "", messageCount: 0 }
-        if (settings?.transcript_enabled !== false) {
-          transcriptData = await generateTranscript(channel, ticket)
+        const messages = await channel.messages.fetch({ limit: 1 }).catch(() => null)
+        if (messages?.size > 0) {
+          const lastMsg = messages.first()
+          const hoursAgo = (Date.now() - lastMsg.createdTimestamp) / (1000 * 60 * 60)
+          const autoCloseHours = ticket.auto_close_hours || 48
+          if (hoursAgo < autoCloseHours) continue
         }
 
         await updateTicket(ticket.channel_id, {
           status: "closed",
-          closed_at: new Date().toISOString(),
-          close_reason: "auto_close_inactivity",
-          message_count: transcriptData.messageCount
+          closed_at: new Date(),
+          closed_by: client.user.id
         })
 
-        // حذف صلاحية الكتابة
-        try {
-          await channel.permissionOverwrites.edit(ticket.user_id, {
-            SendMessages: false,
-            ViewChannel: true
-          })
-        } catch {
-          // العضو طلع
-        }
+        const transcriptData = ticket.transcript_enabled !== false
+          ? await generateTranscript(channel, ticket)
+          : { transcript: null, messageCount: 0 }
 
-        // إرسال transcript للـ log channel
+        const settings = await getSettings(ticket.guild_id)
+        const autoCloseHours = settings?.auto_close_hours || 48
+
         if (settings?.log_channel_id && transcriptData.transcript) {
           const logChannel = guild.channels.cache.get(settings.log_channel_id)
           if (logChannel) {
-            const buffer = Buffer.from(transcriptData.transcript, "utf-8")
             await logChannel.send({
+              content: `📜 سجل التذكرة #${ticket.id} (إغلاق تلقائي)`,
               files: [{
-                attachment: buffer,
-                name: `transcript-${ticket.id}.txt`
+                attachment: Buffer.from(transcriptData.transcript, "utf-8"),
+                name: `ticket-${ticket.id}.txt`
               }]
             }).catch(() => {})
           }
         }
 
-        // إعلان في القناة
         const closedEmbed = new EmbedBuilder()
           .setColor(0x6b7280)
           .setTitle("⏰ تم إغلاق التذكرة تلقائياً")
@@ -1460,7 +1265,6 @@ async function autoCloseInactiveTickets(client) {
 
         await channel.setName(`مغلقة-${ticket.id}`).catch(() => {})
 
-        // لوق
         await sendLog(guild, ticket, "auto_close", client.user, {
           duration: formatDuration(ticket.created_at, Date.now()),
           messageCount: transcriptData.messageCount,
@@ -1469,9 +1273,7 @@ async function autoCloseInactiveTickets(client) {
 
         closedCount++
 
-        // تأخير صغير عشان rate limit
         await new Promise(r => setTimeout(r, 500))
-
       } catch (err) {
         logger.error("TICKET_AUTO_CLOSE_ITEM_FAILED", {
           ticketId: ticket.id,
@@ -1483,20 +1285,15 @@ async function autoCloseInactiveTickets(client) {
     if (closedCount > 0) {
       logger.info("TICKET_AUTO_CLOSE_BATCH", { closedCount, total: openTickets.length })
     }
-
   } catch (error) {
     logger.error("TICKET_AUTO_CLOSE_FAILED", { error: error.message })
   }
 }
 
-/**
- * بدء scheduler للإغلاق التلقائي.
- * يجب استدعاؤه مرة واحدة عند startup مع client.
- */
 function startAutoCloseScheduler(client) {
   scheduler.register(
     "ticket-auto-close",
-    60 * 60 * 1000, // كل ساعة
+    60 * 60 * 1000,
     () => autoCloseInactiveTickets(client),
     false
   )
@@ -1508,11 +1305,10 @@ function startAutoCloseScheduler(client) {
 // ══════════════════════════════════════
 
 module.exports = {
-  // Settings
   getSettings,
   saveSettings,
+  deployPanel,
 
-  // Database
   createTicket,
   getTicketByChannel,
   getOpenTickets,
@@ -1520,7 +1316,6 @@ module.exports = {
   getTicketCount,
   getTicketStats,
 
-  // Builders
   buildSetupEmbed,
   buildOpenButton,
   buildCategoryMenu,
@@ -1528,8 +1323,8 @@ module.exports = {
   buildTicketControlButtons,
   buildPriorityButton,
   buildPriorityMenu,
+  buildAfterCloseButtons,
 
-  // Button Handlers
   handleOpenButton,
   handleCategorySelect,
   handleCloseButton,
@@ -1542,21 +1337,17 @@ module.exports = {
   handleDeleteButton,
   handleReopenButton,
 
-  // Priority Handlers (NEW)
   handleChangePriorityButton,
   handlePrioritySelect,
   updateWelcomeEmbedPriority,
 
-  // Auto-Close (NEW)
   startAutoCloseScheduler,
   autoCloseInactiveTickets,
 
-  // Utils
   generateTranscript,
   sendLog,
   isStaff,
 
-  // Constants
   TICKET_CATEGORIES,
   TICKET_STATUS,
   PRIORITY_LABELS,
