@@ -31,6 +31,7 @@ const VARIABLES = [
 
 const replacePreviewVars = (txt) => {
   if (!txt) return txt;
+  if (typeof txt !== 'string') return '';
   return txt
     .replace(/{user}/g, '@أنت')
     .replace(/{username}/g, 'أنت')
@@ -80,7 +81,7 @@ export default function WelcomePage() {
           title: replacePreviewVars(data.embed?.title),
           description: replacePreviewVars(data.embed?.description),
           color: data.embed?.color ? intToHexColor(data.embed.color) : '#9b59b6',
-          footer: { text: replacePreviewVars(data.embed?.footer) },
+          footer: replacePreviewVars(data.embed?.footer),
         }
       : null;
 
