@@ -27,6 +27,7 @@ import CommandsPage from '@/pages/CommandsPage';
 import SchedulerPage from '@/pages/SchedulerPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
+import SettingsPage from '@/pages/SettingsPage';
 
 const router = createBrowserRouter([
   {
@@ -73,7 +74,7 @@ const router = createBrowserRouter([
           { path: 'moderation', element: <ModerationPage /> },
           { path: 'reaction-roles', element: <ReactionRolesPage /> },
           { path: 'embed', element: <EmbedBuilderPage /> },
-          { path: 'settings', element: <ComingSoonPage title="الإعدادات" /> },
+          { path: 'settings', element: <SettingsPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

@@ -124,6 +124,9 @@ export const settingsApi = {
   getEmbedTemplates: (g) => apiClient.get(`/api/guild/${g}/embeds/templates`),
   saveEmbedTemplate: (g, data) => apiClient.post(`/api/guild/${g}/embeds/templates`, data),
   deleteEmbedTemplate: (g, id) => apiClient.delete(`/api/guild/${g}/embeds/templates/${id}`),
+  // Danger Zone
+  wipeGuildData: (g, confirmName) =>
+    apiClient.delete(`/api/guild/${g}/data`, { data: { confirm: confirmName } }),
 
   // Audit Log
   auditLog: (g, opts = {}) => {
