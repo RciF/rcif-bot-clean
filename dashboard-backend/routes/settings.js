@@ -1030,4 +1030,153 @@ function calculateOrganizationScore(logs) {
   return Math.round(30 + (enabled / total) * 70)
 }
 
+// ════════════════════════════════════════════════════════════
+//  ════════════ DANGER ZONE ════════════
+//  هذا الكود يضاف داخل dashboard-backend/routes/settings.js
+//  مكان الإضافة: قبل سطر "module.exports = router" في آخر الملف
+// ════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════
+//  DELETE /api/guild/:guildId/data
+//  مسح كامل لكل بيانات السيرفر (Diamond فقط)
+//
+//  ⚠️ لا يمسح:
+//   - economy_users (عالمي)
+//   - guild_subscriptions (الاشتراك — يُفك بشكل منفصل)
+//   - subscriptions, payment_requests (شخصية)
+//
+//  متطلبات الجسم (body):
+//   { confirm: "<server name>" }   — لازم يطابق اسم السيرفر الحالي
+// ════════════════════════════════════════════════════════════
+
+router.delete(
+  "/data",
+  requireAuth,
+  requireGuildAdmin,
+  requirePlan(PLAN_TIERS.DIAMOND),
+  auditLog("settings.wipe_all"),
+  asyncHandler(async (req, res) => {
+    const { guildId } = req.params
+    const { confirm } = req.body || {}
+
+    // ── 1) جلب اسم السيرفر للمقارنة ──
+    let guildName = null
+    try {
+      const discord = require("../utils/discord")
+      const g = await discord.fetchGuild(guildId)
+      guildName = g?.name || null
+    } catch (err) {
+      console.error("[WIPE_GUILD_FETCH_FAILED]", err.message)
+    }
+
+    if (!guildName) {
+      throw new ApiError("تعذّر التحقق من السيرفر", 400, "GUILD_NOT_FOUND")
+    }
+
+    // ── 2) التحقق من تطابق التأكيد ──
+    if (!confirm || String(confirm).trim() !== guildName) {
+      throw new ApiError(
+        "نص التأكيد غير مطابق لاسم السيرفر",
+        400,
+        "CONFIRMATION_MISMATCH",
+      )
+    }
+
+    // ── 3) قائمة الجداول للحذف (guild-scoped) ──
+    const tables = [
+      // إعدادات
+      "welcome_settings",
+      "protection_settings",
+      "log_settings",
+      "xp_settings",
+      "ticket_settings",
+      "economy_settings",
+      "ai_settings",
+      "stats_config",
+      "guild_command_settings",
+      "guild_prefix_settings",
+
+      // بيانات (per-guild)
+      "xp",
+      "inventory",
+      "users",
+      "tickets",
+      "economy_shop",
+      "moderation_bans",
+      "moderation_mutes",
+      "warnings",
+      "ai_usage_log",
+      "scheduled_tasks",
+      "embed_templates",
+      "dashboard_audit_log",
+      "button_role_panels",
+      "button_roles",
+      "guild_events",
+      "stats_channels",
+      "stats_snapshots",
+      "stats_hourly",
+      "guild_analytics",
+
+      // الجدول الأساسي للسيرفر (آخر شيء)
+      "guilds",
+    ]
+
+    // ── 4) Transaction: مسح الكل أو لا شيء ──
+    const summary = { deleted: {}, skipped: [], errors: [] }
+
+    await transaction(async (client) => {
+      // event_attendees: ربط بـ guild_events.id (لازم نحذفه قبل guild_events)
+      try {
+        const r = await client.query(
+          `DELETE FROM event_attendees
+           WHERE event_id IN (
+             SELECT id FROM guild_events WHERE guild_id = $1
+           )`,
+          [guildId],
+        )
+        summary.deleted.event_attendees = r.rowCount
+      } catch (err) {
+        if (err.code === "42P01") {
+          summary.skipped.push("event_attendees")
+        } else {
+          summary.errors.push({ table: "event_attendees", error: err.message })
+        }
+      }
+
+      // ✅ guilds يستخدم column "id" (مو guild_id) — نتعامل معه منفصل
+      for (const table of tables) {
+        try {
+          const column = table === "guilds" ? "id" : "guild_id"
+          const r = await client.query(
+            `DELETE FROM ${table} WHERE ${column} = $1`,
+            [guildId],
+          )
+          summary.deleted[table] = r.rowCount
+        } catch (err) {
+          // الجدول غير موجود (42P01) — نتجاهله
+          if (err.code === "42P01") {
+            summary.skipped.push(table)
+          } else {
+            console.error(`[WIPE_TABLE_FAIL] ${table}:`, err.message)
+            summary.errors.push({ table, error: err.message })
+            // ما نوقف الـ transaction — نكمل ونتجاهل الجداول الفاشلة
+          }
+        }
+      }
+    })
+
+    // ── 5) إبطال الكاش (لو فيه plan caching) ──
+    try {
+      const { invalidateGuildPlan } = require("../services/guildPlan")
+      invalidateGuildPlan(guildId)
+    } catch {}
+
+    res.json({
+      success: true,
+      message: "تم مسح كل بيانات السيرفر",
+      summary,
+    })
+  }),
+)
+
 module.exports = router
