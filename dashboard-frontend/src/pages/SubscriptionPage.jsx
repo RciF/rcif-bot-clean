@@ -1,249 +1,403 @@
-/**
- * ═══════════════════════════════════════════════════════════
- *  Subscription Routes
- *  /api/subscription/*  /api/payment-requests
- * ═══════════════════════════════════════════════════════════
- */
-
-const express = require("express")
-const { asyncHandler, ApiError } = require("../middleware/error")
-const { requireAuth, requireOwner } = require("../middleware/auth")
-const { query } = require("../config/database")
-const { invalidateGuildPlan } = require("../services/guildPlan")
-
-const router = express.Router()
+import { useEffect, useState } from 'react';
+import { CreditCard, CheckCircle2, Clock, XCircle, Sparkles, Copy, Check } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { Skeleton } from '@/components/ui/Skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/Dialog';
+import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
+import { PlanBadge } from '@/components/shared/PlanBadge';
+import { useAuthStore } from '@/store/authStore';
+import { PLANS, PLAN_ORDER, PLAN_TIERS, getPlanInfo } from '@/lib/plans';
+import { apiClient } from '@/api';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ════════════════════════════════════════════════════════════
-//  GET /api/subscription/:userId
+//  Bank info
 // ════════════════════════════════════════════════════════════
 
-router.get(
-  "/subscription/:userId",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    if (req.user.id !== req.params.userId && req.user.id !== process.env.OWNER_ID) {
-      throw new ApiError("غير مصرح", 403)
+const BANK_INFO = {
+  bank: 'مصرف الراجحي',
+  iban: 'SA0000000000000000000000',
+  accountName: 'Lyn Bot',
+};
+
+// ════════════════════════════════════════════════════════════
+//  Status meta
+// ════════════════════════════════════════════════════════════
+
+const STATUS_META = {
+  pending:  { label: 'قيد المراجعة', icon: Clock,         color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/30' },
+  approved: { label: 'تم القبول',    icon: CheckCircle2,  color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/30' },
+  rejected: { label: 'مرفوض',         icon: XCircle,       color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/30' },
+};
+
+// ════════════════════════════════════════════════════════════
+//  Page
+// ════════════════════════════════════════════════════════════
+
+export default function SubscriptionPage() {
+  const { user } = useAuthStore();
+
+  const [subscription, setSubscription] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [refNumber, setRefNumber] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const [copiedField, setCopiedField] = useState(null);
+
+  // ────────────────────────────────────────────────────────
+  //  Load subscription + history
+  // ────────────────────────────────────────────────────────
+
+  const loadData = async () => {
+    if (!user?.id) return;
+
+    setLoading(true);
+    try {
+      const [subRes, historyRes] = await Promise.all([
+        apiClient.get(`/subscription/${user.id}`).catch(() => ({ data: null })),
+        apiClient.get('/payment-requests/me').catch(() => ({ data: [] })),
+      ]);
+
+      setSubscription(subRes.data || { plan_id: 'free', status: 'inactive' });
+      setHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
+    } catch (err) {
+      console.error('Load subscription failed:', err);
+      toast.error('فشل تحميل بيانات الاشتراك');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // ────────────────────────────────────────────────────────
+  //  Submit payment request
+  // ────────────────────────────────────────────────────────
+
+  const handleSubmit = async () => {
+    if (!selectedPlan || !refNumber.trim()) {
+      toast.error('الرجاء إدخال رقم الحوالة');
+      return;
     }
 
-    const r = await query(
-      `SELECT * FROM subscriptions WHERE user_id = $1 LIMIT 1`,
-      [req.params.userId],
-    )
+    setSubmitting(true);
+    try {
+      await apiClient.post('/payment-requests', {
+        plan_id: selectedPlan,
+        ref_number: refNumber.trim(),
+      });
 
-    if (!r.rows.length) {
-      return res.json({
-        user_id: req.params.userId,
-        plan_id: "free",
-        status: "inactive",
-        expires_at: null,
-      })
+      toast.success('تم إرسال طلبك — سيتم مراجعته قريباً');
+      setDialogOpen(false);
+      setRefNumber('');
+      setSelectedPlan(null);
+      loadData();
+    } catch (err) {
+      const code = err?.response?.data?.code;
+      if (code === 'PENDING_EXISTS') {
+        toast.error('عندك طلب قيد المراجعة بالفعل');
+      } else {
+        toast.error(err?.response?.data?.error || 'فشل إرسال الطلب');
+      }
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    const sub = r.rows[0]
+  const openUpgradeDialog = (planId) => {
+    setSelectedPlan(planId);
+    setRefNumber('');
+    setDialogOpen(true);
+  };
 
-    // فحص انتهاء الاشتراك
-    if (sub.expires_at && new Date(sub.expires_at) < new Date()) {
-      await query(
-        `UPDATE subscriptions SET status = 'expired', updated_at = NOW() WHERE user_id = $1`,
-        [req.params.userId],
-      )
-      sub.status = "expired"
+  const copyToClipboard = async (text, field) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      toast.success('تم النسخ');
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch {
+      toast.error('فشل النسخ');
     }
+  };
 
-    res.json(sub)
-  }),
-)
+  // ────────────────────────────────────────────────────────
+  //  Loading state
+  // ────────────────────────────────────────────────────────
 
-// ════════════════════════════════════════════════════════════
-//  ✅ NEW: GET /api/payment-requests/me
-//  جلب طلبات المستخدم الحالية (سجل المدفوعات)
-// ════════════════════════════════════════════════════════════
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-32 w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    );
+  }
 
-router.get(
-  "/payment-requests/me",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const r = await query(
-      `SELECT id, plan_id, ref_number, status, notes, created_at, reviewed_at
-       FROM payment_requests
-       WHERE user_id = $1
-       ORDER BY created_at DESC
-       LIMIT 50`,
-      [req.user.id],
-    )
-    res.json(r.rows)
-  }),
-)
+  const currentPlanId = subscription?.plan_id || 'free';
+  const currentPlan = getPlanInfo(currentPlanId);
+  const isActive = subscription?.status === 'active';
 
-// ════════════════════════════════════════════════════════════
-//  POST /api/payment-requests
-//  المستخدم يطلب اشتراك جديد
-// ════════════════════════════════════════════════════════════
+  // ────────────────────────────────────────────────────────
+  //  Render
+  // ────────────────────────────────────────────────────────
 
-router.post(
-  "/payment-requests",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const { plan_id, ref_number } = req.body
+  return (
+    <div className="space-y-6">
+      <SettingsPageHeader
+        icon={CreditCard}
+        title="الاشتراك"
+        description="اختر الخطة المناسبة لسيرفرك"
+      />
 
-    if (!plan_id || !ref_number) {
-      throw new ApiError("plan_id و ref_number مطلوبين", 400)
-    }
+      {/* الاشتراك الحالي */}
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl lyn-gradient flex items-center justify-center text-2xl">
+              {currentPlan.icon}
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground mb-1">الخطة الحالية</div>
+              <div className="text-xl font-bold">{currentPlan.name}</div>
+              {isActive && subscription?.expires_at && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  تنتهي في: {new Date(subscription.expires_at).toLocaleDateString('ar-SA')}
+                </div>
+              )}
+            </div>
+          </div>
+          <PlanBadge plan={currentPlanId} size="lg" />
+        </div>
+      </Card>
 
-    if (!["silver", "gold", "diamond"].includes(plan_id)) {
-      throw new ApiError("الخطة غير صالحة", 400)
-    }
+      {/* الخطط المتاحة */}
+      <div>
+        <h2 className="text-xl font-bold mb-4">الخطط المتاحة</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {PLAN_ORDER.map((planId) => {
+            const plan = PLANS[planId];
+            const isCurrent = planId === currentPlanId && isActive;
+            const isFree = planId === PLAN_TIERS.FREE;
 
-    // فحص لو فيه طلب pending
-    const existing = await query(
-      `SELECT id FROM payment_requests WHERE user_id = $1 AND status = 'pending' LIMIT 1`,
-      [req.user.id],
-    )
+            return (
+              <Card
+                key={planId}
+                className={cn(
+                  'p-6 flex flex-col gap-4 transition-all',
+                  isCurrent && 'ring-2 ring-purple-500 lyn-glow',
+                )}
+              >
+                <div className="text-center">
+                  <div className="text-4xl mb-2">{plan.icon}</div>
+                  <h3 className="text-lg font-bold mb-1">{plan.name}</h3>
+                  {plan.badge && (
+                    <Badge variant="lyn" size="sm">
+                      {plan.badge}
+                    </Badge>
+                  )}
+                  <div className="text-2xl font-bold mt-3 lyn-text-gradient num">
+                    {plan.priceLabel}
+                  </div>
+                </div>
 
-    if (existing.rows.length > 0) {
-      throw new ApiError("لديك طلب قيد المراجعة بالفعل", 400, "PENDING_EXISTS")
-    }
+                <div className="space-y-2 flex-1 text-sm">
+                  {plan.features.slice(0, 5).map((f, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground">{f}</span>
+                    </div>
+                  ))}
+                  {plan.features.length > 5 && (
+                    <div className="text-xs text-muted-foreground pt-1">
+                      + {plan.features.length - 5} ميزة أخرى
+                    </div>
+                  )}
+                </div>
 
-    const r = await query(
-      `INSERT INTO payment_requests (user_id, plan_id, ref_number, status)
-       VALUES ($1, $2, $3, 'pending') RETURNING *`,
-      [req.user.id, plan_id, ref_number],
-    )
+                {isCurrent ? (
+                  <Button variant="outline" disabled className="w-full">
+                    <CheckCircle2 className="w-4 h-4" />
+                    خطتك الحالية
+                  </Button>
+                ) : isFree ? (
+                  <Button variant="outline" disabled className="w-full">
+                    افتراضي
+                  </Button>
+                ) : (
+                  <Button
+                    variant="default"
+                    onClick={() => openUpgradeDialog(planId)}
+                    className="w-full"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    ترقية لـ {plan.name}
+                  </Button>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
 
-    res.json(r.rows[0])
-  }),
-)
+      {/* سجل الطلبات */}
+      {history.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold mb-4">سجل الطلبات</h2>
+          <div className="space-y-2">
+            {history.map((item) => {
+              const meta = STATUS_META[item.status] || STATUS_META.pending;
+              const Icon = meta.icon;
+              const plan = getPlanInfo(item.plan_id);
 
-// ════════════════════════════════════════════════════════════
-//  GET /api/admin/payment-requests (Owner only)
-// ════════════════════════════════════════════════════════════
+              return (
+                <Card key={item.id} className={cn('p-4 border', meta.bg)}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Icon className={cn('w-5 h-5', meta.color)} />
+                      <div>
+                        <div className="font-medium">
+                          ترقية {plan.icon} {plan.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          رقم الحوالة: <span className="num">{item.ref_number}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-end">
+                      <div className={cn('text-sm font-medium', meta.color)}>
+                        {meta.label}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(item.created_at).toLocaleDateString('ar-SA')}
+                      </div>
+                    </div>
+                  </div>
+                  {item.notes && (
+                    <div className="text-sm mt-3 pt-3 border-t border-border/50">
+                      <span className="text-muted-foreground">ملاحظات: </span>
+                      {item.notes}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-router.get(
-  "/admin/payment-requests",
-  requireAuth,
-  requireOwner,
-  asyncHandler(async (req, res) => {
-    const status = req.query.status || "pending"
-    const r = await query(
-      `SELECT * FROM payment_requests WHERE status = $1 ORDER BY created_at DESC`,
-      [status],
-    )
-    res.json(r.rows)
-  }),
-)
+      {/* Dialog الترقية */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              ترقية لخطة {selectedPlan && getPlanInfo(selectedPlan).name}
+            </DialogTitle>
+            <DialogDescription>
+              حوّل المبلغ على الحساب البنكي ثم أدخل رقم الحوالة هنا
+            </DialogDescription>
+          </DialogHeader>
 
-// ════════════════════════════════════════════════════════════
-//  POST /api/admin/payment-requests/:id/approve
-// ════════════════════════════════════════════════════════════
+          {/* بيانات البنك */}
+          <Card className="p-4 space-y-3 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground">البنك</div>
+                <div className="font-medium">{BANK_INFO.bank}</div>
+              </div>
+            </div>
 
-router.post(
-  "/admin/payment-requests/:id/approve",
-  requireAuth,
-  requireOwner,
-  asyncHandler(async (req, res) => {
-    const { months = 1 } = req.body
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-muted-foreground">IBAN</div>
+                <div className="font-mono text-sm truncate" dir="ltr">
+                  {BANK_INFO.iban}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copyToClipboard(BANK_INFO.iban, 'iban')}
+              >
+                {copiedField === 'iban' ? (
+                  <Check className="w-4 h-4 text-emerald-500" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
 
-    const reqRow = await query(`SELECT * FROM payment_requests WHERE id = $1`, [req.params.id])
-    if (!reqRow.rows.length) throw new ApiError("طلب غير موجود", 404)
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground">اسم المستلم</div>
+                <div className="font-medium">{BANK_INFO.accountName}</div>
+              </div>
+            </div>
 
-    const payment = reqRow.rows[0]
-    const expiresAt = new Date()
-    expiresAt.setMonth(expiresAt.getMonth() + months)
+            <div className="pt-2 border-t border-border/50">
+              <div className="text-xs text-muted-foreground">المبلغ</div>
+              <div className="text-lg font-bold lyn-text-gradient num">
+                {selectedPlan && PLANS[selectedPlan]?.priceLabel}
+              </div>
+            </div>
+          </Card>
 
-    // تفعيل الاشتراك
-    await query(
-      `INSERT INTO subscriptions (user_id, plan_id, status, expires_at)
-       VALUES ($1, $2, 'active', $3)
-       ON CONFLICT (user_id) DO UPDATE SET
-         plan_id = $2, status = 'active', expires_at = $3, updated_at = NOW()`,
-      [payment.user_id, payment.plan_id, expiresAt],
-    )
+          {/* رقم الحوالة */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">رقم الحوالة (Reference)</label>
+            <Input
+              placeholder="أدخل رقم الحوالة من إيصال التحويل"
+              value={refNumber}
+              onChange={(e) => setRefNumber(e.target.value)}
+              dir="ltr"
+            />
+            <p className="text-xs text-muted-foreground">
+              راح نراجع طلبك ونفعّل اشتراكك خلال 24 ساعة
+            </p>
+          </div>
 
-    // تحديث الطلب
-    await query(
-      `UPDATE payment_requests SET status = 'approved', reviewed_at = NOW() WHERE id = $1`,
-      [req.params.id],
-    )
-
-    res.json({ success: true })
-  }),
-)
-
-// ════════════════════════════════════════════════════════════
-//  POST /api/admin/payment-requests/:id/reject
-// ════════════════════════════════════════════════════════════
-
-router.post(
-  "/admin/payment-requests/:id/reject",
-  requireAuth,
-  requireOwner,
-  asyncHandler(async (req, res) => {
-    const { notes } = req.body
-    await query(
-      `UPDATE payment_requests SET status = 'rejected', notes = $1, reviewed_at = NOW() WHERE id = $2`,
-      [notes || null, req.params.id],
-    )
-    res.json({ success: true })
-  }),
-)
-
-// ════════════════════════════════════════════════════════════
-//  POST /api/guild/:guildId/link
-//  ربط الاشتراك بسيرفر
-// ════════════════════════════════════════════════════════════
-
-router.post(
-  "/guild/:guildId/link",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const { guildId } = req.params
-
-    // فحص إن المستخدم عنده اشتراك نشط
-    const sub = await query(
-      `SELECT plan_id FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
-      [req.user.id],
-    )
-
-    if (!sub.rows.length) {
-      throw new ApiError("ما عندك اشتراك نشط", 400, "NO_SUBSCRIPTION")
-    }
-
-    // فحص إن المستخدم ما عنده ربط آخر
-    const existing = await query(
-      `SELECT guild_id FROM guild_subscriptions WHERE owner_id = $1`,
-      [req.user.id],
-    )
-
-    if (existing.rows.length > 0 && existing.rows[0].guild_id !== guildId) {
-      throw new ApiError(
-        "اشتراكك مربوط بسيرفر آخر — فك الربط أولاً",
-        400,
-        "ALREADY_LINKED",
-      )
-    }
-
-    await query(
-      `INSERT INTO guild_subscriptions (guild_id, owner_id) VALUES ($1, $2)
-       ON CONFLICT (guild_id) DO UPDATE SET owner_id = $2`,
-      [guildId, req.user.id],
-    )
-
-    invalidateGuildPlan(guildId)
-    res.json({ success: true })
-  }),
-)
-
-router.delete(
-  "/guild/:guildId/link",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    await query(
-      `DELETE FROM guild_subscriptions WHERE guild_id = $1 AND owner_id = $2`,
-      [req.params.guildId, req.user.id],
-    )
-    invalidateGuildPlan(req.params.guildId)
-    res.json({ success: true })
-  }),
-)
-
-module.exports = router
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={submitting}
+              className="flex-1"
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="default"
+              onClick={handleSubmit}
+              disabled={submitting || !refNumber.trim()}
+              className="flex-1"
+            >
+              {submitting ? 'جاري الإرسال...' : 'إرسال الطلب'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
