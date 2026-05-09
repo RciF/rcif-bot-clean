@@ -17,7 +17,7 @@ import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { PlanBadge } from '@/components/shared/PlanBadge';
 import { useAuthStore } from '@/store/authStore';
 import { PLANS, PLAN_ORDER, PLAN_TIERS, getPlanInfo } from '@/lib/plans';
-import { apiClient } from '@/api';
+import { subscriptionApi } from '@/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -69,12 +69,16 @@ export default function SubscriptionPage() {
     setLoading(true);
     try {
       const [subRes, historyRes] = await Promise.all([
-        apiClient.get(`/subscription/${user.id}`).catch(() => ({ data: null })),
-        apiClient.get('/payment-requests/me').catch(() => ({ data: [] })),
+        subscriptionApi.get(user.id).catch(() => null),
+        subscriptionApi.getMyPayments().catch(() => []),
       ]);
 
-      setSubscription(subRes.data || { plan_id: 'free', status: 'inactive' });
-      setHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
+      // apiClient في هذا المشروع يرجع الـ data مباشرة (مو { data })
+      const subData = subRes?.data ?? subRes;
+      const historyData = historyRes?.data ?? historyRes;
+
+      setSubscription(subData || { plan_id: 'free', status: 'inactive' });
+      setHistory(Array.isArray(historyData) ? historyData : []);
     } catch (err) {
       console.error('Load subscription failed:', err);
       toast.error('فشل تحميل بيانات الاشتراك');
@@ -100,7 +104,7 @@ export default function SubscriptionPage() {
 
     setSubmitting(true);
     try {
-      await apiClient.post('/payment-requests', {
+      await subscriptionApi.requestPayment({
         plan_id: selectedPlan,
         ref_number: refNumber.trim(),
       });
@@ -111,11 +115,13 @@ export default function SubscriptionPage() {
       setSelectedPlan(null);
       loadData();
     } catch (err) {
-      const code = err?.response?.data?.code;
+      const code = err?.response?.data?.code || err?.code;
+      const message = err?.response?.data?.error || err?.message;
+
       if (code === 'PENDING_EXISTS') {
         toast.error('عندك طلب قيد المراجعة بالفعل');
       } else {
-        toast.error(err?.response?.data?.error || 'فشل إرسال الطلب');
+        toast.error(message || 'فشل إرسال الطلب');
       }
     } finally {
       setSubmitting(false);
