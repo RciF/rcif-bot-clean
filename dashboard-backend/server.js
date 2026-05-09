@@ -25,6 +25,7 @@ const guildRoutes = require("./routes/guild")
 const settingsRoutes = require("./routes/settings")
 const subscriptionRoutes = require("./routes/subscription")
 const commandsRoutes = require("./routes/commands")
+const commandsModularRoutes = require("./routes/commands/index")
 const statsRoutes = require("./routes/stats")
 const aiRoutes = require("./routes/ai")
 
@@ -34,6 +35,7 @@ const discordUtil = require("./utils/discord")
 
 // ── Migrations ──
 const { runMigrations } = require("./scripts/migrate")
+const { runCommandsMigration } = require("./scripts/migrate-commands")
 
 // ── App ──
 const app = express()
@@ -147,11 +149,16 @@ app.use("/api/auth", authRoutes)
 
 // ── Subscription / Payment / Linking ──
 app.use("/api", subscriptionRoutes)
+// Bot Internal (للبوت — محمي بـ x-bot-secret)
+   app.use("/api", commandsModularRoutes.botRoutes)
 
 // ── Guild routes (resources + settings + commands + stats) ──
 app.use("/api/guild/:guildId", guildRoutes)
 app.use("/api/guild/:guildId", settingsRoutes)
-app.use("/api/guild/:guildId", commandsRoutes)
+// النظام القديم (legacy) — للصفحة الحالية
+   app.use("/api/guild/:guildId", commandsRoutes)
+   // النظام الجديد (modular) — للأوامر الجديدة (aliases, restrictions, defaults, leaderboard)
+   app.use("/api/guild/:guildId/commands", commandsModularRoutes.guildRoutes)
 app.use("/api/guild/:guildId", statsRoutes)
 app.use("/api/guild/:guildId", aiRoutes)
 
@@ -178,6 +185,7 @@ async function start() {
 
     await db.initSchema()
     await runMigrations()
+    await runCommandsMigration()
 
     httpServer = app.listen(env.PORT, "0.0.0.0", () => {
       console.log(`✅ Server running on http://0.0.0.0:${env.PORT}`)
