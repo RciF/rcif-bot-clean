@@ -84,20 +84,22 @@ const PAYMENT_METHODS = {
       'الصق رقم العملية في الأسفل واضغط إرسال',
     ],
   },
-  phone: {
-    id: 'phone',
-    label: 'تحويل بالجوال',
+  burq: {
+    id: 'burq',
+    label: 'برق',
     icon: Apple,
     color: 'text-pink-500',
     bg: 'bg-pink-500/10 border-pink-500/30',
     info: {
-      number: '0509992372',
+      bank: 'البنك العربي الوطني (برق)',
+      phone: '0509992372',
+      iban: 'SA7430100991107858632154',
       accountName: ACCOUNT_NAME,
     },
     steps: [
-      'افتح تطبيق البنك أو STC Bank',
-      'اختر "تحويل لرقم جوال"',
-      'أدخل الرقم: 0509992372',
+      'افتح تطبيق برق أو أي بنك',
+      'الطريقة الأسرع: اختر "تحويل لرقم جوال" وأدخل: 0509992372',
+      'الطريقة البديلة: استخدم رقم IBAN من الأسفل',
       'تأكد من الاسم: علي سلمان طاوي الفيفي',
       'حوّل المبلغ المطلوب',
       'الصق رقم العملية في الأسفل واضغط إرسال',
@@ -478,10 +480,10 @@ export default function SubscriptionPage() {
               />
             </TabsContent>
 
-            {/* Phone Transfer */}
-            <TabsContent value="phone">
+            {/* Burq (BNK Wallet — Phone or IBAN) */}
+            <TabsContent value="burq">
               <PaymentMethodCard
-                method={PAYMENT_METHODS.phone}
+                method={PAYMENT_METHODS.burq}
                 copiedField={copiedField}
                 onCopy={copyToClipboard}
               />
@@ -576,21 +578,55 @@ function PaymentMethodCard({ method, copiedField, onCopy }) {
           </>
         )}
 
-        {/* Phone-based method */}
-        {method.id === 'phone' && (
+        {/* Burq — phone first, IBAN as backup */}
+        {method.id === 'burq' && (
           <>
             <InfoRow
-              label="رقم الجوال"
-              value={method.info.number}
-              field="phone-number"
-              copiedField={copiedField}
-              onCopy={onCopy}
-              monospace
+              label="البنك"
+              value={method.info.bank}
+              copyable={false}
             />
+
+            {/* Primary: Phone */}
+            <div className="p-3 rounded-lg bg-pink-500/5 border border-pink-500/20">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Smartphone className="w-4 h-4 text-pink-500" />
+                <span className="text-xs font-bold text-pink-500">
+                  الطريقة الأسرع
+                </span>
+              </div>
+              <InfoRow
+                label="رقم الجوال"
+                value={method.info.phone}
+                field="burq-phone"
+                copiedField={copiedField}
+                onCopy={onCopy}
+                monospace
+              />
+            </div>
+
+            {/* Backup: IBAN */}
+            <div className="p-3 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  أو استخدم IBAN
+                </span>
+              </div>
+              <InfoRow
+                label="رقم IBAN"
+                value={method.info.iban}
+                field="burq-iban"
+                copiedField={copiedField}
+                onCopy={onCopy}
+                monospace
+              />
+            </div>
+
             <InfoRow
               label="اسم المستلم"
               value={method.info.accountName}
-              field="phone-name"
+              field="burq-name"
               copiedField={copiedField}
               onCopy={onCopy}
             />
