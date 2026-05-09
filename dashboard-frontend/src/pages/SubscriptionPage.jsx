@@ -173,7 +173,7 @@ export default function SubscriptionPage() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
-        icon={CreditCard}
+        icon={<CreditCard />}
         title="الاشتراك"
         description="اختر الخطة المناسبة لسيرفرك"
       />
