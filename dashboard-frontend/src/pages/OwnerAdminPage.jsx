@@ -311,11 +311,16 @@ function PaymentRequestsTab({ status }) {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={STATUS_META[status]?.icon || Clock}
-          title={search ? 'لا توجد نتائج' : `لا توجد طلبات ${STATUS_META[status]?.label}`}
-          description={search ? 'جرب كلمات بحث مختلفة' : 'الطلبات الجديدة ستظهر هنا'}
-        />
+        (() => {
+          const EmptyIcon = STATUS_META[status]?.icon || Clock;
+          return (
+            <EmptyState
+              icon={<EmptyIcon />}
+              title={search ? 'لا توجد نتائج' : `لا توجد طلبات ${STATUS_META[status]?.label}`}
+              description={search ? 'جرب كلمات بحث مختلفة' : 'الطلبات الجديدة ستظهر هنا'}
+            />
+          );
+        })()
       ) : (
         <div className="space-y-3">
           {filtered.map((req) => (
@@ -717,7 +722,7 @@ function SubscriptionsTab() {
         <>
           {!subscription || subscription?.status === 'inactive' ? (
             <EmptyState
-              icon={Sparkles}
+              icon={<Sparkles />}
               title="لا يوجد اشتراك نشط"
               description={
                 searchId
