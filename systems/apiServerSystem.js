@@ -116,6 +116,73 @@ function startApiServer(client) {
   })
 
   // ════════════════════════════════════════════════════════
+  //  ✅ POST /api/moderation/unban
+  //  يستدعيه dashboard-backend عند DELETE /moderation/bans/:userId
+  // ════════════════════════════════════════════════════════
+
+  app.post("/api/moderation/unban", requireBotSecret, async (req, res) => {
+    try {
+      const { guildId, userId, reason } = req.body || {}
+      if (!guildId || !userId) {
+        return res.status(400).json({ error: "guildId and userId required" })
+      }
+
+      const guild = client?.guilds?.cache?.get(guildId)
+      if (!guild) {
+        return res.status(404).json({ error: "guild_not_found" })
+      }
+
+      try {
+        await guild.bans.remove(userId, reason || "Unbanned via dashboard")
+      } catch (err) {
+        // لو ما هو محظور أصلاً
+        if (err.code === 10026) {
+          return res.json({ success: true, was_banned: false })
+        }
+        throw err
+      }
+
+      return res.json({ success: true, was_banned: true })
+    } catch (err) {
+      logger.error("UNBAN_API_FAILED", { error: err.message })
+      return res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ════════════════════════════════════════════════════════
+  //  ✅ POST /api/moderation/unmute
+  // ════════════════════════════════════════════════════════
+
+  app.post("/api/moderation/unmute", requireBotSecret, async (req, res) => {
+    try {
+      const { guildId, userId, reason } = req.body || {}
+      if (!guildId || !userId) {
+        return res.status(400).json({ error: "guildId and userId required" })
+      }
+
+      const guild = client?.guilds?.cache?.get(guildId)
+      if (!guild) {
+        return res.status(404).json({ error: "guild_not_found" })
+      }
+
+      const member = await guild.members.fetch(userId).catch(() => null)
+      if (!member) {
+        return res.status(404).json({ error: "member_not_found" })
+      }
+
+      if (!member.isCommunicationDisabled?.()) {
+        return res.json({ success: true, was_muted: false })
+      }
+
+      await member.timeout(null, reason || "Unmuted via dashboard")
+      return res.json({ success: true, was_muted: true })
+    } catch (err) {
+      logger.error("UNMUTE_API_FAILED", { error: err.message })
+      return res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ════════════════════════════════════════════════════════
   //  ✅ POST /api/deploy-ticket-panel
   //  يستدعيه dashboard-backend بعد POST /tickets/panel/deploy
   // ════════════════════════════════════════════════════════

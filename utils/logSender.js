@@ -1,9 +1,45 @@
+// ══════════════════════════════════════════════════════════════════
+//  LOG SENDER
+//  المسار: utils/logSender.js
+//
+//  يدعم schema مزدوج:
+//   1) Flat columns (legacy): message_delete_channel, member_join_channel, ...
+//   2) JSONB من الداش: events: { message_delete: {enabled, channel}, ... }
+//                      + master_channel + use_single_channel
+//
+//  أولوية القراءة:
+//   - لو use_single_channel = true → master_channel للجميع
+//   - وإلا → events[key].channel من JSONB لو موجودة وenabled
+//   - وإلا → العمود الـ flat
+//   - fallback: master_channel
+// ══════════════════════════════════════════════════════════════════
+
 const { EmbedBuilder } = require("discord.js")
 const databaseManager = require("./databaseManager")
 const logger = require("../systems/loggerSystem")
 
 const cache = new Map()
 const CACHE_TTL = 60 * 1000
+
+// ══════════════════════════════════════
+//  JSON parser
+// ══════════════════════════════════════
+
+function parseJsonObject(raw) {
+  if (!raw) return {}
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw
+  if (typeof raw === "string") {
+    try {
+      const p = JSON.parse(raw)
+      return (p && typeof p === "object" && !Array.isArray(p)) ? p : {}
+    } catch { return {} }
+  }
+  return {}
+}
+
+// ══════════════════════════════════════
+//  Settings loader
+// ══════════════════════════════════════
 
 async function getLogSettings(guildId) {
   const cached = cache.get(guildId)
@@ -15,7 +51,12 @@ async function getLogSettings(guildId) {
       "SELECT * FROM log_settings WHERE guild_id = $1",
       [guildId]
     )
-    const data = result.rows[0] || null
+    const row = result.rows[0] || null
+    let data = row
+    if (data) {
+      // normalize: events JSONB → object
+      data = { ...data, events: parseJsonObject(data.events) }
+    }
     cache.set(guildId, { data, timestamp: Date.now() })
     return data
   } catch (err) {
@@ -25,12 +66,13 @@ async function getLogSettings(guildId) {
 }
 
 function clearCache(guildId) {
-  if (guildId) {
-    cache.delete(guildId)
-  } else {
-    cache.clear()
-  }
+  if (guildId) cache.delete(guildId)
+  else cache.clear()
 }
+
+// ══════════════════════════════════════
+//  EVENT MAPS
+// ══════════════════════════════════════
 
 const EVENT_CHANNEL_MAP = {
   message_delete:       "message_delete_channel",
@@ -56,7 +98,6 @@ const EVENT_CHANNEL_MAP = {
   emoji_delete:         "emoji_channel",
   invite_create:        "invite_channel",
   invite_delete:        "invite_channel",
-  // ✅ فعاليات — كلها تستخدم نفس القناة
   event_create:         "event_channel",
   event_cancel:         "event_channel",
   event_start:          "event_channel",
@@ -82,7 +123,6 @@ const EVENT_TYPES = [
   { key: "guild_update",        column: "guild_update_channel",        label: "تحديث السيرفر",      emoji: "🏠" },
   { key: "emoji_create",        column: "emoji_channel",               label: "الإيموجي",           emoji: "😀" },
   { key: "invite_create",       column: "invite_channel",              label: "الدعوات",            emoji: "🔗" },
-  // ✅ فعاليات — entry واحدة تضبط القناة لكل أحداث الفعاليات
   { key: "event_create",        column: "event_channel",               label: "سجل الفعاليات",      emoji: "📅" },
 ]
 
@@ -102,16 +142,51 @@ const LOG_COLORS = {
   event:   0x8b5cf6,
 }
 
+// ══════════════════════════════════════
+//  Channel resolver — حسب الأولوية
+// ══════════════════════════════════════
+
+function resolveChannelId(settings, eventType) {
+  if (!settings) return null
+
+  // 1) قناة موحدة لكل اللوقات
+  if (settings.use_single_channel === true && settings.master_channel) {
+    // تحقق إن الحدث مفعّل في events JSONB لو موجود (وإلا اعتبره مفعّل افتراضياً)
+    const events = settings.events || {}
+    const evCfg = events[eventType]
+    if (evCfg && evCfg.enabled === false) return null
+    return settings.master_channel
+  }
+
+  // 2) JSONB events من الداش
+  const events = settings.events || {}
+  const evCfg = events[eventType]
+  if (evCfg && evCfg.enabled !== false) {
+    if (evCfg.channel) return evCfg.channel
+    // مفعّل لكن بدون channel → استخدم master_channel كـ fallback
+    if (settings.master_channel) return settings.master_channel
+  }
+
+  // 3) عمود flat قديم
+  const flatColumn = EVENT_CHANNEL_MAP[eventType]
+  if (flatColumn && settings[flatColumn]) {
+    return settings[flatColumn]
+  }
+
+  // 4) لا شيء
+  return null
+}
+
+// ══════════════════════════════════════
+//  Send log
+// ══════════════════════════════════════
+
 async function sendLog(client, guildId, eventType, options = {}) {
   try {
     const settings = await getLogSettings(guildId)
-
     if (!settings || !settings.enabled) return
 
-    const channelColumn = EVENT_CHANNEL_MAP[eventType]
-    if (!channelColumn) return
-
-    const channelId = settings[channelColumn]
+    const channelId = resolveChannelId(settings, eventType)
     if (!channelId) return
 
     const guild = client.guilds.cache.get(guildId)
@@ -148,6 +223,7 @@ module.exports = {
   sendLog,
   getLogSettings,
   clearCache,
+  resolveChannelId,
   EVENT_TYPES,
   EVENT_CHANNEL_MAP,
   LOG_COLORS

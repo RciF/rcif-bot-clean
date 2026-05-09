@@ -4,6 +4,7 @@
  *  /api/subscription/*  /api/payment-requests
  *
  *  ✅ NEW: يستدعي البوت بعد approve/reject/expire لمزامنة الرتبة
+ *  ✅ NEW: GET /api/admin/stats للوحة الأونر
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -179,7 +180,7 @@ router.get(
 
 // ════════════════════════════════════════════════════════════
 //  POST /api/admin/payment-requests/:id/approve
-//  ✅ NEW: يستدعي البوت لإعطاء رتبة الاشتراك
+//  ✅ يستدعي البوت لإعطاء رتبة الاشتراك
 // ════════════════════════════════════════════════════════════
 
 router.post(
@@ -237,7 +238,7 @@ router.post(
 )
 
 // ════════════════════════════════════════════════════════════
-//  ✅ NEW: POST /api/admin/subscriptions/:userId/cancel
+//  POST /api/admin/subscriptions/:userId/cancel
 //  إلغاء اشتراك مستخدم يدوياً (للأونر) — يسحب الرتبة
 // ════════════════════════════════════════════════════════════
 
@@ -271,6 +272,79 @@ router.post(
     syncBotRole(userId, sub.rows[0]?.plan_id || null, "cancelled").catch(() => {})
 
     res.json({ success: true, unlinked: linked.rows.length })
+  }),
+)
+
+// ════════════════════════════════════════════════════════════
+//  ✅ NEW: GET /api/admin/stats
+//  إحصائيات سريعة للوحة المالك
+// ════════════════════════════════════════════════════════════
+
+router.get(
+  "/admin/stats",
+  requireAuth,
+  requireOwner,
+  asyncHandler(async (req, res) => {
+    // ─── Counts of payment requests by status ───
+    const counts = await query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
+        COUNT(*) FILTER (WHERE status = 'approved') AS approved,
+        COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
+        COUNT(*)                                    AS total
+      FROM payment_requests
+    `)
+
+    // ─── Active subscriptions count by plan ───
+    const subs = await query(`
+      SELECT
+        plan_id,
+        COUNT(*) AS count
+      FROM subscriptions
+      WHERE status = 'active'
+        AND (expires_at IS NULL OR expires_at > NOW())
+      GROUP BY plan_id
+    `)
+
+    const subsByPlan = { silver: 0, gold: 0, diamond: 0 }
+    for (const row of subs.rows || []) {
+      if (subsByPlan[row.plan_id] !== undefined) {
+        subsByPlan[row.plan_id] = parseInt(row.count, 10) || 0
+      }
+    }
+
+    const totalActiveSubs =
+      subsByPlan.silver + subsByPlan.gold + subsByPlan.diamond
+
+    // ─── Approved this month (revenue indicator) ───
+    const thisMonth = await query(`
+      SELECT plan_id, COUNT(*) AS count
+      FROM payment_requests
+      WHERE status = 'approved'
+        AND reviewed_at >= date_trunc('month', NOW())
+      GROUP BY plan_id
+    `)
+
+    const approvedThisMonth = { silver: 0, gold: 0, diamond: 0 }
+    for (const row of thisMonth.rows || []) {
+      if (approvedThisMonth[row.plan_id] !== undefined) {
+        approvedThisMonth[row.plan_id] = parseInt(row.count, 10) || 0
+      }
+    }
+
+    res.json({
+      requests: {
+        pending:  parseInt(counts.rows[0]?.pending,  10) || 0,
+        approved: parseInt(counts.rows[0]?.approved, 10) || 0,
+        rejected: parseInt(counts.rows[0]?.rejected, 10) || 0,
+        total:    parseInt(counts.rows[0]?.total,    10) || 0,
+      },
+      activeSubscriptions: {
+        total: totalActiveSubs,
+        byPlan: subsByPlan,
+      },
+      approvedThisMonth,
+    })
   }),
 )
 

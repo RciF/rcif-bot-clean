@@ -124,6 +124,7 @@ export const settingsApi = {
   getEmbedTemplates: (g) => apiClient.get(`/api/guild/${g}/embeds/templates`),
   saveEmbedTemplate: (g, data) => apiClient.post(`/api/guild/${g}/embeds/templates`, data),
   deleteEmbedTemplate: (g, id) => apiClient.delete(`/api/guild/${g}/embeds/templates/${id}`),
+
   // Danger Zone
   wipeGuildData: (g, confirmName) =>
     apiClient.delete(`/api/guild/${g}/data`, { data: { confirm: confirmName } }),
@@ -168,10 +169,18 @@ export const subscriptionApi = {
 // ════════════════════════════════════════════════════════════
 
 export const adminApi = {
+  // Payment Requests
   getPaymentRequests: (status = "pending") =>
     apiClient.get(`/api/admin/payment-requests?status=${status}`),
   approvePayment: (id, months = 1) =>
     apiClient.post(`/api/admin/payment-requests/${id}/approve`, { months }),
   rejectPayment: (id, notes) =>
     apiClient.post(`/api/admin/payment-requests/${id}/reject`, { notes }),
+
+  // ✅ NEW: Subscriptions Management
+  cancelSubscription: (userId) =>
+    apiClient.post(`/api/admin/subscriptions/${userId}/cancel`),
+
+  // ✅ NEW: Owner Stats
+  getOwnerStats: () => apiClient.get(`/api/admin/stats`),
 }

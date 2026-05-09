@@ -13,12 +13,13 @@ const { auditLog } = require("../middleware/audit")
 const { query } = require("../config/database")
 const { getGuildPlan } = require("../services/guildPlan")
 const { hasAccess, PLAN_TIERS } = require("../plans")
+const { COMMANDS_REGISTRY, CATEGORIES_META } = require("../data/commandsRegistry")
 
 const router = express.Router({ mergeParams: true })
 
 // ════════════════════════════════════════════════════════════
 //  GET /api/guild/:guildId/commands
-//  قائمة الأوامر مع الإعدادات المخصصة
+//  قائمة الأوامر الكاملة + الإعدادات المخصصة
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -29,7 +30,7 @@ router.get(
     const { guildId } = req.params
     const guildPlan = await getGuildPlan(guildId)
 
-    // جلب الإعدادات المخصصة
+    // إعدادات السيرفر المخصصة
     const r = await query(
       `SELECT command_name, custom_name, enabled FROM guild_command_settings WHERE guild_id = $1`,
       [guildId],
@@ -43,11 +44,21 @@ router.get(
       }
     }
 
-    // قائمة الأوامر الكاملة (يجب أن تأتي من helpSystem.js لاحقاً)
-    // حالياً نرجع map الإعدادات فقط، الفرونت يدمجه مع قائمة الأوامر
+    // دمج registry مع custom_settings
+    const commands = COMMANDS_REGISTRY.map((cmd) => {
+      const custom = customMap[cmd.name] || null
+      return {
+        ...cmd,
+        custom_name: custom?.custom_name || null,
+        enabled: custom?.enabled !== false, // default true
+      }
+    })
+
     res.json({
       guild_plan: guildPlan,
-      custom_settings: customMap,
+      commands,
+      categories: CATEGORIES_META,
+      custom_settings: customMap, // backward compat
     })
   }),
 )
@@ -65,7 +76,6 @@ router.patch(
     const { guildId, commandName } = req.params
     const { custom_name, enabled } = req.body
 
-    // تحقق إن لديه خطة Silver لتغيير الاسم
     if (custom_name !== undefined) {
       const guildPlan = await getGuildPlan(guildId)
       if (!hasAccess(guildPlan, PLAN_TIERS.SILVER)) {
@@ -149,7 +159,6 @@ router.post(
       throw new ApiError("البريفكس 1-5 أحرف فقط", 400)
     }
 
-    // تحقق من الخطة
     const guildPlan = await getGuildPlan(req.params.guildId)
     if (!hasAccess(guildPlan, PLAN_TIERS.SILVER)) {
       throw new ApiError(

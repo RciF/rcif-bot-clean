@@ -25,6 +25,7 @@ import TemplatesPage from '@/pages/TemplatesPage';
 import SubscriptionPage from '@/pages/SubscriptionPage';
 import CommandsPage from '@/pages/CommandsPage';
 import SchedulerPage from '@/pages/SchedulerPage';
+import OwnerAdminPage from '@/pages/OwnerAdminPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 import SettingsPage from '@/pages/SettingsPage';
@@ -75,6 +76,8 @@ const router = createBrowserRouter([
           { path: 'reaction-roles', element: <ReactionRolesPage /> },
           { path: 'embed', element: <EmbedBuilderPage /> },
           { path: 'settings', element: <SettingsPage /> },
+          // ✅ NEW: Owner Admin (محمي بـ Owner guard داخل الصفحة نفسها)
+          { path: 'owner-admin', element: <OwnerAdminPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
 const { ALL_ITEMS, calculateNetWorth, getProgressStage, formatPriceExact, formatPrice } = require("../../config/economyConfig")
+const economySettings = require("../../utils/economySettingsHelper")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -49,14 +50,22 @@ module.exports = {
       const userId = targetUser.id
       const guildId = interaction.guild.id
 
+      // ✅ إعدادات الاقتصاد من الداش
+      const settings = await economySettings.getSettings(guildId)
 
-      // ✅ جلب أو إنشاء المستخدم
-      await database.query(
-        `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-         VALUES ($1, 0, 0, 0, '[]')
-         ON CONFLICT (user_id) DO NOTHING`,
-        [userId]
-      )
+      if (!settings.enabled) {
+        return interaction.reply({
+          content: "❌ نظام الاقتصاد معطّل في هذا السيرفر.",
+          ephemeral: true
+        })
+      }
+
+      const symbol = settings.currency_symbol
+      const currencyName = settings.currency_name
+      const startingBalance = settings.starting_balance || 0
+
+      // ✅ جلب أو إنشاء المستخدم — يحترم starting_balance من الداش
+      await economySettings.ensureUser(userId, startingBalance)
 
       const userResult = await database.query(
         "SELECT * FROM economy_users WHERE user_id = $1",
@@ -95,11 +104,11 @@ module.exports = {
       // ✅ Embed
       const embed = new EmbedBuilder()
         .setColor(0xf59e0b)
-        .setTitle(`💰 محفظة ${targetUser.username}`)
+        .setTitle(`${symbol} محفظة ${targetUser.username}`)
         .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 128 }))
         .addFields(
-          { name: "💵 الرصيد", value: `**${formatPriceExact(user.coins)}** كوين`, inline: true },
-          { name: "💎 صافي الثروة", value: `**${formatPrice(netWorth)}** كوين`, inline: true },
+          { name: `${symbol} الرصيد`, value: `**${formatPriceExact(user.coins)}** ${currencyName}`, inline: true },
+          { name: "💎 صافي الثروة", value: `**${formatPrice(netWorth)}** ${currencyName}`, inline: true },
           { name: "📦 الممتلكات", value: `**${totalItems}** عنصر`, inline: true },
           { name: "📊 المرحلة", value: `${stage.emoji} **${stage.stage}** (مستوى ${stage.level})`, inline: false }
         )
@@ -107,7 +116,7 @@ module.exports = {
       if (topAsset) {
         embed.addFields({
           name: "👑 أغلى ممتلكة",
-          value: `${topAsset.emoji} ${topAsset.name} — ${formatPrice(topAsset.price)} كوين`,
+          value: `${topAsset.emoji} ${topAsset.name} — ${formatPrice(topAsset.price)} ${currencyName}`,
           inline: false
         })
       }

@@ -1,18 +1,20 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Settings, Bot, Shield, TrendingUp, Coins,
   Ticket, Bell, LogOut, Menu, X, Moon, Sun, PartyPopper, ScrollText,
   Gavel, ToggleRight, Sparkles, BarChart3, Users, History, Layers,
-  CreditCard, Terminal, CalendarDays, Clock, ChevronDown,
+  CreditCard, Terminal, CalendarDays, Clock, ChevronDown, Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { useAuthStore } from '@/store/authStore';
 import { useGuildStore } from '@/store/guildStore';
+import { isOwner as checkIsOwner } from '@/config/env';
 import { toast } from 'sonner';
 
-const navSections = [
+// ─── Base nav sections (للجميع) ──────────────────────────────
+const BASE_NAV_SECTIONS = [
   {
     label: 'الرئيسية',
     items: [
@@ -61,12 +63,31 @@ const navSections = [
   },
 ];
 
+// ─── Owner-only section ──────────────────────────────────────
+const OWNER_NAV_SECTION = {
+  label: 'إدارة المالك',
+  ownerOnly: true,
+  items: [
+    { to: '/dashboard/owner-admin', label: 'لوحة المالك', icon: Crown },
+  ],
+};
+
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { selectedGuild } = useGuildStore();
+
+  const isOwner = user?.isOwner || checkIsOwner(user?.id);
+
+  // ✅ ضم قسم الأونر إذا كان المستخدم هو المالك
+  const navSections = useMemo(() => {
+    if (isOwner) {
+      return [...BASE_NAV_SECTIONS, OWNER_NAV_SECTION];
+    }
+    return BASE_NAV_SECTIONS;
+  }, [isOwner]);
 
   const handleLogout = async () => {
     await logout();
@@ -127,8 +148,16 @@ export default function DashboardLayout() {
         <nav className="flex-1 overflow-y-auto p-4 space-y-5">
           {navSections.map((section) => (
             <div key={section.label}>
-              <div className="text-[10px] font-bold text-sidebar-foreground/50 uppercase tracking-widest px-3 mb-2">
-                {section.label}
+              <div
+                className={cn(
+                  'text-[10px] font-bold uppercase tracking-widest px-3 mb-2 flex items-center gap-1.5',
+                  section.ownerOnly
+                    ? 'text-amber-500'
+                    : 'text-sidebar-foreground/50',
+                )}
+              >
+                {section.ownerOnly && <Crown className="w-3 h-3" />}
+                <span>{section.label}</span>
               </div>
               <div className="space-y-1">
                 {section.items.map((item) => (
@@ -164,7 +193,9 @@ export default function DashboardLayout() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm truncate">{user.username}</div>
-                <div className="text-xs text-muted-foreground">{user.isOwner ? 'المالك' : 'مسؤول'}</div>
+                <div className="text-xs text-muted-foreground">
+                  {user.isOwner ? 'المالك' : 'مسؤول'}
+                </div>
               </div>
             </div>
           )}
