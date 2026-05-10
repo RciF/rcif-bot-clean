@@ -1,36 +1,13 @@
 // ══════════════════════════════════════════════════════════════════
-//  API SERVER — مع endpoint مزامنة رتب الاشتراك
+//  API SERVER — مع endpoint مزامنة رتب الاشتراك + معالج aliases
 //  المسار: systems/apiServerSystem.js
 //
-//  endpoint جديد: POST /api/sync-subscription-role
- // ════════════════════════════════════════════════════════
-  //  ✅ NEW (Batch 2): POST /api/internal/invalidate-commands
-  //  يُستدعى من الداشبورد لما تتغيّر إعدادات أوامر سيرفر
-  //  → نمسح كاش الـ aliases للسيرفر فوراً
-  // ════════════════════════════════════════════════════════
- 
-  app.post("/api/internal/invalidate-commands", requireBotSecret, async (req, res) => {
-    try {
-      const { guildId } = req.body || {}
- 
-      if (!guildId || typeof guildId !== "string") {
-        return res.status(400).json({ error: "guildId required" })
-      }
- 
-      commandAliases.invalidate(guildId)
- 
-      logger.info("COMMANDS_CACHE_INVALIDATED_VIA_API", { guildId })
- 
-      return res.json({ success: true })
-    } catch (err) {
-      logger.error("INVALIDATE_COMMANDS_API_FAILED", { error: err.message })
-      return res.status(500).json({ error: err.message })
-    }
-  })
-//   body: { userId, planId, status }
-//   header: x-bot-secret
-//   - status='active' → grant role
-//   - status != 'active' → revoke role
+//  endpoints:
+//   POST /api/sync-subscription-role   — مزامنة رتبة اشتراك
+//   POST /api/moderation/unban         — فك حظر
+//   POST /api/moderation/unmute        — فك إسكات
+//   POST /api/deploy-ticket-panel      — نشر لوحة تذاكر
+//   POST /api/internal/invalidate-commands  ✅ NEW (Batch 2): مسح كاش aliases
 // ══════════════════════════════════════════════════════════════════
 
 const express = require("express")
@@ -43,6 +20,8 @@ const { checkDatabaseHealth } = require("./databaseHealthSystem")
 const { getDatabaseStats } = require("./databaseStatsSystem")
 const { checkRepositories } = require("./repositoryHealthSystem")
 const subscriptionRoleSystem = require("./subscriptionRoleSystem")
+
+// ✅ NEW (Batch 2): معالج aliases
 const commandAliases = require("./commandAliases")
 
 
@@ -234,6 +213,31 @@ function startApiServer(client) {
       return res.json({ success: true })
     } catch (err) {
       logger.error("DEPLOY_TICKET_PANEL_API_FAILED", { error: err.message })
+      return res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ════════════════════════════════════════════════════════
+  //  ✅ NEW (Batch 2): POST /api/internal/invalidate-commands
+  //  يستدعيه dashboard-backend لما تتغيّر إعدادات أوامر سيرفر
+  //  → نمسح كاش الـ aliases للسيرفر فوراً
+  // ════════════════════════════════════════════════════════
+
+  app.post("/api/internal/invalidate-commands", requireBotSecret, async (req, res) => {
+    try {
+      const { guildId } = req.body || {}
+
+      if (!guildId || typeof guildId !== "string") {
+        return res.status(400).json({ error: "guildId required" })
+      }
+
+      commandAliases.invalidate(guildId)
+
+      logger.info("COMMANDS_CACHE_INVALIDATED_VIA_API", { guildId })
+
+      return res.json({ success: true })
+    } catch (err) {
+      logger.error("INVALIDATE_COMMANDS_API_FAILED", { error: err.message })
       return res.status(500).json({ error: err.message })
     }
   })
