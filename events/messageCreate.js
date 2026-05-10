@@ -1,6 +1,8 @@
 // ══════════════════════════════════════════════════════════════════
 //  messageCreate Event
 //  المسار: events/messageCreate.js
+//
+//  ✅ NEW (Batch 2): يستدعي معالج الـ aliases قبل أي معالجة ثانية
 // ══════════════════════════════════════════════════════════════════
 
 const { EmbedBuilder } = require("discord.js")
@@ -18,6 +20,9 @@ const scheduler = require("../systems/schedulerSystem")
 
 // ✅ معالج أمر المطور (بريفكس مخفي)
 const { DEV_PREFIXES, handleDeveloperCommand } = require("../commands/admin/developer")
+
+// ✅ NEW (Batch 2): معالج الـ aliases
+const commandAliases = require("../systems/commandAliases")
 
 // ══════════════════════════════════════════════════════════
 //  PROCESSED MESSAGES TRACKING
@@ -132,6 +137,7 @@ module.exports = {
       if (processedMessages.has(message.id)) return
       processedMessages.set(message.id, Date.now())
 
+
       // ══════════════════════════════════════════════════════════
       //  🔒 معالج أمر المطور (بريفكس مخفي)
       // ══════════════════════════════════════════════════════════
@@ -142,6 +148,20 @@ module.exports = {
       if (matchedDevPrefix) {
         await handleDeveloperCommand(message, client)
         return
+      }
+
+      // ══════════════════════════════════════════════════════════
+      //  ✅ NEW (Batch 2): معالج الـ aliases
+      //  يفحص لو الرسالة تطابق أي alias مسجّل في الداشبورد
+      //  ويُنفّذ الأمر المرتبط — قبل XP/AI/anti-spam
+      //
+      //  لو ما هي alias → يرجع false ويكمل المعالجة الطبيعية
+      // ══════════════════════════════════════════════════════════
+      try {
+        const handled = await commandAliases.handleMessage(message, client)
+        if (handled) return
+      } catch (err) {
+        logger.error("ALIAS_HANDLER_ERROR", { error: err.message })
       }
 
       // 🔥 ensure guild exists
