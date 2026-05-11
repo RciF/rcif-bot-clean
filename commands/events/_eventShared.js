@@ -404,7 +404,8 @@ function parseDateTime(input) {
 
   if (target.getTime() <= now.getTime()) return null
 
-  return target.getTime()
+  const SAUDI_OFFSET_MS = 3 * 60 * 60 * 1000
+return target.getTime() - SAUDI_OFFSET_MS
 }
 
 // ══════════════════════════════════════
