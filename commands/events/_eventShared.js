@@ -351,21 +351,21 @@ function parseDateTime(input) {
   const now = new Date()
   const direct = new Date(input)
   if (!isNaN(direct.getTime()) && direct.getTime() > now.getTime()) {
-    return direct.getTime()
+    return direct.getTime() - (3 * 60 * 60 * 1000)
   }
 
-  const text = input.trim().toLowerCase()
+  const text = input.trim()
   let hour = null, minute = 0
 
-  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*([اA-Za-z]*)/u)
+  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(ص|م|am|pm)?/iu)
   if (timeMatch) {
-    hour   = parseInt(timeMatch[1])
+    hour = parseInt(timeMatch[1])
     minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0
 
     const ampm = timeMatch[3]?.toLowerCase() || ""
-    if (ampm.includes("م") || ampm.includes("pm")) {
+    if (ampm === "م" || ampm === "pm") {
       if (hour < 12) hour += 12
-    } else if (ampm.includes("ص") || ampm.includes("am")) {
+    } else if (ampm === "ص" || ampm === "am") {
       if (hour === 12) hour = 0
     }
   }
@@ -405,7 +405,7 @@ function parseDateTime(input) {
   if (target.getTime() <= now.getTime()) return null
 
   const SAUDI_OFFSET_MS = 3 * 60 * 60 * 1000
-return target.getTime() - SAUDI_OFFSET_MS
+  return target.getTime() - SAUDI_OFFSET_MS
 }
 
 // ══════════════════════════════════════
