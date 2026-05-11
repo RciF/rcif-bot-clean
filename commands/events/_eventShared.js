@@ -430,10 +430,10 @@ async function buildEventEmbed(event, guild, goingCount = 0, maybeCount = 0) {
   }
 
   const fields = [
-    { name: "🏷️ النوع",        value: label,                            inline: true },
-    { name: "📊 الحالة",       value: EVENT_STATUS[event.status] || event.status, inline: true },
-    { name: "👤 المنظّم",       value: `<@${event.creator_id}>`,          inline: true },
-    { name: "📅 الموعد",       value: formatTime(event.start_time),     inline: false }
+    { name: "🏷️ النوع",   value: label,                                    inline: true },
+    { name: "📊 الحالة",  value: EVENT_STATUS[event.status] || event.status, inline: true },
+    { name: "👤 المنظّم",  value: `<@${event.creator_id}>`,                  inline: true },
+    { name: "📅 الموعد",  value: formatTime(event.start_time),              inline: false }
   ]
 
   if (event.end_time) {
@@ -441,12 +441,14 @@ async function buildEventEmbed(event, guild, goingCount = 0, maybeCount = 0) {
   }
 
   if (event.location) {
-    fields.push({ name: "📍 المكان", value: event.location, inline: true })
+    fields.push({ name: "📍 المكان", value: event.location, inline: false })
   }
 
+  // ✅ حاضر وربما دايماً في سطر منفصل ومرتب
   const maxText = event.max_attendees ? `/${event.max_attendees}` : ""
-  fields.push({ name: "👥 حاضر",  value: `${goingCount}${maxText}`, inline: true })
-  fields.push({ name: "🤔 ربما",   value: `${maybeCount}`,           inline: true })
+  fields.push({ name: "👥 حاضر", value: `${goingCount}${maxText}`, inline: true })
+  fields.push({ name: "🤔 ربما",  value: `${maybeCount}`,           inline: true })
+  fields.push({ name: "\u200b",   value: "\u200b",                  inline: true })
 
   if (event.status === "upcoming") {
     embed.setFooter({ text: `🆔 ${event.id} — اضغط للتسجيل` })
