@@ -444,7 +444,9 @@ async function buildEventEmbed(event, guild, goingCount = 0, maybeCount = 0) {
     fields.push({ name: "📍 المكان", value: event.location, inline: false })
   }
 
-  // ✅ حاضر وربما دايماً في سطر منفصل ومرتب
+  // ✅ سطر فاضي يضمن أن حاضر وربما يبدأون من أول السطر دايماً
+  fields.push({ name: "\u200b", value: "\u200b", inline: false })
+
   const maxText = event.max_attendees ? `/${event.max_attendees}` : ""
   fields.push({ name: "👥 حاضر", value: `${goingCount}${maxText}`, inline: true })
   fields.push({ name: "🤔 ربما",  value: `${maybeCount}`,           inline: true })
