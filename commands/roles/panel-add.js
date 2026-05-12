@@ -80,15 +80,12 @@ module.exports = {
       const emojiRaw  = interaction.options.getString("الإيموجي")
       const color     = interaction.options.getString("اللون") || "أزرق"
 
-      // ✅ تحقق من emoji — flag emojis (🇸🇦) مرفوضة من Discord للأزرار
       let safeEmoji = null
       if (emojiRaw) {
         safeEmoji = sanitizeButtonEmoji(emojiRaw)
         if (!safeEmoji) {
           return interaction.editReply({
-            content: "❌ الإيموجي غير مدعوم لأزرار Discord.\n" +
-              "💡 Discord ما يقبل علم دولة (مثل 🇸🇦) كإيموجي للأزرار — المشكلة من Discord نفسه.\n" +
-              "✅ استخدم إيموجي عادي مثل 🌍 ⭐ 🏳️ ❤️ أو إيموجي مخصص من السيرفر."
+            content: "❌ الإيموجي غير صالح. استخدم Unicode emoji أو إيموجي مخصص من السيرفر."
           })
         }
       }
@@ -169,10 +166,7 @@ module.exports = {
         } catch {}
 
         return interaction.editReply({
-          content: "❌ فشل تحديث رسالة اللوحة في القناة.\n" +
-            "💡 الأرجح سبب الفشل: emoji غير مقبول من Discord (مثل علم دولة)، أو رسالة اللوحة محذوفة.\n" +
-            `📋 تفاصيل: ${(editError?.message || 'غير معروف').slice(0, 200)}\n` +
-            "✅ تم التراجع عن إضافة الزر."
+          content: "❌ فشل تحديث رسالة اللوحة. تم التراجع عن إضافة الزر."
         })
       }
 
