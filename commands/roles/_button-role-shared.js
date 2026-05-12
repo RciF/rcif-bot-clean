@@ -63,6 +63,17 @@ async function ensureTable() {
     }
   }
 
+  // ⚠️ إصلاح حرج: لو الداش أنشأ color كـ INT، حوّله TEXT
+  //    البوت يستخدم أسماء عربية ("بنفسجي")، والداش يستخدم أرقام (10181046)
+  //    TEXT يستوعب الاثنين عبر colorToHex()
+  try {
+    await databaseSystem.query(
+      `ALTER TABLE button_role_panels ALTER COLUMN color TYPE TEXT USING color::TEXT;`
+    )
+  } catch (e) {
+    // already TEXT or other safe failure — ignore
+  }
+
   // الجدول القديم (للأوامر — تُحفظ فيه الأزرار من /لوحة-رتب-إضافة)
   await databaseSystem.query(`
     CREATE TABLE IF NOT EXISTS button_roles (
