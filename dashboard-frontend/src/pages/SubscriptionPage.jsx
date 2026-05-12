@@ -14,12 +14,23 @@ import {
   ArrowLeft,
   ArrowRight,
   Send,
+  Link2,
+  Link2Off,
+  Server,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import {
   Dialog,
@@ -33,7 +44,7 @@ import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { PlanBadge } from '@/components/shared/PlanBadge';
 import { useAuthStore } from '@/store/authStore';
 import { PLANS, PLAN_ORDER, PLAN_TIERS, getPlanInfo } from '@/lib/plans';
-import { subscriptionApi } from '@/api';
+import { subscriptionApi, apiClient } from '@/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -56,60 +67,43 @@ const PAYMENT_METHODS = {
       accountName: ACCOUNT_NAME,
     },
     steps: [
-      'افتح تطبيق الراجحي',
-      'اختر "تحويل لحساب آخر" أو "تحويل بنكي"',
-      'انسخ رقم الـ IBAN من الأسفل',
-      'حوّل المبلغ المطلوب من خطتك',
-      'انسخ رقم العملية (Reference) من إيصال التحويل',
-      'الصق رقم العملية في الأسفل واضغط إرسال',
+      'افتح تطبيق الراجحي وحوّل المبلغ للـ IBAN أعلاه',
+      'انسخ رقم العملية من إشعار التحويل',
+      'الصق رقم العملية في الخانة أدناه واضغط إرسال',
     ],
   },
-  stcbank: {
-    id: 'stcbank',
-    label: 'STC Bank',
+  stc: {
+    id: 'stc',
+    label: 'STC Pay',
     icon: Smartphone,
-    color: 'text-emerald-500',
-    bg: 'bg-emerald-500/10 border-emerald-500/30',
-    info: {
-      bank: 'STC Bank',
-      iban: 'SA0478000000001301454291',
-      accountName: ACCOUNT_NAME,
-    },
-    steps: [
-      'افتح تطبيق STC Bank',
-      'اختر "تحويل" ثم "حساب آخر / IBAN"',
-      'انسخ رقم الـ IBAN من الأسفل',
-      'حوّل المبلغ المطلوب',
-      'انسخ رقم العملية من سجل المعاملات',
-      'الصق رقم العملية في الأسفل واضغط إرسال',
-    ],
-  },
-  burq: {
-    id: 'burq',
-    label: 'برق',
-    icon: Apple,
     color: 'text-pink-500',
     bg: 'bg-pink-500/10 border-pink-500/30',
     info: {
-      bank: 'البنك العربي الوطني (برق)',
-      phone: '0509992372',
-      iban: 'SA7430100991107858632154',
+      phone: '0509999999',
       accountName: ACCOUNT_NAME,
     },
     steps: [
-      'افتح تطبيق برق أو أي بنك',
-      'الطريقة الأسرع: اختر "تحويل لرقم جوال" وأدخل: 0509992372',
-      'الطريقة البديلة: استخدم رقم IBAN من الأسفل',
-      'تأكد من الاسم: علي سلمان طاوي الفيفي',
-      'حوّل المبلغ المطلوب',
-      'الصق رقم العملية في الأسفل واضغط إرسال',
+      'افتح تطبيق STC Pay وحوّل المبلغ للرقم أعلاه',
+      'انسخ رقم العملية من إشعار التحويل',
+      'الصق رقم العملية في الخانة أدناه واضغط إرسال',
+    ],
+  },
+  applepay: {
+    id: 'applepay',
+    label: 'Apple Pay',
+    icon: Apple,
+    color: 'text-slate-300',
+    bg: 'bg-slate-500/10 border-slate-500/30',
+    info: {
+      note: 'استخدم نفس بيانات الراجحي عبر Apple Pay',
+    },
+    steps: [
+      'افتح Apple Pay واختر بطاقة الراجحي',
+      'حوّل المبلغ للـ IBAN في تبويب الراجحي',
+      'انسخ رقم العملية والصقها في الخانة أدناه',
     ],
   },
 };
-
-// ════════════════════════════════════════════════════════════
-//  Status meta — using JSX elements (NOT component refs)
-// ════════════════════════════════════════════════════════════
 
 const STATUS_META = {
   pending:  { label: 'قيد المراجعة', Icon: Clock,        color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/30' },
@@ -136,8 +130,16 @@ export default function SubscriptionPage() {
 
   const [copiedField, setCopiedField] = useState(null);
 
+  // ── Guild linking state ──
+  const [guilds, setGuilds] = useState(null);
+  const [botGuildIds, setBotGuildIds] = useState([]);
+  const [linkedGuildId, setLinkedGuildId] = useState(null);
+  const [selectedGuildToLink, setSelectedGuildToLink] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [unlinkDialog, setUnlinkDialog] = useState(false);
+
   // ────────────────────────────────────────────────────────
-  //  Load subscription + history
+  //  Load subscription + history + guilds
   // ────────────────────────────────────────────────────────
 
   const loadData = async () => {
@@ -163,8 +165,43 @@ export default function SubscriptionPage() {
     }
   };
 
+  // ── جلب السيرفرات + إيدي السيرفر المربوط ──
+  const loadGuilds = async () => {
+    try {
+      const guildsStr = localStorage.getItem('lyn-guilds');
+      const userGuilds = guildsStr ? JSON.parse(guildsStr) : [];
+      const botIds = await apiClient.get('/api/bot/guilds').catch(() => []);
+      const botList = Array.isArray(botIds) ? botIds : [];
+
+      setBotGuildIds(botList);
+      setGuilds(Array.isArray(userGuilds) ? userGuilds : []);
+
+      // ابحث عن السيرفر المربوط حالياً (نسأل /api/guild/:id/plan لكل سيرفر فيه البوت ومالكه الحالي)
+      const eligible = userGuilds.filter(
+        (g) => botList.includes(g.id) && (BigInt(g.permissions || 0) & BigInt(0x8)) === BigInt(0x8),
+      );
+
+      for (const g of eligible) {
+        try {
+          const planData = await apiClient.get(`/api/guild/${g.id}/plan`).catch(() => null);
+          const linkedOwner = planData?.owner_id || planData?.linked_owner_id;
+          if (linkedOwner === user.id) {
+            setLinkedGuildId(g.id);
+            break;
+          }
+        } catch {
+          // skip
+        }
+      }
+    } catch (err) {
+      console.error('Load guilds failed:', err);
+      setGuilds([]);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadGuilds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -224,6 +261,52 @@ export default function SubscriptionPage() {
   };
 
   // ────────────────────────────────────────────────────────
+  //  Guild linking handlers
+  // ────────────────────────────────────────────────────────
+
+  const handleLink = async () => {
+    if (!selectedGuildToLink) {
+      toast.error('اختر سيرفر أولاً');
+      return;
+    }
+
+    setLinkBusy(true);
+    try {
+      await subscriptionApi.linkGuild(selectedGuildToLink);
+      toast.success('تم ربط الاشتراك بالسيرفر بنجاح');
+      setLinkedGuildId(selectedGuildToLink);
+      setSelectedGuildToLink('');
+    } catch (err) {
+      const code = err?.code;
+      if (code === 'NO_SUBSCRIPTION') {
+        toast.error('ما عندك اشتراك نشط');
+      } else if (code === 'ALREADY_LINKED') {
+        toast.error('اشتراكك مربوط بسيرفر آخر — فك الربط أولاً');
+      } else {
+        toast.error(err?.message || 'فشل الربط');
+      }
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const handleUnlink = async () => {
+    if (!linkedGuildId) return;
+
+    setLinkBusy(true);
+    try {
+      await subscriptionApi.unlinkGuild(linkedGuildId);
+      toast.success('تم فك ربط الاشتراك');
+      setLinkedGuildId(null);
+      setUnlinkDialog(false);
+    } catch (err) {
+      toast.error(err?.message || 'فشل فك الربط');
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  // ────────────────────────────────────────────────────────
   //  Loading state
   // ────────────────────────────────────────────────────────
 
@@ -253,12 +336,27 @@ export default function SubscriptionPage() {
   const expiresAt = subscription?.expires_at ? new Date(subscription.expires_at) : null;
   const daysLeft = expiresAt ? Math.max(0, Math.ceil((expiresAt - Date.now()) / 86_400_000)) : null;
 
+  // ── سيرفرات اللي يقدر يربط فيها (admin + بوت موجود) ──
+  const eligibleGuilds = (guilds || []).filter(
+    (g) =>
+      botGuildIds.includes(g.id) &&
+      (BigInt(g.permissions || 0) & BigInt(0x8)) === BigInt(0x8) &&
+      g.id !== linkedGuildId,
+  );
+
+  const linkedGuild = linkedGuildId
+    ? (guilds || []).find((g) => g.id === linkedGuildId)
+    : null;
+
+  // ── هل يقدر يربط؟ (لازم يكون مشترك مدفوع) ──
+  const canLink = isActive && currentPlanId !== 'free';
+
   return (
     <div className="space-y-8">
       <SettingsPageHeader
         icon={<CreditCard />}
         title="الاشتراك"
-        description="إدارة خطتك ودفعاتك"
+        description="إدارة خطتك ودفعاتك وربطها بسيرفرك"
       />
 
       {/* ─── Current subscription card ─── */}
@@ -298,6 +396,149 @@ export default function SubscriptionPage() {
             </div>
           </div>
         </div>
+      </Card>
+
+      {/* ════════════════════════════════════════════════════════ */}
+      {/*  Guild Linking Card                                       */}
+      {/* ════════════════════════════════════════════════════════ */}
+      <Card className="p-6">
+        <div className="flex items-start gap-3 mb-5">
+          <div
+            className={cn(
+              'w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0',
+              linkedGuild
+                ? 'bg-emerald-500/10 text-emerald-500'
+                : canLink
+                  ? 'lyn-gradient text-white'
+                  : 'bg-muted text-muted-foreground',
+            )}
+          >
+            <Server className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold mb-1">ربط الاشتراك بسيرفر</h3>
+            <p className="text-sm text-muted-foreground">
+              اربط اشتراكك بسيرفر واحد لتفعيل ميزات الخطة فيه (اشتراك واحد = سيرفر واحد)
+            </p>
+          </div>
+        </div>
+
+        {/* ── حالة 1: ما عنده اشتراك مدفوع ── */}
+        {!canLink && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium text-sm mb-1">تحتاج اشتراك مدفوع</p>
+                <p className="text-xs text-muted-foreground">
+                  ترقّى لخطة فضي، ذهبي، أو ماسي أولاً، بعدها تقدر تربط الاشتراك بسيرفرك
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── حالة 2: مربوط بسيرفر ── */}
+        {canLink && linkedGuild && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+            <div className="flex items-center gap-3 mb-3">
+              {linkedGuild.icon ? (
+                <img
+                  src={`https://cdn.discordapp.com/icons/${linkedGuild.id}/${linkedGuild.icon}.png?size=64`}
+                  alt={linkedGuild.name}
+                  className="w-12 h-12 rounded-xl"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-xl lyn-gradient flex items-center justify-center text-white text-sm font-bold">
+                  {linkedGuild.name.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-emerald-500" />
+                  <span className="font-bold truncate">{linkedGuild.name}</span>
+                </div>
+                <p className="text-xs text-muted-foreground font-mono num">
+                  {linkedGuild.id}
+                </p>
+              </div>
+              <Badge variant="success" size="sm">
+                {getPlanInfo(currentPlanId).name}
+              </Badge>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setUnlinkDialog(true)}
+              className="w-full"
+              disabled={linkBusy}
+            >
+              <Link2Off className="w-4 h-4" />
+              فك الربط
+            </Button>
+          </div>
+        )}
+
+        {/* ── حالة 3: مشترك لكن ما ربط أي سيرفر ── */}
+        {canLink && !linkedGuild && (
+          <div className="space-y-3">
+            {eligibleGuilds.length === 0 ? (
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-sm mb-1">ما في سيرفر متاح للربط</p>
+                    <p className="text-xs text-muted-foreground">
+                      تحتاج تكون مالك أو إدمن في سيرفر فيه البوت Lyn. أضف البوت لسيرفرك من صفحة السيرفرات.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <label className="text-sm font-medium block">اختر السيرفر</label>
+                <Select
+                  value={selectedGuildToLink}
+                  onValueChange={setSelectedGuildToLink}
+                  disabled={linkBusy}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر سيرفر..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleGuilds.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  onClick={handleLink}
+                  disabled={!selectedGuildToLink || linkBusy}
+                  className="w-full"
+                >
+                  {linkBusy ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      جاري الربط...
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="w-4 h-4" />
+                      اربط الاشتراك بهذا السيرفر
+                    </>
+                  )}
+                </Button>
+
+                <p className="text-xs text-muted-foreground text-center">
+                  💡 تقدر تفك الربط وتنقل الاشتراك لسيرفر ثاني في أي وقت
+                </p>
+              </>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* ─── Available plans ─── */}
@@ -429,105 +670,168 @@ export default function SubscriptionPage() {
               </span>
             </DialogTitle>
             <DialogDescription>
-              اختر طريقة الدفع المناسبة لك واتبع الخطوات
+              اختر طريقة الدفع وحوّل المبلغ، ثم الصق رقم العملية
             </DialogDescription>
           </DialogHeader>
 
-          {/* Price highlight */}
           {selectedPlan && (
-            <div className="p-4 rounded-xl lyn-gradient-soft border border-primary/20 text-center">
-              <div className="text-xs text-muted-foreground mb-1">المبلغ المطلوب</div>
-              <div className="text-3xl font-bold lyn-text-gradient num">
-                {PLANS[selectedPlan]?.priceLabel}
+            <div className="space-y-4 py-2">
+              {/* Plan Summary */}
+              <div className="rounded-xl bg-muted/40 border border-border p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">المبلغ المطلوب</span>
+                  <span className="text-2xl font-bold lyn-text-gradient num">
+                    {getPlanInfo(selectedPlan).priceLabel}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  مدة الاشتراك: شهر واحد — قابل للتجديد
+                </div>
+              </div>
+
+              {/* Payment Method Tabs */}
+              <Tabs value={paymentMethod} onValueChange={setPaymentMethod}>
+                <TabsList variant="pills" className="grid grid-cols-3 w-full">
+                  {Object.values(PAYMENT_METHODS).map((m) => {
+                    const Icon = m.icon;
+                    return (
+                      <TabsTrigger key={m.id} value={m.id} variant="pills">
+                        <Icon className="w-4 h-4" />
+                        <span>{m.label}</span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+
+                {Object.values(PAYMENT_METHODS).map((method) => {
+                  const Icon = method.icon;
+                  return (
+                    <TabsContent key={method.id} value={method.id} className="space-y-3 mt-4">
+                      <div
+                        className={cn(
+                          'rounded-xl border p-4 space-y-3',
+                          method.bg,
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon className={cn('w-5 h-5', method.color)} />
+                          <span className="font-bold">{method.label}</span>
+                        </div>
+
+                        {method.info.bank && (
+                          <InfoRow
+                            label="البنك"
+                            value={method.info.bank}
+                            onCopy={() => copyToClipboard(method.info.bank, `${method.id}-bank`)}
+                            copied={copiedField === `${method.id}-bank`}
+                          />
+                        )}
+                        {method.info.iban && (
+                          <InfoRow
+                            label="IBAN"
+                            value={method.info.iban}
+                            mono
+                            onCopy={() => copyToClipboard(method.info.iban, `${method.id}-iban`)}
+                            copied={copiedField === `${method.id}-iban`}
+                          />
+                        )}
+                        {method.info.phone && (
+                          <InfoRow
+                            label="الرقم"
+                            value={method.info.phone}
+                            mono
+                            onCopy={() => copyToClipboard(method.info.phone, `${method.id}-phone`)}
+                            copied={copiedField === `${method.id}-phone`}
+                          />
+                        )}
+                        {method.info.accountName && (
+                          <InfoRow
+                            label="الاسم"
+                            value={method.info.accountName}
+                          />
+                        )}
+                        {method.info.note && (
+                          <div className="text-xs text-muted-foreground">
+                            {method.info.note}
+                          </div>
+                        )}
+                      </div>
+
+                      <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+                        {method.steps.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ol>
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
+
+              {/* Reference Number Input */}
+              <div className="space-y-2 pt-2 border-t border-border">
+                <label className="text-sm font-medium block">رقم العملية</label>
+                <Input
+                  value={refNumber}
+                  onChange={(e) => setRefNumber(e.target.value)}
+                  placeholder="مثال: 123456789"
+                  className="num text-center font-mono"
+                  maxLength={50}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">
+                  💡 رقم العملية يظهر في إشعار التحويل من البنك أو التطبيق
+                </p>
               </div>
             </div>
           )}
 
-          {/* Payment Method Tabs */}
-          <Tabs value={paymentMethod} onValueChange={setPaymentMethod}>
-            <TabsList variant="pills" className="flex-wrap gap-1 w-full">
-              {Object.values(PAYMENT_METHODS).map((method) => {
-                const MethodIcon = method.icon;
-                return (
-                  <TabsTrigger
-                    key={method.id}
-                    value={method.id}
-                    variant="pills"
-                    className="flex-1 min-w-[100px]"
-                  >
-                    <MethodIcon className="w-4 h-4" />
-                    <span className="text-xs sm:text-sm">{method.label}</span>
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-
-            {/* Al-Rajhi Bank Transfer */}
-            <TabsContent value="rajhi">
-              <PaymentMethodCard
-                method={PAYMENT_METHODS.rajhi}
-                copiedField={copiedField}
-                onCopy={copyToClipboard}
-              />
-            </TabsContent>
-
-            {/* STC Bank Transfer */}
-            <TabsContent value="stcbank">
-              <PaymentMethodCard
-                method={PAYMENT_METHODS.stcbank}
-                copiedField={copiedField}
-                onCopy={copyToClipboard}
-              />
-            </TabsContent>
-
-            {/* Burq (BNK Wallet — Phone or IBAN) */}
-            <TabsContent value="burq">
-              <PaymentMethodCard
-                method={PAYMENT_METHODS.burq}
-                copiedField={copiedField}
-                onCopy={copyToClipboard}
-              />
-            </TabsContent>
-          </Tabs>
-
-          {/* Reference Number Input */}
-          <div className="space-y-2 pt-2 border-t border-border">
-            <label className="text-sm font-semibold flex items-center gap-1.5">
-              <Send className="w-4 h-4 text-primary" />
-              <span>رقم العملية (Reference)</span>
-            </label>
-            <Input
-              placeholder="مثلاً: FT24230012345"
-              value={refNumber}
-              onChange={(e) => setRefNumber(e.target.value)}
-              dir="ltr"
-              className="font-mono num"
-            />
-            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              <p>
-                ستجد رقم العملية في إيصال التحويل أو سجل المعاملات. سنراجع طلبك
-                ونفعّل اشتراكك خلال 24 ساعة كحد أقصى.
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              disabled={submitting}
-              className="flex-1"
-            >
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
               إلغاء
             </Button>
-            <Button
-              variant="default"
-              onClick={handleSubmit}
-              disabled={submitting || !refNumber.trim()}
-              className="flex-1"
-            >
-              {submitting ? 'جاري الإرسال...' : 'إرسال الطلب'}
+            <Button onClick={handleSubmit} disabled={submitting || !refNumber.trim()}>
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  جاري الإرسال...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  إرسال الطلب
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Unlink confirm dialog ── */}
+      <Dialog open={unlinkDialog} onOpenChange={setUnlinkDialog}>
+        <DialogContent>
+          <div className="flex justify-center -mt-4 mb-2">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <Link2Off className="w-8 h-8" />
+            </div>
+          </div>
+          <DialogHeader>
+            <DialogTitle className="text-center">فك ربط الاشتراك؟</DialogTitle>
+            <DialogDescription className="text-center">
+              راح يرجع السيرفر <span className="font-bold">{linkedGuild?.name}</span> للخطة المجانية،
+              وتقدر تربط الاشتراك بسيرفر ثاني بعدها
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUnlinkDialog(false)} disabled={linkBusy} className="flex-1">
+              إلغاء
+            </Button>
+            <Button onClick={handleUnlink} disabled={linkBusy} className="flex-1" variant="destructive">
+              {linkBusy ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Link2Off className="w-4 h-4" />
+              )}
+              تأكيد فك الربط
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -537,174 +841,28 @@ export default function SubscriptionPage() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Component: Payment Method Card
+//  Sub-components
 // ════════════════════════════════════════════════════════════
 
-function PaymentMethodCard({ method, copiedField, onCopy }) {
-  const MethodIcon = method.icon;
-
-  return (
-    <div className="space-y-4">
-      {/* Account Info */}
-      <Card className={cn('p-4 space-y-3 border', method.bg)}>
-        <div className="flex items-center gap-2 pb-2 border-b border-border/50">
-          <MethodIcon className={cn('w-5 h-5', method.color)} />
-          <span className="font-bold">{method.label}</span>
-        </div>
-
-        {/* IBAN-based methods (rajhi, stcbank) */}
-        {(method.id === 'rajhi' || method.id === 'stcbank') && (
-          <>
-            <InfoRow
-              label="البنك"
-              value={method.info.bank}
-              copyable={false}
-            />
-            <InfoRow
-              label="رقم IBAN"
-              value={method.info.iban}
-              field={`${method.id}-iban`}
-              copiedField={copiedField}
-              onCopy={onCopy}
-              monospace
-            />
-            <InfoRow
-              label="اسم المستلم"
-              value={method.info.accountName}
-              field={`${method.id}-name`}
-              copiedField={copiedField}
-              onCopy={onCopy}
-            />
-          </>
-        )}
-
-        {/* Burq — phone first, IBAN as backup */}
-        {method.id === 'burq' && (
-          <>
-            <InfoRow
-              label="البنك"
-              value={method.info.bank}
-              copyable={false}
-            />
-
-            {/* Primary: Phone */}
-            <div className="p-3 rounded-lg bg-pink-500/5 border border-pink-500/20">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Smartphone className="w-4 h-4 text-pink-500" />
-                <span className="text-xs font-bold text-pink-500">
-                  الطريقة الأسرع
-                </span>
-              </div>
-              <InfoRow
-                label="رقم الجوال"
-                value={method.info.phone}
-                field="burq-phone"
-                copiedField={copiedField}
-                onCopy={onCopy}
-                monospace
-              />
-            </div>
-
-            {/* Backup: IBAN */}
-            <div className="p-3 rounded-lg bg-muted/50 border border-border">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Building2 className="w-4 h-4 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">
-                  أو استخدم IBAN
-                </span>
-              </div>
-              <InfoRow
-                label="رقم IBAN"
-                value={method.info.iban}
-                field="burq-iban"
-                copiedField={copiedField}
-                onCopy={onCopy}
-                monospace
-              />
-            </div>
-
-            <InfoRow
-              label="اسم المستلم"
-              value={method.info.accountName}
-              field="burq-name"
-              copiedField={copiedField}
-              onCopy={onCopy}
-            />
-          </>
-        )}
-      </Card>
-
-      {/* Steps */}
-      <div className="space-y-2">
-        <div className="text-sm font-semibold flex items-center gap-1.5">
-          <span>الخطوات</span>
-          <Badge variant="outline" size="sm">
-            {method.steps.length}
-          </Badge>
-        </div>
-        <ol className="space-y-2">
-          {method.steps.map((step, idx) => (
-            <li key={idx} className="flex items-start gap-3 text-sm">
-              <div
-                className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0',
-                  'text-xs font-bold border',
-                  method.bg,
-                  method.color,
-                )}
-              >
-                <span className="num">{idx + 1}</span>
-              </div>
-              <span className="text-muted-foreground pt-0.5">{step}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════
-//  Component: Info Row (with copy button)
-// ════════════════════════════════════════════════════════════
-
-function InfoRow({ label, value, field, copiedField, onCopy, copyable = true, monospace = false }) {
-  const isCopied = field && copiedField === field;
-
+function InfoRow({ label, value, mono = false, onCopy, copied }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-muted-foreground mb-0.5">{label}</div>
-        <div
-          className={cn(
-            'text-sm truncate',
-            monospace ? 'font-mono num font-semibold' : 'font-medium',
-          )}
-          dir={monospace ? 'ltr' : 'rtl'}
-        >
-          {value}
-        </div>
+      <span className="text-xs text-muted-foreground">{label}:</span>
+      <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+        <span className={cn('text-sm truncate', mono && 'font-mono num')}>{value}</span>
+        {onCopy && (
+          <button
+            onClick={onCopy}
+            className="p-1 rounded hover:bg-background/50 transition-colors flex-shrink-0"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+            )}
+          </button>
+        )}
       </div>
-      {copyable && field && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onCopy(value, field)}
-          className="flex-shrink-0"
-        >
-          {isCopied ? (
-            <>
-              <Check className="w-4 h-4 text-emerald-500" />
-              <span className="text-xs text-emerald-500">تم</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-4 h-4" />
-              <span className="text-xs">نسخ</span>
-            </>
-          )}
-        </Button>
-      )}
     </div>
   );
 }
