@@ -153,6 +153,37 @@ async function runMigrations() {
     [`CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id)`],
   )
 
+  await ensureBotTable(
+    "events",
+    `CREATE TABLE IF NOT EXISTS events (
+      id               SERIAL PRIMARY KEY,
+      guild_id         TEXT NOT NULL,
+      title            TEXT NOT NULL,
+      description      TEXT,
+      image            TEXT,
+      starts_at        TIMESTAMP NOT NULL,
+      max_participants INT,
+      channel          TEXT,
+      reminder_hours   INT DEFAULT 1,
+      reminder_sent    BOOLEAN DEFAULT false,
+      started_notified BOOLEAN DEFAULT false,
+      status           TEXT DEFAULT 'upcoming',
+      created_by       TEXT,
+      created_at       TIMESTAMP DEFAULT NOW()
+    )`,
+    [`CREATE INDEX IF NOT EXISTS idx_events_guild ON events(guild_id, starts_at)`],
+  )
+
+  await ensureBotTable(
+    "help_hidden_categories",
+    `CREATE TABLE IF NOT EXISTS help_hidden_categories (
+      guild_id    TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      hidden_at   TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (guild_id, category_id)
+    )`,
+  )
+
   console.log("   ✅ Bot tables ensured")
 
   // ──────────────────────────────────────────────────

@@ -82,6 +82,144 @@ async function upsertSettings(table, guildId, data) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  Protection Schema Mappers
+//  يحوّل بين nested (UI القديم) و flat (البوت)
+// ════════════════════════════════════════════════════════════
+
+function nestedToFlatProtection(data) {
+  if (!data || typeof data !== "object") return {}
+
+  const result = {}
+
+  // anti_spam nested → antispam_* flat
+  if (data.anti_spam && typeof data.anti_spam === "object") {
+    const s = data.anti_spam
+    if (s.enabled !== undefined) result.antispam_enabled = s.enabled
+    if (s.maxMessages !== undefined) result.antispam_max_messages = s.maxMessages
+    if (s.max_messages !== undefined) result.antispam_max_messages = s.max_messages
+    if (s.timeWindow !== undefined)
+      result.antispam_interval_ms = Number(s.timeWindow) * 1000
+    if (s.interval_ms !== undefined) result.antispam_interval_ms = s.interval_ms
+    if (s.action !== undefined) result.antispam_action = s.action
+    if (s.muteDuration !== undefined) result.antispam_mute_duration = s.muteDuration
+  }
+
+  // anti_raid nested → antiraid_* flat
+  if (data.anti_raid && typeof data.anti_raid === "object") {
+    const r = data.anti_raid
+    if (r.enabled !== undefined) result.antiraid_enabled = r.enabled
+    if (r.maxJoins !== undefined) result.antiraid_join_threshold = r.maxJoins
+    if (r.join_threshold !== undefined) result.antiraid_join_threshold = r.join_threshold
+    if (r.timeWindow !== undefined)
+      result.antiraid_join_interval_ms = Number(r.timeWindow) * 1000
+    if (r.interval_ms !== undefined) result.antiraid_join_interval_ms = r.interval_ms
+    if (r.action !== undefined) result.antiraid_action = r.action
+  }
+
+  // anti_nuke nested → antinuke_* flat
+  if (data.anti_nuke && typeof data.anti_nuke === "object") {
+    const n = data.anti_nuke
+    if (n.enabled !== undefined) result.antinuke_enabled = n.enabled
+    if (n.maxChannelDeletes !== undefined)
+      result.antinuke_channel_delete_threshold = n.maxChannelDeletes
+    if (n.maxRoleDeletes !== undefined)
+      result.antinuke_role_delete_threshold = n.maxRoleDeletes
+    if (n.maxBans !== undefined) result.antinuke_ban_threshold = n.maxBans
+    if (n.interval_ms !== undefined) result.antinuke_interval_ms = n.interval_ms
+    if (n.action !== undefined) result.antinuke_action = n.action
+  }
+
+  // Top-level flat keys (UI الجديد يرسل كذا)
+  const flatKeys = [
+    "antispam_enabled", "antispam_max_messages", "antispam_interval_ms",
+    "antispam_action", "antispam_mute_duration",
+    "antiraid_enabled", "antiraid_join_threshold", "antiraid_join_interval_ms",
+    "antiraid_action",
+    "antinuke_enabled", "antinuke_channel_delete_threshold",
+    "antinuke_role_delete_threshold", "antinuke_ban_threshold",
+    "antinuke_interval_ms", "antinuke_action",
+    "log_channel_id", "is_locked", "lockdown_started_at",
+    "whitelist_users", "whitelist_roles",
+  ]
+  for (const k of flatKeys) {
+    if (data[k] !== undefined) result[k] = data[k]
+  }
+
+  return result
+}
+
+function flatToNestedProtection(row) {
+  if (!row) {
+    return {
+      antispam_enabled: false,
+      antispam_max_messages: 5,
+      antispam_interval_ms: 3000,
+      antispam_action: "mute",
+      antispam_mute_duration: 300000,
+      antiraid_enabled: false,
+      antiraid_join_threshold: 10,
+      antiraid_join_interval_ms: 10000,
+      antiraid_action: "lockdown",
+      antinuke_enabled: false,
+      antinuke_channel_delete_threshold: 3,
+      antinuke_role_delete_threshold: 3,
+      antinuke_ban_threshold: 3,
+      antinuke_interval_ms: 10000,
+      antinuke_action: "ban",
+      log_channel_id: null,
+      is_locked: false,
+      lockdown_started_at: null,
+      whitelist_users: [],
+      whitelist_roles: [],
+      anti_spam: { enabled: false, maxMessages: 5, timeWindow: 3, action: "mute" },
+      anti_raid: { enabled: false, maxJoins: 10, timeWindow: 10, action: "lockdown" },
+      anti_nuke: { enabled: false, maxChannelDeletes: 3, maxRoleDeletes: 3, maxBans: 3 },
+    }
+  }
+
+  return {
+    antispam_enabled: row.antispam_enabled ?? false,
+    antispam_max_messages: row.antispam_max_messages ?? 5,
+    antispam_interval_ms: row.antispam_interval_ms ?? 3000,
+    antispam_action: row.antispam_action ?? "mute",
+    antispam_mute_duration: row.antispam_mute_duration ?? 300000,
+    antiraid_enabled: row.antiraid_enabled ?? false,
+    antiraid_join_threshold: row.antiraid_join_threshold ?? 10,
+    antiraid_join_interval_ms: row.antiraid_join_interval_ms ?? 10000,
+    antiraid_action: row.antiraid_action ?? "lockdown",
+    antinuke_enabled: row.antinuke_enabled ?? false,
+    antinuke_channel_delete_threshold: row.antinuke_channel_delete_threshold ?? 3,
+    antinuke_role_delete_threshold: row.antinuke_role_delete_threshold ?? 3,
+    antinuke_ban_threshold: row.antinuke_ban_threshold ?? 3,
+    antinuke_interval_ms: row.antinuke_interval_ms ?? 10000,
+    antinuke_action: row.antinuke_action ?? "ban",
+    log_channel_id: row.log_channel_id ?? null,
+    is_locked: row.is_locked ?? false,
+    lockdown_started_at: row.lockdown_started_at ?? null,
+    whitelist_users: row.whitelist_users ?? [],
+    whitelist_roles: row.whitelist_roles ?? [],
+    anti_spam: {
+      enabled: row.antispam_enabled ?? false,
+      maxMessages: row.antispam_max_messages ?? 5,
+      timeWindow: Math.round((row.antispam_interval_ms ?? 3000) / 1000),
+      action: row.antispam_action ?? "mute",
+    },
+    anti_raid: {
+      enabled: row.antiraid_enabled ?? false,
+      maxJoins: row.antiraid_join_threshold ?? 10,
+      timeWindow: Math.round((row.antiraid_join_interval_ms ?? 10000) / 1000),
+      action: row.antiraid_action ?? "lockdown",
+    },
+    anti_nuke: {
+      enabled: row.antinuke_enabled ?? false,
+      maxChannelDeletes: row.antinuke_channel_delete_threshold ?? 3,
+      maxRoleDeletes: row.antinuke_role_delete_threshold ?? 3,
+      maxBans: row.antinuke_ban_threshold ?? 3,
+    },
+  }
+}
+
+// ════════════════════════════════════════════════════════════
 //  ════════════ WELCOME ════════════
 // ════════════════════════════════════════════════════════════
 
@@ -136,15 +274,17 @@ router.get(
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
-    const settings = await getSettings("protection_settings", req.params.guildId, {
-      anti_spam: { enabled: false, maxMessages: 5, timeWindow: 5, action: "mute" },
-      anti_raid: { enabled: false, maxJoins: 10, timeWindow: 30, action: "lockdown" },
-      anti_nuke: { enabled: false, maxChannelDeletes: 3, maxRoleDeletes: 3, maxBans: 5 },
-      whitelist: { roles: [], members: [] },
-      log_channel: null,
-      is_locked: false,
-    })
-    res.json(settings)
+    try {
+      const r = await query(
+        `SELECT * FROM protection_settings WHERE guild_id = $1 LIMIT 1`,
+        [req.params.guildId],
+      )
+      const row = r.rows[0] || null
+      res.json(flatToNestedProtection(row))
+    } catch (err) {
+      console.error("[GET_PROTECTION]", err.message)
+      res.json(flatToNestedProtection(null))
+    }
   }),
 )
 
@@ -155,7 +295,11 @@ router.put(
   requirePlan(PLAN_TIERS.GOLD),
   auditLog("protection.update"),
   asyncHandler(async (req, res) => {
-    await upsertSettings("protection_settings", req.params.guildId, req.body)
+    const flatData = nestedToFlatProtection(req.body)
+    if (Object.keys(flatData).length === 0) {
+      return res.json({ success: true, message: "لا تغييرات للحفظ" })
+    }
+    await upsertSettings("protection_settings", req.params.guildId, flatData)
     res.json({ success: true })
   }),
 )
