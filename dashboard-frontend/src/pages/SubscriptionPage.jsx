@@ -174,13 +174,15 @@ export default function SubscriptionPage() {
       const botIds = await apiClient.get('/api/bot/guilds').catch(() => []);
       const botList = Array.isArray(botIds) ? botIds : [];
 
+      console.log('[LINK] user guilds:', userGuilds.length);
+      console.log('[LINK] bot guilds:', botList.length);
+      console.log('[LINK] sample user guild:', userGuilds[0]);
+
       setBotGuildIds(botList);
       setGuilds(Array.isArray(userGuilds) ? userGuilds : []);
 
-      // ابحث عن السيرفر المربوط حالياً (نسأل /api/guild/:id/plan لكل سيرفر فيه البوت ومالكه الحالي)
-      const eligible = userGuilds.filter(
-        (g) => botList.includes(g.id) && (BigInt(g.permissions || 0) & BigInt(0x8)) === BigInt(0x8),
-      );
+      // ابحث عن السيرفر المربوط حالياً
+      const eligible = userGuilds.filter((g) => botList.includes(g.id));
 
       for (const g of eligible) {
         try {
@@ -337,13 +339,28 @@ export default function SubscriptionPage() {
   const expiresAt = subscription?.expires_at ? new Date(subscription.expires_at) : null;
   const daysLeft = expiresAt ? Math.max(0, Math.ceil((expiresAt - Date.now()) / 86_400_000)) : null;
 
-  // ── سيرفرات اللي يقدر يربط فيها (admin + بوت موجود) ──
-  const eligibleGuilds = (guilds || []).filter(
-    (g) =>
-      botGuildIds.includes(g.id) &&
-      (BigInt(g.permissions || 0) & BigInt(0x8)) === BigInt(0x8) &&
-      g.id !== linkedGuildId,
-  );
+  // ── سيرفرات اللي يقدر يربط فيها ──
+  // الشرط: البوت موجود + (owner أو admin أو manage_guild)
+  const eligibleGuilds = (guilds || []).filter((g) => {
+    if (!botGuildIds.includes(g.id)) return false;
+    if (g.id === linkedGuildId) return false;
+
+    // مالك السيرفر
+    if (g.owner === true) return true;
+
+    // فحص الصلاحيات
+    try {
+      const perms = BigInt(g.permissions || g.permissions_new || 0);
+      const ADMINISTRATOR = BigInt(0x8);
+      const MANAGE_GUILD = BigInt(0x20);
+      if ((perms & ADMINISTRATOR) === ADMINISTRATOR) return true;
+      if ((perms & MANAGE_GUILD) === MANAGE_GUILD) return true;
+    } catch {
+      // permissions غير صالحة — استبعد
+    }
+
+    return false;
+  });
 
   const linkedGuild = linkedGuildId
     ? (guilds || []).find((g) => g.id === linkedGuildId)
