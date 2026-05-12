@@ -1,4 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js")
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  MessageFlags
+} = require("discord.js")
 const commandGuardSystem = require("../../systems/commandGuardSystem")
 const databaseSystem     = require("../../systems/databaseSystem")
 const {
@@ -35,20 +40,25 @@ module.exports = {
 
   async execute(interaction) {
     try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral })
+    } catch (e) {
+      console.error("[BUTTON-ROLE-DELETE] defer failed:", e.message)
+      return
+    }
+
+    try {
       if (!interaction.guild) {
-        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+        return interaction.editReply({ content: "❌ هذا الأمر داخل السيرفر فقط" })
       }
 
       const isAdmin = commandGuardSystem.requireAdmin(interaction)
       if (!isAdmin) {
-        return interaction.reply({ content: "❌ هذا الأمر للإدارة فقط", ephemeral: true })
+        return interaction.editReply({ content: "❌ هذا الأمر للإدارة فقط" })
       }
 
       await ensureTable()
 
       const messageId = interaction.options.getString("معرف_الرسالة").trim()
-
-      await interaction.deferReply({ ephemeral: true })
 
       const panel = await getPanel(messageId)
       if (!panel || panel.guild_id !== interaction.guild.id) {
@@ -71,15 +81,15 @@ module.exports = {
           new EmbedBuilder()
             .setColor(0xef4444)
             .setTitle("🗑️ تم حذف اللوحة")
-            .setDescription(`تم حذف لوحة **"${panel.title}"** بالكامل.`)
+            .setDescription(`تم حذف لوحة **"${panel.title || 'بدون عنوان'}"** بالكامل.`)
         ]
       })
 
     } catch (err) {
       console.error("[BUTTON-ROLE-DELETE ERROR]", err)
-      const msg = "❌ حدث خطأ أثناء حذف اللوحة."
-      if (interaction.deferred) return interaction.editReply({ content: msg })
-      if (!interaction.replied) return interaction.reply({ content: msg, ephemeral: true })
+      try {
+        return await interaction.editReply({ content: "❌ حدث خطأ أثناء حذف اللوحة." })
+      } catch {}
     }
   }
 }

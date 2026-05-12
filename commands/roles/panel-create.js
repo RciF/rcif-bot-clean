@@ -1,4 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js")
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  MessageFlags
+} = require("discord.js")
 const commandGuardSystem = require("../../systems/commandGuardSystem")
 const databaseSystem     = require("../../systems/databaseSystem")
 const {
@@ -33,7 +38,6 @@ module.exports = {
     ],
     notes: [
       "اللوحة تُنشأ فاضية — أضف الأزرار بـ /لوحة-رتب-إضافة",
-      "الوضع الحصري = العضو يقدر يأخذ رتبة واحدة فقط من اللوحة",
       "خانات الصورة والثمبنيل لازم تكون روابط تبدأ بـ http:// أو https://"
     ],
     requirements: {
@@ -47,13 +51,20 @@ module.exports = {
 
   async execute(interaction) {
     try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral })
+    } catch (e) {
+      console.error("[BUTTON-ROLE-CREATE] defer failed:", e.message)
+      return
+    }
+
+    try {
       if (!interaction.guild) {
-        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+        return interaction.editReply({ content: "❌ هذا الأمر داخل السيرفر فقط" })
       }
 
       const isAdmin = commandGuardSystem.requireAdmin(interaction)
       if (!isAdmin) {
-        return interaction.reply({ content: "❌ هذا الأمر للإدارة فقط", ephemeral: true })
+        return interaction.editReply({ content: "❌ هذا الأمر للإدارة فقط" })
       }
 
       const title     = interaction.options.getString("العنوان")
@@ -63,17 +74,14 @@ module.exports = {
       const thumbRaw  = interaction.options.getString("ثمبنيل")
       const exclusive = interaction.options.getBoolean("حصري") ?? false
 
-      // ✅ تحقق مبكر من الروابط — قبل deferReply عشان الرد يطلع سريع
       if (imageRaw && !isValidHttpUrl(imageRaw)) {
-        return interaction.reply({
-          content: "❌ خيار `صورة` لازم يكون رابط يبدأ بـ `http://` أو `https://`",
-          ephemeral: true
+        return interaction.editReply({
+          content: "❌ خيار `صورة` لازم يكون رابط يبدأ بـ `http://` أو `https://`"
         })
       }
       if (thumbRaw && !isValidHttpUrl(thumbRaw)) {
-        return interaction.reply({
-          content: "❌ خيار `ثمبنيل` لازم يكون رابط يبدأ بـ `http://` أو `https://`",
-          ephemeral: true
+        return interaction.editReply({
+          content: "❌ خيار `ثمبنيل` لازم يكون رابط يبدأ بـ `http://` أو `https://`"
         })
       }
 
@@ -81,7 +89,6 @@ module.exports = {
       const thumbnail = thumbRaw ? thumbRaw.trim() : null
 
       await ensureTable()
-      await interaction.deferReply({ ephemeral: true })
 
       const panelData = { title, description: desc, color, image_url: image, thumbnail, exclusive }
       const { embeds, components } = await buildPanelMessage(panelData, [])
@@ -111,9 +118,9 @@ module.exports = {
 
     } catch (err) {
       console.error("[BUTTON-ROLE-CREATE ERROR]", err)
-      const msg = "❌ حدث خطأ أثناء إنشاء اللوحة."
-      if (interaction.deferred) return interaction.editReply({ content: msg })
-      if (!interaction.replied) return interaction.reply({ content: msg, ephemeral: true })
+      try {
+        return await interaction.editReply({ content: "❌ حدث خطأ أثناء إنشاء اللوحة." })
+      } catch {}
     }
   }
 }

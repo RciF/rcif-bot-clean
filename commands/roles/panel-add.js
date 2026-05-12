@@ -1,4 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js")
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  MessageFlags
+} = require("discord.js")
 const commandGuardSystem = require("../../systems/commandGuardSystem")
 const databaseSystem     = require("../../systems/databaseSystem")
 const {
@@ -6,6 +11,7 @@ const {
   getPanel,
   getPanelButtons,
   buildPanelMessage,
+  parseButtons,
   COLOR_CHOICES_NO_GOLD
 } = require("./_button-role-shared")
 
@@ -33,7 +39,8 @@ module.exports = {
     ],
     notes: [
       "الإيموجي يقدر يكون عادي أو من السيرفر",
-      "5 ألوان أزرار: أخضر، أحمر، أزرق، رمادي، Link"
+      "يدعم لوحات البوت ولوحات الداش",
+      "5 ألوان أزرار: أخضر، أحمر، أزرق، رمادي"
     ],
     requirements: {
       botRoleHierarchy: true,
@@ -45,14 +52,23 @@ module.exports = {
   },
 
   async execute(interaction) {
+    // ✅ Defer أول شي — قبل أي شي ممكن يفشل
+    try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral })
+    } catch (e) {
+      // الـ interaction انتهى أو تم ack مسبقاً — ما نقدر نكمل
+      console.error("[BUTTON-ROLE-ADD] defer failed:", e.message)
+      return
+    }
+
     try {
       if (!interaction.guild) {
-        return interaction.reply({ content: "❌ هذا الأمر داخل السيرفر فقط", ephemeral: true })
+        return interaction.editReply({ content: "❌ هذا الأمر داخل السيرفر فقط" })
       }
 
       const isAdmin = commandGuardSystem.requireAdmin(interaction)
       if (!isAdmin) {
-        return interaction.reply({ content: "❌ هذا الأمر للإدارة فقط", ephemeral: true })
+        return interaction.editReply({ content: "❌ هذا الأمر للإدارة فقط" })
       }
 
       await ensureTable()
@@ -63,44 +79,63 @@ module.exports = {
       const emoji     = interaction.options.getString("الإيموجي")
       const color     = interaction.options.getString("اللون") || "أزرق"
 
-      await interaction.deferReply({ ephemeral: true })
-
       const panel = await getPanel(messageId)
       if (!panel || panel.guild_id !== interaction.guild.id) {
-        return interaction.editReply({ content: "❌ ما لقيت هذه اللوحة في السيرفر." })
+        return interaction.editReply({
+          content: "❌ ما لقيت هذه اللوحة في السيرفر.\n💡 تأكد إنك ناسخ ID الرسالة الصحيح، وإن اللوحة في نفس السيرفر."
+        })
       }
 
-      const existing = await databaseSystem.queryOne(
-        "SELECT id FROM button_roles WHERE message_id = $1 AND role_id = $2",
-        [messageId, role.id]
-      )
-      if (existing) {
-        return interaction.editReply({ content: `❌ رتبة ${role} مضافة بالفعل.` })
+      // ✅ تحقق التكرار — يفحص كلا المصدرين (legacy + jsonb)
+      const allButtons = await getPanelButtons(messageId)
+      const duplicate  = allButtons.find(b => b.role_id === role.id)
+      if (duplicate) {
+        return interaction.editReply({ content: `❌ رتبة ${role} مضافة بالفعل في هذه اللوحة.` })
       }
 
-      const buttons = await getPanelButtons(messageId)
-      if (buttons.length >= 25) {
+      if (allButtons.length >= 25) {
         return interaction.editReply({ content: "❌ وصلت الحد الأقصى (25 زر)." })
       }
 
       const botMember = interaction.guild.members.me
-      if (role.position >= botMember.roles.highest.position) {
-        return interaction.editReply({ content: "❌ رتبة البوت أقل من هذه الرتبة، ارفع رتبة البوت أولاً." })
+      if (botMember && role.position >= botMember.roles.highest.position) {
+        return interaction.editReply({
+          content: "❌ رتبة البوت أقل من هذه الرتبة، ارفع رتبة البوت أولاً."
+        })
       }
 
+      if (role.managed) {
+        return interaction.editReply({
+          content: "❌ هذه الرتبة مُدارة من تكامل خارجي ولا يمكن إعطاؤها يدوياً."
+        })
+      }
+
+      // ✅ نضيف الزر في الجدول legacy (button_roles)
+      //    حتى لو اللوحة أصلها من الداش (JSONB)، نكمل الـ bridge
       await databaseSystem.query(`
         INSERT INTO button_roles (guild_id, channel_id, message_id, role_id, label, emoji, color)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
-      `, [interaction.guild.id, panel.channel_id, messageId, role.id, label, emoji || null, color])
+      `, [
+        interaction.guild.id,
+        panel.channel_id,
+        messageId,
+        role.id,
+        label,
+        emoji || null,
+        color
+      ])
 
+      // ✅ حدّث الرسالة في القناة
       const newButtons = await getPanelButtons(messageId)
-      const channel = interaction.guild.channels.cache.get(panel.channel_id)
+      const channel    = interaction.guild.channels.cache.get(panel.channel_id)
       if (channel) {
         try {
           const msg     = await channel.messages.fetch(messageId)
           const updated = await buildPanelMessage(panel, newButtons)
           await msg.edit(updated)
-        } catch {}
+        } catch (editErr) {
+          console.error("[BUTTON-ROLE-ADD] message edit failed:", editErr.message)
+        }
       }
 
       return interaction.editReply({
@@ -110,17 +145,17 @@ module.exports = {
             .setTitle("✅ تم إضافة الزر")
             .addFields(
               { name: "🏷️ الرتبة", value: `${role}`, inline: true },
-              { name: "📝 النص",   value: label,       inline: true },
-              { name: "🎨 اللون",  value: color,        inline: true }
+              { name: "📝 النص",   value: label,     inline: true },
+              { name: "🎨 اللون",  value: color,     inline: true }
             )
         ]
       })
 
     } catch (err) {
       console.error("[BUTTON-ROLE-ADD ERROR]", err)
-      const msg = "❌ حدث خطأ أثناء إضافة الزر."
-      if (interaction.deferred) return interaction.editReply({ content: msg })
-      if (!interaction.replied) return interaction.reply({ content: msg, ephemeral: true })
+      try {
+        return await interaction.editReply({ content: "❌ حدث خطأ أثناء إضافة الزر." })
+      } catch {}
     }
   }
 }
