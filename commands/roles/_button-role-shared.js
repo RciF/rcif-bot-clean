@@ -278,6 +278,23 @@ function buttonStyle(color) {
 }
 
 // ══════════════════════════════════════
+//  URL VALIDATOR
+//  يمنع تمرير نص عادي للـ setImage/setThumbnail
+//  (Discord.js يرمي ValidationError إذا مرّرنا غير URL)
+// ══════════════════════════════════════
+
+function isValidHttpUrl(value) {
+  if (typeof value !== "string") return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  try {
+    const u = new URL(trimmed)
+    return u.protocol === "http:" || u.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+// ══════════════════════════════════════
 //  BUILD PANEL MESSAGE
 //  يستخدم customId المناسب لكل زر حسب source
 // ══════════════════════════════════════
@@ -289,8 +306,8 @@ async function buildPanelMessage(panel, buttons) {
     .setTimestamp()
 
   if (panel.description) embed.setDescription(panel.description)
-  if (panel.image_url) embed.setImage(panel.image_url)
-  if (panel.thumbnail) embed.setThumbnail(panel.thumbnail)
+  if (isValidHttpUrl(panel.image_url)) embed.setImage(panel.image_url.trim())
+  if (isValidHttpUrl(panel.thumbnail)) embed.setThumbnail(panel.thumbnail.trim())
 
   if (!buttons || buttons.length === 0) {
     embed.setFooter({ text: "لا توجد أزرار بعد" })

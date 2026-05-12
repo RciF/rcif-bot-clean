@@ -59,6 +59,19 @@ module.exports = {
       const thumbnail = interaction.options.getString("ثمبنيل")
       const exclusive = interaction.options.getBoolean("حصري") ?? false
 
+      // ✅ تحقق من صلاحية الروابط قبل ما نكمل
+if (image && !/^https?:\/\/\S+/i.test(image.trim())) {
+  return interaction.reply({
+    content: "❌ خيار `صورة` لازم يكون رابط يبدأ بـ http:// أو https://",
+    ephemeral: true
+  })
+}
+if (thumbnail && !/^https?:\/\/\S+/i.test(thumbnail.trim())) {
+  return interaction.reply({
+    content: "❌ خيار `ثمبنيل` لازم يكون رابط يبدأ بـ http:// أو https://",
+    ephemeral: true
+  })
+}
       await interaction.deferReply({ ephemeral: true })
 
       const panelData = { title, description: desc, color, image_url: image, thumbnail, exclusive }
