@@ -1,7 +1,12 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js")
 const commandGuardSystem = require("../../systems/commandGuardSystem")
 const databaseSystem     = require("../../systems/databaseSystem")
-const { ensureTable, buildPanelMessage, COLOR_CHOICES } = require("./_button-role-shared")
+const {
+  ensureTable,
+  buildPanelMessage,
+  isValidHttpUrl,
+  COLOR_CHOICES
+} = require("./_button-role-shared")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -15,8 +20,8 @@ module.exports = {
       .setName("اللون").setDescription("لون الـ Embed").setRequired(false)
       .addChoices(...COLOR_CHOICES)
     )
-    .addStringOption(o => o.setName("صورة").setDescription("رابط صورة كبيرة").setRequired(false))
-    .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط صورة صغيرة").setRequired(false))
+    .addStringOption(o => o.setName("صورة").setDescription("رابط صورة كبيرة (http/https)").setRequired(false))
+    .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط صورة صغيرة (http/https)").setRequired(false))
     .addBooleanOption(o => o.setName("حصري").setDescription("رتبة واحدة فقط من اللوحة؟").setRequired(false)),
 
   helpMeta: {
@@ -28,7 +33,8 @@ module.exports = {
     ],
     notes: [
       "اللوحة تُنشأ فاضية — أضف الأزرار بـ /لوحة-رتب-إضافة",
-      "الوضع الحصري = العضو يقدر يأخذ رتبة واحدة فقط من اللوحة"
+      "الوضع الحصري = العضو يقدر يأخذ رتبة واحدة فقط من اللوحة",
+      "خانات الصورة والثمبنيل لازم تكون روابط تبدأ بـ http:// أو https://"
     ],
     requirements: {
       botRoleHierarchy: true,
@@ -50,28 +56,31 @@ module.exports = {
         return interaction.reply({ content: "❌ هذا الأمر للإدارة فقط", ephemeral: true })
       }
 
-      await ensureTable()
-
       const title     = interaction.options.getString("العنوان")
       const desc      = interaction.options.getString("الوصف")
       const color     = interaction.options.getString("اللون") || "أزرق"
-      const image     = interaction.options.getString("صورة")
-      const thumbnail = interaction.options.getString("ثمبنيل")
+      const imageRaw  = interaction.options.getString("صورة")
+      const thumbRaw  = interaction.options.getString("ثمبنيل")
       const exclusive = interaction.options.getBoolean("حصري") ?? false
 
-      // ✅ تحقق من صلاحية الروابط قبل ما نكمل
-if (image && !/^https?:\/\/\S+/i.test(image.trim())) {
-  return interaction.reply({
-    content: "❌ خيار `صورة` لازم يكون رابط يبدأ بـ http:// أو https://",
-    ephemeral: true
-  })
-}
-if (thumbnail && !/^https?:\/\/\S+/i.test(thumbnail.trim())) {
-  return interaction.reply({
-    content: "❌ خيار `ثمبنيل` لازم يكون رابط يبدأ بـ http:// أو https://",
-    ephemeral: true
-  })
-}
+      // ✅ تحقق مبكر من الروابط — قبل deferReply عشان الرد يطلع سريع
+      if (imageRaw && !isValidHttpUrl(imageRaw)) {
+        return interaction.reply({
+          content: "❌ خيار `صورة` لازم يكون رابط يبدأ بـ `http://` أو `https://`",
+          ephemeral: true
+        })
+      }
+      if (thumbRaw && !isValidHttpUrl(thumbRaw)) {
+        return interaction.reply({
+          content: "❌ خيار `ثمبنيل` لازم يكون رابط يبدأ بـ `http://` أو `https://`",
+          ephemeral: true
+        })
+      }
+
+      const image     = imageRaw ? imageRaw.trim() : null
+      const thumbnail = thumbRaw ? thumbRaw.trim() : null
+
+      await ensureTable()
       await interaction.deferReply({ ephemeral: true })
 
       const panelData = { title, description: desc, color, image_url: image, thumbnail, exclusive }
@@ -84,7 +93,7 @@ if (thumbnail && !/^https?:\/\/\S+/i.test(thumbnail.trim())) {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `, [
         interaction.guild.id, interaction.channel.id, sent.id,
-        title, desc || null, color, image || null, thumbnail || null, exclusive
+        title, desc || null, color, image, thumbnail, exclusive
       ])
 
       return interaction.editReply({

@@ -16,7 +16,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("
 const databaseSystem = require("../../systems/databaseSystem")
 
 // ══════════════════════════════════════
-//  ENSURE TABLES
+//  ENSURE TABLES (+ defensive migrations)
 // ══════════════════════════════════════
 
 async function ensureTable() {
@@ -39,6 +39,30 @@ async function ensureTable() {
     );
   `)
 
+  // ⚠️ Defensive migrations — لو الجدول تم إنشاؤه قديماً من الداش
+  //    (CREATE TABLE IF NOT EXISTS أعلاه ما يضيف أعمدة لجدول قائم)
+  //    نضيف الأعمدة الناقصة بـ ALTER ADD COLUMN IF NOT EXISTS
+  const altersMain = [
+    "ADD COLUMN IF NOT EXISTS channel_id  TEXT",
+    "ADD COLUMN IF NOT EXISTS message_id  TEXT",
+    "ADD COLUMN IF NOT EXISTS title       TEXT",
+    "ADD COLUMN IF NOT EXISTS description TEXT",
+    "ADD COLUMN IF NOT EXISTS color       TEXT",
+    "ADD COLUMN IF NOT EXISTS image_url   TEXT",
+    "ADD COLUMN IF NOT EXISTS thumbnail   TEXT",
+    "ADD COLUMN IF NOT EXISTS exclusive   BOOLEAN DEFAULT false",
+    "ADD COLUMN IF NOT EXISTS buttons     JSONB DEFAULT '[]'::jsonb",
+    "ADD COLUMN IF NOT EXISTS created_at  TIMESTAMP DEFAULT NOW()",
+    "ADD COLUMN IF NOT EXISTS updated_at  TIMESTAMP DEFAULT NOW()"
+  ]
+  for (const clause of altersMain) {
+    try {
+      await databaseSystem.query(`ALTER TABLE button_role_panels ${clause};`)
+    } catch (e) {
+      // column already exists / type clash — ignore safely
+    }
+  }
+
   // الجدول القديم (للأوامر — تُحفظ فيه الأزرار من /لوحة-رتب-إضافة)
   await databaseSystem.query(`
     CREATE TABLE IF NOT EXISTS button_roles (
@@ -53,6 +77,24 @@ async function ensureTable() {
       created_at  TIMESTAMP DEFAULT NOW()
     );
   `)
+}
+
+// ══════════════════════════════════════
+//  URL VALIDATOR
+//  يمنع تمرير نص غير URL إلى setImage/setThumbnail
+//  (discord.js يرمي ValidationError لو القيمة ما تطابق URL)
+// ══════════════════════════════════════
+
+function isValidHttpUrl(value) {
+  if (typeof value !== "string") return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  try {
+    const u = new URL(trimmed)
+    return u.protocol === "http:" || u.protocol === "https:"
+  } catch {
+    return false
+  }
 }
 
 // ══════════════════════════════════════
@@ -278,23 +320,6 @@ function buttonStyle(color) {
 }
 
 // ══════════════════════════════════════
-//  URL VALIDATOR
-//  يمنع تمرير نص عادي للـ setImage/setThumbnail
-//  (Discord.js يرمي ValidationError إذا مرّرنا غير URL)
-// ══════════════════════════════════════
-
-function isValidHttpUrl(value) {
-  if (typeof value !== "string") return false
-  const trimmed = value.trim()
-  if (!trimmed) return false
-  try {
-    const u = new URL(trimmed)
-    return u.protocol === "http:" || u.protocol === "https:"
-  } catch {
-    return false
-  }
-}
-// ══════════════════════════════════════
 //  BUILD PANEL MESSAGE
 //  يستخدم customId المناسب لكل زر حسب source
 // ══════════════════════════════════════
@@ -306,6 +331,8 @@ async function buildPanelMessage(panel, buttons) {
     .setTimestamp()
 
   if (panel.description) embed.setDescription(panel.description)
+
+  // ✅ حماية: ما نمرر setImage/setThumbnail إلا لقيم URL صحيحة
   if (isValidHttpUrl(panel.image_url)) embed.setImage(panel.image_url.trim())
   if (isValidHttpUrl(panel.thumbnail)) embed.setThumbnail(panel.thumbnail.trim())
 
@@ -371,6 +398,7 @@ module.exports = {
   buttonStyle,
   buildPanelMessage,
   parseButtons,
+  isValidHttpUrl,
   COLOR_CHOICES,
   COLOR_CHOICES_NO_GOLD
 }
