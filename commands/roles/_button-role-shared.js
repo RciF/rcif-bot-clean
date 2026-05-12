@@ -331,9 +331,50 @@ function buttonStyle(color) {
 }
 
 // ══════════════════════════════════════
-//  BUILD PANEL MESSAGE
-//  يستخدم customId المناسب لكل زر حسب source
+//  BUTTON EMOJI SANITIZER
+//  يقبل: Unicode emoji واحد بسيط (😀, ❤️) أو custom emoji <:name:id>
+//  يرفض: flag emojis (🇸🇦 = regional_indicator_S + regional_indicator_A)،
+//        نصوص عادية، حروف لاتينية، أكثر من emoji واحد
+//  السبب: Discord buttons ما تقبل composed emojis زي الأعلام، فترفض الرسالة كلها
 // ══════════════════════════════════════
+
+function sanitizeButtonEmoji(raw) {
+  if (!raw || typeof raw !== "string") return null
+  const s = raw.trim()
+  if (!s) return null
+
+  // Custom Discord emoji: <:name:id> أو <a:name:id>
+  if (/^<a?:[a-zA-Z0-9_]{2,32}:\d{17,21}>$/.test(s)) return s
+
+  // ابني list من code points
+  const cps = Array.from(s)
+
+  // ❌ ارفض flag emojis (regional indicators: U+1F1E6..U+1F1FF)
+  //    flag = حرفان regional indicator ملصوقين → ما يصلح لـ button emoji
+  const hasRegional = cps.some(c => {
+    const cp = c.codePointAt(0)
+    return cp >= 0x1F1E6 && cp <= 0x1F1FF
+  })
+  if (hasRegional) return null
+
+  // ❌ ارفض نص عادي/حروف
+  //    نتأكد إن كل code point ضمن نطاقات الـ emoji المعروفة
+  const isEmojiCp = (cp) => (
+    (cp >= 0x1F300 && cp <= 0x1FAFF) || // Misc Symbols, Pictographs, Emoticons, Transport, Supplemental
+    (cp >= 0x2600  && cp <= 0x27BF)  || // Misc Symbols + Dingbats
+    (cp >= 0x2300  && cp <= 0x23FF)  || // Misc Technical (⏰ etc)
+    (cp >= 0x25A0  && cp <= 0x25FF)  || // Geometric Shapes
+    (cp >= 0x2B00  && cp <= 0x2BFF)  || // Misc Symbols and Arrows
+    cp === 0xFE0F || cp === 0x200D     // Variation Selector / ZWJ
+  )
+
+  const ok = cps.every(c => isEmojiCp(c.codePointAt(0)))
+  if (!ok) return null
+
+  return s
+}
+
+
 
 async function buildPanelMessage(panel, buttons) {
   const embed = new EmbedBuilder()
@@ -372,7 +413,10 @@ async function buildPanelMessage(panel, buttons) {
         .setStyle(buttonStyle(btn.color))
 
       if (btn.emoji) {
-        try { b.setEmoji(btn.emoji) } catch {}
+        const safeEmoji = sanitizeButtonEmoji(btn.emoji)
+        if (safeEmoji) {
+          try { b.setEmoji(safeEmoji) } catch {}
+        }
       }
       row.addComponents(b)
     }
@@ -410,6 +454,7 @@ module.exports = {
   buildPanelMessage,
   parseButtons,
   isValidHttpUrl,
+  sanitizeButtonEmoji,
   COLOR_CHOICES,
   COLOR_CHOICES_NO_GOLD
 }

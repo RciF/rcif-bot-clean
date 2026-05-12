@@ -12,6 +12,7 @@ const {
   getPanelButtons,
   buildPanelMessage,
   parseButtons,
+  sanitizeButtonEmoji,
   COLOR_CHOICES_NO_GOLD
 } = require("./_button-role-shared")
 
@@ -76,8 +77,21 @@ module.exports = {
       const messageId = interaction.options.getString("معرف_الرسالة").trim()
       const role      = interaction.options.getRole("الرتبة")
       const label     = interaction.options.getString("النص")
-      const emoji     = interaction.options.getString("الإيموجي")
+      const emojiRaw  = interaction.options.getString("الإيموجي")
       const color     = interaction.options.getString("اللون") || "أزرق"
+
+      // ✅ تحقق من emoji — flag emojis (🇸🇦) مرفوضة من Discord للأزرار
+      let safeEmoji = null
+      if (emojiRaw) {
+        safeEmoji = sanitizeButtonEmoji(emojiRaw)
+        if (!safeEmoji) {
+          return interaction.editReply({
+            content: "❌ الإيموجي غير مدعوم لأزرار Discord.\n" +
+              "💡 Discord ما يقبل علم دولة (مثل 🇸🇦) كإيموجي للأزرار — المشكلة من Discord نفسه.\n" +
+              "✅ استخدم إيموجي عادي مثل 🌍 ⭐ 🏳️ ❤️ أو إيموجي مخصص من السيرفر."
+          })
+        }
+      }
 
       const panel = await getPanel(messageId)
       if (!panel || panel.guild_id !== interaction.guild.id) {
@@ -112,30 +126,54 @@ module.exports = {
 
       // ✅ نضيف الزر في الجدول legacy (button_roles)
       //    حتى لو اللوحة أصلها من الداش (JSONB)، نكمل الـ bridge
-      await databaseSystem.query(`
+      const insertResult = await databaseSystem.query(`
         INSERT INTO button_roles (guild_id, channel_id, message_id, role_id, label, emoji, color)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
+        RETURNING id
       `, [
         interaction.guild.id,
         panel.channel_id,
         messageId,
         role.id,
         label,
-        emoji || null,
+        safeEmoji,
         color
       ])
+      const insertedId = insertResult.rows?.[0]?.id
 
-      // ✅ حدّث الرسالة في القناة
+      // ✅ حدّث الرسالة في القناة — مع rollback لو فشل
       const newButtons = await getPanelButtons(messageId)
       const channel    = interaction.guild.channels.cache.get(panel.channel_id)
+      let editFailed = false
+      let editError  = null
+
       if (channel) {
         try {
           const msg     = await channel.messages.fetch(messageId)
           const updated = await buildPanelMessage(panel, newButtons)
           await msg.edit(updated)
         } catch (editErr) {
+          editFailed = true
+          editError  = editErr
           console.error("[BUTTON-ROLE-ADD] message edit failed:", editErr.message)
         }
+      }
+
+      // ✅ Rollback: لو فشل تحديث الرسالة، احذف الزر من DB عشان ما يصير تناقض
+      if (editFailed && insertedId) {
+        try {
+          await databaseSystem.query(
+            "DELETE FROM button_roles WHERE id = $1",
+            [insertedId]
+          )
+        } catch {}
+
+        return interaction.editReply({
+          content: "❌ فشل تحديث رسالة اللوحة في القناة.\n" +
+            "💡 الأرجح سبب الفشل: emoji غير مقبول من Discord (مثل علم دولة)، أو رسالة اللوحة محذوفة.\n" +
+            `📋 تفاصيل: ${(editError?.message || 'غير معروف').slice(0, 200)}\n` +
+            "✅ تم التراجع عن إضافة الزر."
+        })
       }
 
       return interaction.editReply({
