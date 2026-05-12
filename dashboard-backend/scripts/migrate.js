@@ -16,7 +16,7 @@
 const { query } = require("../config/database")
 
 // ════════════════════════════════════════════════════════════
-//  Helper: إضافة عمود لجدول موجود (آمن)
+//  Helpers
 // ════════════════════════════════════════════════════════════
 
 async function addColumn(table, column, definition) {
@@ -41,6 +41,21 @@ async function createTable(name, sql, indexes = []) {
   }
 }
 
+/**
+ * يتأكد إن الجدول موجود قبل الـ ALTER.
+ * يفيد لما البوت ما يكون شغّل الجدول بعد (مثلاً سيرفر جديد ما استعمل /رتب-تفاعل).
+ */
+async function ensureBotTable(name, sql, indexes = []) {
+  try {
+    await query(sql)
+    for (const idx of indexes) await query(idx)
+    return true
+  } catch (err) {
+    console.error(`   ⚠️  ensureBotTable ${name}: ${err.message}`)
+    return false
+  }
+}
+
 // ════════════════════════════════════════════════════════════
 //  MAIN
 // ════════════════════════════════════════════════════════════
@@ -51,6 +66,94 @@ async function runMigrations() {
   console.log("═══════════════════════════════════════════")
 
   let success = 0
+
+  // ──────────────────────────────────────────────────
+  //  0. التأكد من وجود جداول البوت قبل الـ ALTER
+  //     (defensive — لو البوت ما اشتغل بعد)
+  // ──────────────────────────────────────────────────
+  console.log("\n📋 Ensuring bot tables exist (defensive)...")
+
+  await ensureBotTable(
+    "welcome_settings",
+    `CREATE TABLE IF NOT EXISTS welcome_settings (
+      guild_id TEXT PRIMARY KEY,
+      enabled BOOLEAN DEFAULT false,
+      welcome_channel_id TEXT,
+      goodbye_channel_id TEXT,
+      welcome_message TEXT,
+      goodbye_message TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  )
+
+  await ensureBotTable(
+    "log_settings",
+    `CREATE TABLE IF NOT EXISTS log_settings (
+      guild_id TEXT PRIMARY KEY,
+      enabled BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  )
+
+  await ensureBotTable(
+    "xp_settings",
+    `CREATE TABLE IF NOT EXISTS xp_settings (
+      guild_id TEXT PRIMARY KEY,
+      xp_multiplier NUMERIC DEFAULT 1,
+      levelup_channel_id TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  )
+
+  await ensureBotTable(
+    "ticket_settings",
+    `CREATE TABLE IF NOT EXISTS ticket_settings (
+      guild_id TEXT PRIMARY KEY,
+      enabled BOOLEAN DEFAULT false,
+      category_id TEXT,
+      log_channel_id TEXT,
+      support_role_id TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  )
+
+  await ensureBotTable(
+    "protection_settings",
+    `CREATE TABLE IF NOT EXISTS protection_settings (
+      guild_id TEXT PRIMARY KEY,
+      antispam_enabled BOOLEAN DEFAULT false,
+      antiraid_enabled BOOLEAN DEFAULT false,
+      antinuke_enabled BOOLEAN DEFAULT false,
+      log_channel_id TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  )
+
+  await ensureBotTable(
+    "button_role_panels",
+    `CREATE TABLE IF NOT EXISTS button_role_panels (
+      id SERIAL PRIMARY KEY,
+      guild_id TEXT NOT NULL,
+      message_id TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    [`CREATE INDEX IF NOT EXISTS idx_brp_guild ON button_role_panels(guild_id)`],
+  )
+
+  await ensureBotTable(
+    "warnings",
+    `CREATE TABLE IF NOT EXISTS warnings (
+      id SERIAL PRIMARY KEY,
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      reason TEXT,
+      moderator_id TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    [`CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id)`],
+  )
+
+  console.log("   ✅ Bot tables ensured")
 
   // ──────────────────────────────────────────────────
   //  1. أعمدة جديدة لجداول البوت الموجودة
@@ -91,9 +194,28 @@ async function runMigrations() {
     `JSONB DEFAULT '{"enabled":false}'::jsonb`,
   )
 
-  // protection_settings (lockdown columns)
+  // protection_settings (lockdown columns + full schema)
+  await addColumn("protection_settings", "antispam_enabled", "BOOLEAN DEFAULT false")
+  await addColumn("protection_settings", "antispam_max_messages", "INT DEFAULT 5")
+  await addColumn("protection_settings", "antispam_interval_ms", "INT DEFAULT 3000")
+  await addColumn("protection_settings", "antispam_action", "TEXT DEFAULT 'mute'")
+  await addColumn("protection_settings", "antispam_mute_duration", "INT DEFAULT 300000")
+  await addColumn("protection_settings", "antiraid_enabled", "BOOLEAN DEFAULT false")
+  await addColumn("protection_settings", "antiraid_join_threshold", "INT DEFAULT 10")
+  await addColumn("protection_settings", "antiraid_join_interval_ms", "INT DEFAULT 10000")
+  await addColumn("protection_settings", "antiraid_action", "TEXT DEFAULT 'lockdown'")
+  await addColumn("protection_settings", "antinuke_enabled", "BOOLEAN DEFAULT false")
+  await addColumn("protection_settings", "antinuke_channel_delete_threshold", "INT DEFAULT 3")
+  await addColumn("protection_settings", "antinuke_role_delete_threshold", "INT DEFAULT 3")
+  await addColumn("protection_settings", "antinuke_ban_threshold", "INT DEFAULT 3")
+  await addColumn("protection_settings", "antinuke_interval_ms", "INT DEFAULT 10000")
+  await addColumn("protection_settings", "antinuke_action", "TEXT DEFAULT 'ban'")
+  await addColumn("protection_settings", "log_channel_id", "TEXT")
+  await addColumn("protection_settings", "whitelist_users", "JSONB DEFAULT '[]'::jsonb")
+  await addColumn("protection_settings", "whitelist_roles", "JSONB DEFAULT '[]'::jsonb")
   await addColumn("protection_settings", "is_locked", "BOOLEAN DEFAULT false")
   await addColumn("protection_settings", "lockdown_started_at", "TIMESTAMP")
+  await addColumn("protection_settings", "updated_at", "TIMESTAMP DEFAULT NOW()")
 
   // button_role_panels
   await addColumn("button_role_panels", "title", "TEXT")
@@ -170,7 +292,7 @@ async function runMigrations() {
         currency_name TEXT DEFAULT 'كوينز',
         daily_reward JSONB DEFAULT '{"min":100,"max":500}'::jsonb,
         weekly_reward JSONB DEFAULT '{"min":1000,"max":5000}'::jsonb,
-        message_reward JSONB DEFAULT '{"min":1,"max":5,"cooldown":60}'::jsonb,
+        message_reward INT DEFAULT 1,
         starting_balance INT DEFAULT 100,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -190,7 +312,7 @@ async function runMigrations() {
         guild_id TEXT NOT NULL,
         name TEXT NOT NULL,
         emoji TEXT,
-        price INT NOT NULL,
+        price INT NOT NULL DEFAULT 0,
         type TEXT DEFAULT 'item',
         role_id TEXT,
         stock INT DEFAULT -1,
@@ -212,12 +334,12 @@ async function runMigrations() {
         id SERIAL PRIMARY KEY,
         guild_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
-        username TEXT,
         reason TEXT,
         moderator_id TEXT,
-        banned_at TIMESTAMP DEFAULT NOW()
+        banned_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP
       )`,
-      [`CREATE UNIQUE INDEX IF NOT EXISTS idx_bans_unique ON moderation_bans(guild_id, user_id)`],
+      [`CREATE INDEX IF NOT EXISTS idx_bans_guild_user ON moderation_bans(guild_id, user_id)`],
     )
   ) {
     console.log("   ✅ moderation_bans")
