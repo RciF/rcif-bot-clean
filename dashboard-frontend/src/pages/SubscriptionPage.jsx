@@ -117,7 +117,7 @@ const STATUS_META = {
 // ════════════════════════════════════════════════════════════
 
 export default function SubscriptionPage() {
-  const { user } = useAuthStore();
+  const { user, guilds: storeGuilds } = useAuthStore();
 
   const [subscription, setSubscription] = useState(null);
   const [history, setHistory] = useState([]);
@@ -166,11 +166,10 @@ export default function SubscriptionPage() {
     }
   };
 
-  // ── جلب السيرفرات + إيدي السيرفر المربوط ──
+  // ── جلب البوت guilds + إيدي السيرفر المربوط ──
   const loadGuilds = async () => {
     try {
-      const guildsStr = localStorage.getItem('lyn-guilds');
-      const userGuilds = guildsStr ? JSON.parse(guildsStr) : [];
+      const userGuilds = storeGuilds || [];
       const botIds = await apiClient.get('/api/bot/guilds').catch(() => []);
       const botList = Array.isArray(botIds) ? botIds : [];
 
@@ -206,7 +205,7 @@ export default function SubscriptionPage() {
     loadData();
     loadGuilds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, storeGuilds]);
 
   // ────────────────────────────────────────────────────────
   //  Submit payment request
