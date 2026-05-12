@@ -44,7 +44,8 @@ import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { PlanBadge } from '@/components/shared/PlanBadge';
 import { useAuthStore } from '@/store/authStore';
 import { PLANS, PLAN_ORDER, PLAN_TIERS, getPlanInfo } from '@/lib/plans';
-import { subscriptionApi, apiClient } from '@/api';
+import { subscriptionApi } from '@/api';
+import { apiClient } from '@/api/client';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
