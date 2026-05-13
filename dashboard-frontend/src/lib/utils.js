@@ -100,7 +100,12 @@ export function formatDate(date, options = {}) {
  * intToHexColor — تحويل لون Discord إلى hex
  */
 export function intToHexColor(color) {
-  if (!color) return '#99AAB5';
+  if (color === null || color === undefined || color === '') return '#99AAB5';
+  if (typeof color === 'string') {
+    const trimmed = color.trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{6}$/.test(trimmed)) return `#${trimmed.toUpperCase()}`;
+    return '#99AAB5';
+  }
   return `#${color.toString(16).padStart(6, '0').toUpperCase()}`;
 }
 
