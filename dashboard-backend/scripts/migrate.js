@@ -1,8 +1,12 @@
 /**
  * ═══════════════════════════════════════════════════════════
  *  Dashboard Migrations — DEPRECATED
- *  Schema authority الآن في البوت (systems/migrations/)
- *  هذا الـ script صار no-op للتوافق
+ *
+ *  Schema authority الآن في البوت (systems/migrations/).
+ *  أي migration جديد يُضاف في:
+ *    systems/migrations/00X_xxx.js
+ *
+ *  هذا الـ script باقي للتوافق فقط — لا يعمل شي.
  * ═══════════════════════════════════════════════════════════
  */
 
