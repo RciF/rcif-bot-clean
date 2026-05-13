@@ -1,3 +1,22 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ *  AI HANDLER — OpenAI Engine
+ *
+ *  المسؤولية: المحرك الأساسي للذكاء — يبني الـ prompt ويستدعي OpenAI
+ *
+ *  متى تستخدمه؟
+ *  - من aiAutoReplySystem (للرد التلقائي)
+ *  - من أمر /ذكاء (للرد المباشر)
+ *
+ *  متى لا تستخدمه؟
+ *  - لفحص هل AI مفعّل → استخدم aiSystem
+ *  - لكشف intent (balance/work/...) → استخدم aiBrainSystem
+ *
+ *  Cache: cacheSystem.ns("ai-responses") — TTL 15min
+ *
+ *  انظر: systems/_README.md للخريطة الكاملة
+ * ═══════════════════════════════════════════════════════════════════
+ */
 const OpenAI = require("openai");
 const memoryManager = require("../utils/memoryManager");
 

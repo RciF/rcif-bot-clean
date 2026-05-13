@@ -1,3 +1,19 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ *  DATABASE SYSTEM — Query Wrapper
+ *
+ *  المسؤولية: wrapper بسيط حول databaseManager.getClient()
+ *
+ *  متى تستخدمه؟
+ *  - لكل queries SELECT/INSERT/UPDATE/DELETE البسيطة
+ *
+ *  متى لا تستخدمه؟
+ *  - لـ transactions → استخدم databaseManager.getClient() مباشرة
+ *  - لإنشاء schema → أضف migration في systems/migrations/
+ *
+ *  انظر: systems/_README.md للخريطة الكاملة
+ * ═══════════════════════════════════════════════════════════════════
+ */
 const databaseManager = require("../utils/databaseManager");
 const logger = require("./loggerSystem");
 

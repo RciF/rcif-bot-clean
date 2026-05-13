@@ -10,6 +10,11 @@
 //   - blocked_words (يتجاهل الرسائل اللي تحويها)
 //   - max_response_length (يقص الرد)
 //   - messages_per_day (تحقق إضافي)
+//
+//  هذا هو الـ entry point للرد التلقائي على الرسائل.
+//  يُستدعى من events/handlers/aiHandler.js
+//
+//  انظر: systems/_README.md للخريطة الكاملة
 // ══════════════════════════════════════════════════════════════════
 
 const aiHandler = require("./aiHandler")

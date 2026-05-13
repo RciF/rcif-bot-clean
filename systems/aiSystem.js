@@ -1,3 +1,19 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ *  AI SYSTEM — Config Gatekeeper
+ *
+ *  المسؤولية: فحص هل AI مفعّل لهذا السيرفر (من جدول guilds)
+ *
+ *  متى تستخدمه؟
+ *  - قبل أي استدعاء لـ aiHandler أو aiAutoReplySystem
+ *
+ *  متى لا تستخدمه؟
+ *  - لتوليد ردود → استخدم aiHandler
+ *  - لمعالجة رسائل تلقائية → استخدم aiAutoReplySystem
+ *
+ *  انظر: systems/_README.md للخريطة الكاملة
+ * ═══════════════════════════════════════════════════════════════════
+ */
 const guildSystem = require("./guildSystem")
 const planGateSystem = require("./planGateSystem")
 const logger = require("./loggerSystem")
