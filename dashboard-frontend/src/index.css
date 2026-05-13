@@ -483,3 +483,15 @@
     scroll-behavior: auto !important;
   }
 }
+/* ════════════════════════════════════════════════════════════
+   Toast Styling (sonner)
+   ════════════════════════════════════════════════════════════ */
+.lyn-toast {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.15);
+}
+
+.dark .lyn-toast {
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.4);
+}
