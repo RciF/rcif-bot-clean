@@ -34,7 +34,7 @@ import { RolePicker } from '@/components/shared/RolePicker';
 import { usePlanGate } from '@/hooks/usePlanGate';
 import { useGuildStore } from '@/store/guildStore';
 import { PLAN_TIERS } from '@/lib/plans';
-import { apiClient } from '@/api';
+import { apiClient } from '@/api/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
