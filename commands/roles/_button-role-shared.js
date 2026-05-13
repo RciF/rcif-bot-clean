@@ -39,8 +39,29 @@ async function ensureTable() {
     );
   `)
 
+  // ✅ COLOR TYPE FIX — لو الجدول قديم وعمود color كان INT، نحوله TEXT
+  try {
+    const colType = await databaseSystem.queryOne(`
+      SELECT data_type
+      FROM information_schema.columns
+      WHERE table_name = 'button_role_panels' AND column_name = 'color'
+    `)
+    if (colType && colType.data_type === "integer") {
+      await databaseSystem.query(`
+        ALTER TABLE button_role_panels
+        ALTER COLUMN color TYPE TEXT
+        USING ('#' || LPAD(TO_HEX(color), 6, '0'))
+      `)
+      await databaseSystem.query(`
+        ALTER TABLE button_role_panels
+        ALTER COLUMN color SET DEFAULT 'أزرق'
+      `)
+    }
+  } catch (e) {
+    // ignore — colorToHex() يتعامل مع الاثنين
+  }
+
   // ⚠️ Defensive migrations — لو الجدول تم إنشاؤه قديماً من الداش
-  //    (CREATE TABLE IF NOT EXISTS أعلاه ما يضيف أعمدة لجدول قائم)
   //    نضيف الأعمدة الناقصة بـ ALTER ADD COLUMN IF NOT EXISTS
   const altersMain = [
     "ADD COLUMN IF NOT EXISTS channel_id  TEXT",
