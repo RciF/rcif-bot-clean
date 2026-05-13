@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { settingsApi } from '@/api';
 import { useGuildStore } from '@/store/guildStore';
 import { toast } from 'sonner';
+import { useSSEContext } from '@/components/shared/SSEProvider';
 
 /**
  * useGuildSettings — hook لجلب وحفظ إعدادات السيرفر
@@ -77,6 +78,20 @@ export function useGuildSettings({ section, fetcher, saver }) {
     return () => { mounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, guildId]);
+  // ─── Auto-refetch on SSE settings_changed ───
+  const { subscribe } = useSSEContext();
+  useEffect(() => {
+    if (!section || !subscribe) return;
+    return subscribe('settings_changed', (data) => {
+      if (data?.section === section && finalFetcher && guildId) {
+        finalFetcher(guildId).then((result) => {
+          const safe = result || {};
+          setData(safe);
+          setOriginalData(JSON.parse(JSON.stringify(safe)));
+        }).catch(() => {});
+      }
+    });
+  }, [section, subscribe, guildId, finalFetcher]);
 
   // ─── Update field by path (e.g. "antiSpam.enabled") ───
   const updateField = useCallback((path, value) => {

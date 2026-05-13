@@ -15,6 +15,8 @@ import { PageTransition } from '@/components/shared/PageTransition';
 import { isOwner as checkIsOwner } from '@/config/env';
 import { toast } from 'sonner';
 import { HelpWidget } from '@/components/shared/HelpWidget';
+import { SSEProvider } from '@/components/shared/SSEProvider';
+import { LiveIndicator } from '@/components/shared/LiveIndicator';
 
 // ─── Base nav sections (للجميع) ──────────────────────────────
 const BASE_NAV_SECTIONS = [
@@ -268,6 +270,7 @@ export default function DashboardLayout() {
           )}
 
           <div className="flex items-center gap-2 mr-auto">
+          <LiveIndicator />
             <button onClick={toggleTheme} className="p-2 hover:bg-accent rounded-lg transition-colors" aria-label="تبديل الثيم">
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
@@ -282,10 +285,12 @@ export default function DashboardLayout() {
         </header>
 
         <main className="flex-1 p-6 overflow-auto">
+         <SSEProvider>
           <PageTransition>
-            <Outlet />
-          </PageTransition>
-        </main>
+           <Outlet />
+         </PageTransition>
+        </SSEProvider>
+       </main>
       </div>
 
       <HelpWidget />

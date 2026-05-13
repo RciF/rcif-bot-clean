@@ -29,6 +29,7 @@ const commandsModularRoutes = require("./routes/commands/index")
 const statsRoutes = require("./routes/stats")
 const aiRoutes = require("./routes/ai")
 const autoRoleRoutes = require("./routes/autoRole")
+const sseRoutes = require("./routes/sse")
 // ── Services / Utils (with stoppable intervals) ──
 const guildPlanService = require("./services/guildPlan")
 const discordUtil = require("./utils/discord")
@@ -145,6 +146,7 @@ app.get("/api/bot/guilds", async (req, res) => {
 })
 
 // ── Auth ──
+app.use("/api", sseRoutes)
 app.use("/api/auth", authRoutes)
 
 // ── Subscription / Payment / Linking ──

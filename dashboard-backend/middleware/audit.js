@@ -80,6 +80,21 @@ async function recordAudit(entry) {
         entry.ip_address || null,
       ],
     )
+
+    // 📡 SSE broadcast — يبث الـ audit للـ realtime          
+    try {                                                      
+      const sse = require("../services/sseService")            
+      sse.broadcast(entry.guild_id, "audit_entry", {           
+        action: entry.action,                                  
+        user_id: entry.user_id,                                
+        username: entry.username,                              
+      })                                                       
+      const section = String(entry.action).split(".")[0]       
+      if (section) {                                           
+        sse.broadcast(entry.guild_id, "settings_changed", { section })  
+      }                                                        
+    } catch {}                                                 
+
   } catch (err) {
     console.error("[AUDIT] DB insert failed:", err.message)
   }
