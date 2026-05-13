@@ -14,6 +14,7 @@ import { useGuildStore } from '@/store/guildStore';
 import { PageTransition } from '@/components/shared/PageTransition';
 import { isOwner as checkIsOwner } from '@/config/env';
 import { toast } from 'sonner';
+import { HelpWidget } from '@/components/shared/HelpWidget';
 
 // ─── Base nav sections (للجميع) ──────────────────────────────
 const BASE_NAV_SECTIONS = [
@@ -285,6 +286,8 @@ export default function DashboardLayout() {
           </PageTransition>
         </main>
       </div>
+
+      <HelpWidget />
     </div>
   );
 }
