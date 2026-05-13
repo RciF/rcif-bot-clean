@@ -11,9 +11,9 @@ const aiDecisionSystem = require("../systems/aiDecisionSystem");
 const aiEmotionSystem = require("../systems/aiEmotionSystem");
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem");
 const aiServerAwarenessSystem = require("../systems/aiServerAwarenessSystem");
-
 const logger = require("../systems/loggerSystem");
-
+const cacheSystem = require("../utils/cacheSystem");
+const aiResponseCache = cacheSystem.ns("ai-responses");
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -70,8 +70,6 @@ class AIHandler {
     this.maxMessageLength = 2000;
     this.maxModelTokens = 800;
 
-    this.responseCache = new Map();
-    this.maxCacheSize = 50;
     this.cacheTTL = 15 * 60 * 1000;
 
     this.activeRequests = new Map();
@@ -108,24 +106,11 @@ class AIHandler {
   // ═══════════════════════════════════════════════════════
 
   getCached(key) {
-    const entry = this.responseCache.get(key);
-    if (!entry) return null;
-    if (Date.now() > entry.expiresAt) {
-      this.responseCache.delete(key);
-      return null;
-    }
-    return entry.content;
+    return aiResponseCache.get(key);
   }
 
   setCached(key, content) {
-    if (this.responseCache.size >= this.maxCacheSize) {
-      const firstKey = this.responseCache.keys().next().value;
-      this.responseCache.delete(firstKey);
-    }
-    this.responseCache.set(key, {
-      content,
-      expiresAt: Date.now() + this.cacheTTL
-    });
+    aiResponseCache.set(key, content, this.cacheTTL);
   }
 
   // ═══════════════════════════════════════════════════════
