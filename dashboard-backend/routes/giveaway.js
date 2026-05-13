@@ -21,7 +21,6 @@ const { auditLog } = require("../middleware/audit")
 const { query } = require("../config/database")
 const { getGuildPlan } = require("../services/guildPlan")
 const { hasAccess, PLAN_TIERS } = require("../plans")
-const fetch = require("node-fetch")
 const env = require("../config/env")
 
 const router = express.Router({ mergeParams: true })
