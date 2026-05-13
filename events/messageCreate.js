@@ -2,39 +2,35 @@
 //  messageCreate Event
 //  المسار: events/messageCreate.js
 //
-//  ✅ NEW (Batch 2): يستدعي معالج الـ aliases قبل أي معالجة ثانية
+//  الترتيب:
+//   1. Dev command (prefix مخفي)
+//   2. Alias resolver
+//   3. Guild init
+//   4. Protection (anti-spam)
+//   5. AI (observation + social + auto-reply)
+//   6. XP + Level-up
 // ══════════════════════════════════════════════════════════════════
 
-const { EmbedBuilder } = require("discord.js")
-const levelSystem = require("../systems/levelSystem")
-const aiAutoReplySystem = require("../systems/aiAutoReplySystem")
-const xpCooldownSystem = require("../systems/xpCooldownSystem")
 const guildManager = require("../utils/guildManager")
-const aiSystem = require("../systems/aiSystem")
-const xpSystem = require("../systems/xpSystem")
-const aiObservationSystem = require("../systems/aiObservationSystem")
-const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem")
 const logger = require("../systems/loggerSystem")
-const protectionSystem = require("../systems/protectionSystem")
 const scheduler = require("../systems/schedulerSystem")
 
-// ✅ معالج أمر المطور (بريفكس مخفي)
 const { DEV_PREFIXES, handleDeveloperCommand } = require("../commands/admin/developer")
-
-// ✅ NEW (Batch 2): معالج الـ aliases
 const commandAliases = require("../systems/commandAliases")
 
-// ══════════════════════════════════════════════════════════
-//  PROCESSED MESSAGES TRACKING
-// ══════════════════════════════════════════════════════════
+const { handleProtection } = require("./handlers/protectionHandler")
+const { handleAI } = require("./handlers/aiHandler")
+const { handleXP } = require("./handlers/xpHandler")
 
+// ══════════════════════════════════════════════════════════
+//  Deduplication
+// ══════════════════════════════════════════════════════════
 const processedMessages = new Map()
 const PROCESSED_TTL = 10000
-const CLEANUP_INTERVAL = 60 * 1000
 
 scheduler.register(
   "processed-messages-cleanup",
-  CLEANUP_INTERVAL,
+  60 * 1000,
   () => {
     const now = Date.now()
     for (const [id, timestamp] of processedMessages.entries()) {
@@ -45,86 +41,6 @@ scheduler.register(
   },
   false
 )
-
-// ══════════════════════════════════════════════════════════
-//  Level-up message helpers
-// ══════════════════════════════════════════════════════════
-
-function parseJsonField(raw) {
-  if (!raw) return null
-  if (typeof raw === "object") return raw
-  if (typeof raw === "string") {
-    try { return JSON.parse(raw) } catch { return null }
-  }
-  return null
-}
-
-function applyLevelUpVariables(text, message, level, oldLevel, xpAdded) {
-  if (!text || typeof text !== "string") return text
-  return text
-    .replace(/\{user\}/g, `<@${message.author.id}>`)
-    .replace(/\{username\}/g, message.author.username)
-    .replace(/\{server\}/g, message.guild.name)
-    .replace(/\{level\}/g, String(level))
-    .replace(/\{old_level\}/g, String(oldLevel))
-    .replace(/\{xp\}/g, String(xpAdded || 0))
-}
-
-async function sendLevelUpMessage(message, result) {
-  const settings = result.settings || {}
-  const cfg = parseJsonField(settings.level_up_message) || {}
-
-  // لو معطّل من الداش بشكل صريح → لا ترسل
-  if (cfg.enabled === false) return
-
-  // تحديد القناة المستهدفة
-  let targetChannel = message.channel
-  const channelId = cfg.channel || settings.levelup_channel_id
-  if (channelId) {
-    const ch = message.guild.channels.cache.get(channelId)
-    if (ch) targetChannel = ch
-  }
-
-  // قالب الرسالة
-  const template = (typeof cfg.template === "string" && cfg.template.trim())
-    ? cfg.template
-    : "🎉 {user} وصل للمستوى **{level}**!"
-
-  const content = applyLevelUpVariables(
-    template,
-    message,
-    result.level,
-    result.oldLevel,
-    result.xpAdded
-  )
-
-  // بناء الـ embed
-  const embed = new EmbedBuilder()
-    .setColor(0x22c55e)
-    .setDescription(content)
-    .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 128 }))
-    .setTimestamp()
-
-  // إضافة الأدوار الممنوحة (لو وجدت)
-  if (Array.isArray(result.grantedRoles) && result.grantedRoles.length > 0) {
-    const rolesText = result.grantedRoles
-      .map(r => `<@&${r.role_id}> (مستوى ${r.level})`)
-      .join("\n")
-    embed.addFields({
-      name: "🎁 رتبة جديدة",
-      value: rolesText.slice(0, 1024),
-      inline: false
-    })
-  }
-
-  await targetChannel.send({ embeds: [embed] }).catch(err => {
-    logger.error("LEVEL_UP_SEND_FAILED", { error: err.message })
-  })
-}
-
-// ══════════════════════════════════════════════════════════
-//  Event
-// ══════════════════════════════════════════════════════════
 
 module.exports = {
   name: "messageCreate",
@@ -137,10 +53,7 @@ module.exports = {
       if (processedMessages.has(message.id)) return
       processedMessages.set(message.id, Date.now())
 
-
-      // ══════════════════════════════════════════════════════════
-      //  🔒 معالج أمر المطور (بريفكس مخفي)
-      // ══════════════════════════════════════════════════════════
+      // 1) Dev command
       const trimmedContent = message.content?.trim() || ""
       const matchedDevPrefix = DEV_PREFIXES.find(p =>
         trimmedContent === p || trimmedContent.startsWith(p + " ")
@@ -150,13 +63,7 @@ module.exports = {
         return
       }
 
-      // ══════════════════════════════════════════════════════════
-      //  ✅ NEW (Batch 2): معالج الـ aliases
-      //  يفحص لو الرسالة تطابق أي alias مسجّل في الداشبورد
-      //  ويُنفّذ الأمر المرتبط — قبل XP/AI/anti-spam
-      //
-      //  لو ما هي alias → يرجع false ويكمل المعالجة الطبيعية
-      // ══════════════════════════════════════════════════════════
+      // 2) Alias resolver
       try {
         const handled = await commandAliases.handleMessage(message, client)
         if (handled) return
@@ -164,67 +71,21 @@ module.exports = {
         logger.error("ALIAS_HANDLER_ERROR", { error: err.message })
       }
 
-      // 🔥 ensure guild exists
+      // 3) Guild init
       try {
         await guildManager.getGuild(message.guild.id)
       } catch (err) {
         logger.error("GUILD_INIT_FAILED", { error: err.message })
       }
 
-      try {
-        await protectionSystem.checkSpam(message)
-      } catch (err) {
-        logger.error("ANTISPAM_CHECK_FAILED", { error: err.message })
-      }
+      // 4) Protection
+      await handleProtection(message)
 
-      // 🔥 AI observation (non-blocking)
-      try {
-        aiObservationSystem.observeMessage(message)
-      } catch (err) {
-        logger.error("AI_OBSERVATION_FAILED", { error: err.message })
-      }
+      // 5) AI
+      await handleAI(message)
 
-      // 🔥 social awareness
-      try {
-        await aiSocialAwarenessSystem.trackInteraction(message)
-      } catch (err) {
-        logger.error("AI_SOCIAL_AWARENESS_FAILED", { error: err.message })
-      }
-
-      // 🔥 AI auto reply
-      const aiEnabled = await aiSystem.ensureAIEnabled(message)
-      if (aiEnabled) {
-        try {
-          await aiAutoReplySystem(message)
-        } catch (err) {
-          logger.error("AI_REPLY_FAILED", { error: err.message })
-        }
-      }
-
-      // ══════════════════════════════════════════════════════════
-      //  🔥 XP system
-      // ══════════════════════════════════════════════════════════
-      const xpEnabled = await xpSystem.ensureXPEnabled(message)
-      if (!xpEnabled) return
-
-      // طبقة كولداون أولية (advisory) — تخفف الحمل قبل levelSystem
-      if (!xpCooldownSystem.canGainXP(message.author.id)) return
-
-      let result
-      try {
-        result = await levelSystem.addXP(message.author.id, message.guild.id, message)
-      } catch (err) {
-        logger.error("XP_ADD_FAILED", { error: err.message })
-        return
-      }
-
-      if (result?.leveledUp) {
-        try {
-          await sendLevelUpMessage(message, result)
-        } catch (err) {
-          logger.error("LEVEL_UP_MESSAGE_FAILED", { error: err.message })
-        }
-      }
+      // 6) XP
+      await handleXP(message)
 
     } catch (error) {
       logger.error("MESSAGE_EVENT_FATAL_ERROR", {
