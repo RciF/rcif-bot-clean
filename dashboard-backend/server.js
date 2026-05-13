@@ -72,13 +72,14 @@ if (!env.IS_PROD) {
   })
 }
 
-// ── Global rate limit ──
+// ── Global rate limit (يستثني SSE — اتصالات طويلة) ──
 app.use(
   rateLimit({
     windowMs: env.RATE_LIMIT_WINDOW_MS,
     max: env.RATE_LIMIT_MAX_REQUESTS,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.path.endsWith("/sse") || req.path === "/api/sse/stats",
     message: { error: "تجاوزت الحد المسموح من الطلبات", code: "RATE_LIMIT" },
   }),
 )
@@ -205,6 +206,7 @@ async function shutdown(signal) {
   console.log(`\n${signal} received — shutting down gracefully...`)
 
   try {
+    require("./services/sseService").shutdown()
     discordUtil.stop?.()
     guildPlanService.stop?.()
   } catch (e) {
