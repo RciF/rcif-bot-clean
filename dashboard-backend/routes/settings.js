@@ -41,6 +41,15 @@ function requirePlan(requiredPlan) {
   })
 }
 
+// تحويل لون من INT (من الفرونت) إلى hex string للحفظ في DB
+function normalizeColor(color) {
+  if (color === null || color === undefined) return null
+  if (typeof color === "number" && isFinite(color)) {
+    return "#" + color.toString(16).padStart(6, "0").toUpperCase()
+  }
+  return String(color)
+}
+
 async function getSettings(table, guildId, defaults = {}) {
   try {
     const r = await query(`SELECT * FROM ${table} WHERE guild_id = $1 LIMIT 1`, [guildId])
@@ -714,7 +723,7 @@ router.post(
         title,
         description,
         channel_id,
-        color,
+        normalizeColor(color),
         !!exclusive,
         JSON.stringify(buttons || []),
       ],
@@ -738,7 +747,7 @@ router.put(
       [
         title,
         description,
-        color,
+        normalizeColor(color),
         !!exclusive,
         JSON.stringify(buttons),
         req.params.panelId,
