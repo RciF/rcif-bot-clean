@@ -33,6 +33,7 @@ const sseRoutes = require("./routes/sse")
 // ── Services / Utils (with stoppable intervals) ──
 const guildPlanService = require("./services/guildPlan")
 const discordUtil = require("./utils/discord")
+const giveawayRoutes = require("./routes/giveaway")
 
 // ── Migrations ──
 const { runMigrations } = require("./scripts/migrate")
@@ -159,6 +160,7 @@ app.use("/api", subscriptionRoutes)
 app.use("/api/guild/:guildId", guildRoutes)
 app.use("/api/guild/:guildId", settingsRoutes)
 app.use("/api/guild/:guildId", autoRoleRoutes)
+app.use("/api/guild/:guildId", giveawayRoutes)
 // النظام القديم (legacy) — للصفحة الحالية
    app.use("/api/guild/:guildId", commandsRoutes)
    // النظام الجديد (modular) — للأوامر الجديدة (aliases, restrictions, defaults, leaderboard)

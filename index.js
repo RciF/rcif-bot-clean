@@ -125,6 +125,8 @@ function pushCommand(filePath, commands) {
     // ✅ المُجدوِل من الداش (scheduled_tasks)
     const scheduledTasksRunner = require("./systems/scheduledTasksRunner")
     scheduledTasksRunner.start(client)
+    const giveawaySystem = require("./systems/giveawaySystem")
+    giveawaySystem.startScheduler(client)
 
     // ✅ Auto-close scheduler للتذاكر الخاملة
     const ticketSystem = require("./systems/ticketSystem")

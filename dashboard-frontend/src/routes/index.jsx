@@ -30,6 +30,7 @@ import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 import SettingsPage from '@/pages/SettingsPage';
 import AutoRolePage from '@/pages/AutoRolePage';
+import GiveawayPage from '@/pages/GiveawayPage';
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
@@ -77,6 +78,7 @@ const router = createBrowserRouter([
           { path: 'reaction-roles', element: <ReactionRolesPage /> },
           { path: 'embed', element: <EmbedBuilderPage /> },
           { path: 'settings', element: <SettingsPage /> },
+          { path: 'giveaway', element: <GiveawayPage /> },
           // ✅ NEW: Owner Admin (محمي بـ Owner guard داخل الصفحة نفسها)
           { path: 'owner-admin', element: <OwnerAdminPage /> },
         ],

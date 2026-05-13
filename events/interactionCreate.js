@@ -9,6 +9,7 @@ const { eventCancel, eventStart, eventEnd } = require("../commands/events/eventM
 const { eventAttendees, eventRemind } = require("../commands/events/eventAttend")
 const { handleVerifyPanelButton }     = require("../commands/admin/verify-panel")
 const helpInteractionHandler = require("../systems/helpInteractionHandler")
+const { handleGiveawayButton } = require("./handlers/giveawayButtonHandler")
 
 // ══════════════════════════════════════
 //  DASHBOARD SETTINGS CACHE
@@ -188,7 +189,9 @@ module.exports = {
         const handled = await helpInteractionHandler.handle(interaction)
         if (handled) return
       }
-
+      if (interaction.customId?.startsWith("giveaway_join_")) {
+      return handleGiveawayButton(interaction)
+      }
       // ✅ Verify Panel Button
       if (customId.startsWith("verify_panel:")) {
         return await handleVerifyPanelButton(interaction)

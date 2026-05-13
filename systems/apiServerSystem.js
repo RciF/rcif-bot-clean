@@ -23,6 +23,7 @@ const subscriptionRoleSystem = require("./subscriptionRoleSystem")
 
 // ✅ NEW (Batch 2): معالج aliases
 const commandAliases = require("./commandAliases")
+const giveawayInternalRoutes = require("./giveawayRoutes")
 
 
 function startApiServer(client) {
@@ -241,7 +242,10 @@ function startApiServer(client) {
       return res.status(500).json({ error: err.message })
     }
   })
-
+// ─── Giveaway internal routes ───
+  app.locals.discordClient = client
+  app.use("/api/internal/giveaway", giveawayInternalRoutes)
+  
   app.listen(PORT, "0.0.0.0", () => {
     logger.success(`API_SERVER_RUNNING ${PORT}`)
     console.log(`🚀 Server listening on 0.0.0.0:${PORT}`)
