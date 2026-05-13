@@ -14,7 +14,7 @@
 
 const express = require("express")
 const giveawaySystem = require("./giveawaySystem")
-const logger = require("../loggerSystem")
+const logger = require("./loggerSystem")
 
 const router = express.Router()
 
