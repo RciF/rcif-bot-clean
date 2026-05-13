@@ -252,7 +252,7 @@ async function runMigrations() {
   await addColumn("button_role_panels", "title", "TEXT")
   await addColumn("button_role_panels", "description", "TEXT")
   await addColumn("button_role_panels", "channel_id", "TEXT")
-  await addColumn("button_role_panels", "color", "INT DEFAULT 10181046")
+  await addColumn("button_role_panels", "color", "TEXT DEFAULT 'أزرق'")
   await addColumn("button_role_panels", "exclusive", "BOOLEAN DEFAULT false")
   await addColumn("button_role_panels", "buttons", "JSONB DEFAULT '[]'::jsonb")
   await addColumn("button_role_panels", "updated_at", "TIMESTAMP DEFAULT NOW()")
