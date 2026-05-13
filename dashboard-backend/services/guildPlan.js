@@ -63,26 +63,19 @@ function invalidateGuildPlan(guildId) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  تنظيف cache دوري
-//  ✅ FIX: حفظ id + .unref() عشان graceful shutdown
+//  تنظيف cache دوري عبر الـ scheduler
 // ═══════════════════════════════════════════════════════════
 
-const cleanupInterval = setInterval(() => {
+const scheduler = require("../utils/scheduler")
+scheduler.register("guild-plan-cache-cleanup", 60 * 1000, () => {
   const now = Date.now()
   for (const [k, v] of cache.entries()) {
     if (now > v.expiresAt) cache.delete(k)
   }
-}, 60 * 1000)
+})
 
-// ✅ unref حتى لا يمنع process exit
-cleanupInterval.unref?.()
-
-/**
- * إيقاف cache cleanup interval
- * يستخدم في graceful shutdown
- */
 function stopCacheCleanup() {
-  clearInterval(cleanupInterval)
+  // managed by scheduler.stopAll()
 }
 
 module.exports = {

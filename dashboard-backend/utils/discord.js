@@ -35,26 +35,19 @@ function setCached(key, data, ttl) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  تنظيف cache دوري
-//  ✅ FIX: حفظ id + .unref() عشان graceful shutdown
+//  تنظيف cache دوري عبر الـ scheduler
 // ═══════════════════════════════════════════════════════════
 
-const cleanupInterval = setInterval(() => {
+const scheduler = require("./scheduler")
+scheduler.register("discord-cache-cleanup", 5 * 60 * 1000, () => {
   const now = Date.now()
   for (const [key, entry] of cache.entries()) {
     if (now > entry.expiresAt) cache.delete(key)
   }
-}, 5 * 60 * 1000) // كل 5 دقائق
+})
 
-// ✅ unref حتى لا يمنع process exit
-cleanupInterval.unref?.()
-
-/**
- * إيقاف cache cleanup interval
- * يستخدم في graceful shutdown
- */
 function stopCacheCleanup() {
-  clearInterval(cleanupInterval)
+  // managed by scheduler.stopAll()
 }
 
 // ════════════════════════════════════════════════════════════
