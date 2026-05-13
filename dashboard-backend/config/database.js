@@ -83,6 +83,8 @@ async function checkConnection() {
  * إنشاء الجداول الأساسية (لو ما كانت موجودة)
  */
 async function initSchema() {
+  console.log("ℹ️  initSchema skipped — schema is managed by the bot")
+  return
   console.log("🔄 Initializing database schema...")
 
   // ── الجداول الموجودة (نتركها كما هي للتوافق) ──
