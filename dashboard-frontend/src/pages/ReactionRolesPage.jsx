@@ -67,7 +67,7 @@ const NEW_PANEL_DEFAULT = {
   title: 'لوحة جديدة',
   description: 'اضغط على الأزرار للحصول على الرتب',
   channel_id: null,
-  color: 0x9b59b6,
+  color: '#9B59B6',
   exclusive: false,
   buttons: [],
 };
