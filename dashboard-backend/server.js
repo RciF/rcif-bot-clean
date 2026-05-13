@@ -28,7 +28,7 @@ const commandsRoutes = require("./routes/commands")
 const commandsModularRoutes = require("./routes/commands/index")
 const statsRoutes = require("./routes/stats")
 const aiRoutes = require("./routes/ai")
-
+const autoRoleRoutes = require("./routes/autoRole")
 // ── Services / Utils (with stoppable intervals) ──
 const guildPlanService = require("./services/guildPlan")
 const discordUtil = require("./utils/discord")
@@ -155,6 +155,7 @@ app.use("/api", subscriptionRoutes)
 // ── Guild routes (resources + settings + commands + stats) ──
 app.use("/api/guild/:guildId", guildRoutes)
 app.use("/api/guild/:guildId", settingsRoutes)
+app.use("/api/guild/:guildId", autoRoleRoutes)
 // النظام القديم (legacy) — للصفحة الحالية
    app.use("/api/guild/:guildId", commandsRoutes)
    // النظام الجديد (modular) — للأوامر الجديدة (aliases, restrictions, defaults, leaderboard)

@@ -17,6 +17,7 @@ const databaseSystem = require("../../systems/databaseSystem")
 const protectionSystem = require("../../systems/protectionSystem")
 const statsSystem = require("../../systems/statsSystem")
 const logger = require("../../systems/loggerSystem")
+const autoRoleSystem = require("../../systems/autoRoleSystem")
 
 // ──────────────────────────────────────────────────────────────────
 //  Variable replacement (global, supports all variables)
@@ -183,6 +184,13 @@ module.exports = {
       } catch (err) {
         logger.error("ANTIRAID_FAILED", { error: err.message })
       }
+
+      // 🎯 Auto-Role                                  
+      try {                                            
+        await autoRoleSystem.applyToMember(member)    
+      } catch (err) {                                  
+        logger.error("AUTOROLE_EVENT_FAILED", { error: err.message })  
+      }                                               
 
       // 📊 Stats snapshot
       try {

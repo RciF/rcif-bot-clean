@@ -35,6 +35,7 @@ const BASE_NAV_SECTIONS = [
       { to: '/dashboard/logs',       label: 'السجلات', icon: ScrollText },
       { to: '/dashboard/moderation', label: 'الإشراف', icon: Gavel },
       { to: '/dashboard/members',    label: 'الأعضاء', icon: Users },
+      { to: '/dashboard/auto-role', label: 'الرتبة التلقائية', icon: UserPlus },
     ],
   },
   {

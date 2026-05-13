@@ -29,7 +29,7 @@ import OwnerAdminPage from '@/pages/OwnerAdminPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 import SettingsPage from '@/pages/SettingsPage';
-
+import AutoRolePage from '@/pages/AutoRolePage';
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
@@ -71,6 +71,7 @@ const router = createBrowserRouter([
           { path: 'economy', element: <EconomyPage /> },
           { path: 'tickets', element: <TicketsPage /> },
           { path: 'welcome', element: <WelcomePage /> },
+          { path: 'auto-role', element: <AutoRolePage /> },
           { path: 'logs', element: <LogsPage /> },
           { path: 'moderation', element: <ModerationPage /> },
           { path: 'reaction-roles', element: <ReactionRolesPage /> },

@@ -92,6 +92,10 @@ export const settingsApi = {
   saveTickets: (g, data) => apiClient.put(`/api/guild/${g}/tickets`, data),
   deployPanel: (g) => apiClient.post(`/api/guild/${g}/tickets/panel/deploy`),
   getActiveTickets: (g) => apiClient.get(`/api/guild/${g}/tickets/active`),
+ 
+  // Auto-Role
+  getAutoRole: (g) => apiClient.get(`/api/guild/${g}/auto-role`),
+  saveAutoRole: (g, data) => apiClient.put(`/api/guild/${g}/auto-role`, data),
 
   // Reaction Roles
   getRolePanels: (g) => apiClient.get(`/api/guild/${g}/role-panels`),
