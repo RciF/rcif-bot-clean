@@ -22,6 +22,7 @@ const logger = require("./loggerSystem")
 const devModeSystem = require("./devModeSystem")
 const planGateSystem = require("./planGateSystem")
 const scheduler = require("./schedulerSystem")
+const cacheSystem = require("../utils/cacheSystem")
 
 const OWNER_ID = "529320108032786433"
 
@@ -41,9 +42,9 @@ const SPAM_WINDOW = 4000
 const SPAM_LIMIT = 4
 
 // ══════════════════════════════════════
-//  AI SETTINGS CACHE — 60s TTL
+//  AI SETTINGS CACHE — 60s TTL (موحّد عبر cacheSystem)
 // ══════════════════════════════════════
-const settingsCache = new Map()
+const aiSettingsCache = cacheSystem.ns("ai-settings")
 const SETTINGS_TTL = 60 * 1000
 
 scheduler.register(
@@ -57,10 +58,7 @@ scheduler.register(
     for (const [userId, data] of userSpam.entries()) {
       if (now - data.last > SPAM_WINDOW) userSpam.delete(userId)
     }
-
-    for (const [guildId, entry] of settingsCache.entries()) {
-      if (now > entry.expiresAt) settingsCache.delete(guildId)
-    }
+    // settings cache يُنظف تلقائياً عبر cacheSystem
   },
   false
 )
@@ -120,15 +118,14 @@ function containsBlockedWord(content, blockedWords) {
 }
 
 // ══════════════════════════════════════
-//  Settings loader (مع cache)
+//  Settings loader (مع cache موحّد)
 // ══════════════════════════════════════
 
 async function getAISettings(guildId) {
   if (!guildId) return null
 
-  const now = Date.now()
-  const cached = settingsCache.get(guildId)
-  if (cached && now < cached.expiresAt) return cached.data
+  const cached = aiSettingsCache.get(guildId)
+  if (cached !== null) return cached
 
   let row = null
   try {
@@ -154,7 +151,7 @@ async function getAISettings(guildId) {
     creative_model_enabled: row.creative_model_enabled === true
   } : null
 
-  settingsCache.set(guildId, { data, expiresAt: now + SETTINGS_TTL })
+  aiSettingsCache.set(guildId, data, SETTINGS_TTL)
   return data
 }
 
@@ -381,6 +378,6 @@ module.exports = async (message) => {
 
 // invalidate cache (يُستخدم لو الداش غيّرت الإعدادات)
 module.exports.invalidateCache = (guildId) => {
-  if (guildId) settingsCache.delete(guildId)
-  else settingsCache.clear()
+  if (guildId) aiSettingsCache.del(guildId)
+  else aiSettingsCache.clear()
 }
