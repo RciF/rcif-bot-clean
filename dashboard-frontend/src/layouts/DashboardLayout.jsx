@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Settings, Bot, Shield, TrendingUp, Coins,
   Ticket, Bell, LogOut, Menu, X, Moon, Sun, PartyPopper, ScrollText,
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
 import { useAuthStore } from '@/store/authStore';
 import { useGuildStore } from '@/store/guildStore';
+import { PageTransition } from '@/components/shared/PageTransition';
 import { isOwner as checkIsOwner } from '@/config/env';
 import { toast } from 'sonner';
 
@@ -279,7 +280,9 @@ export default function DashboardLayout() {
         </header>
 
         <main className="flex-1 p-6 overflow-auto">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
     </div>
