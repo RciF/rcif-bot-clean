@@ -2,6 +2,8 @@ const memoryRepository = require("../repositories/memoryRepository")
 const databaseSystem = require("../systems/databaseSystem")
 const logger = require("../systems/loggerSystem")
 const scheduler = require("../systems/schedulerSystem")
+const cacheSystem = require("./cacheSystem")
+const conversationCache = cacheSystem.ns("conversations")
 
 // ══════════════════════════════════════
 //  CONFIG
@@ -12,34 +14,23 @@ const MAX_CACHE_SIZE = 500
 const CLEANUP_DAYS = 7
 
 // ══════════════════════════════════════
-//  IN-MEMORY CACHE (طبقة سريعة فوق DB)
+//  CACHE HELPERS (موحّد عبر cacheSystem)
 // ══════════════════════════════════════
-const conversationCache = new Map()
 
 function buildKey(userId, guildId, channelId) {
   return `${userId}:${guildId || "dm"}:${channelId || "dm"}`
 }
 
 function getCached(key) {
-  const cached = conversationCache.get(key)
-  if (!cached) return null
-  if (Date.now() - cached.time > CACHE_TTL) {
-    conversationCache.delete(key)
-    return null
-  }
-  return cached.data
+  return conversationCache.get(key)
 }
 
 function setCached(key, data) {
-  if (conversationCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = conversationCache.keys().next().value
-    conversationCache.delete(firstKey)
-  }
-  conversationCache.set(key, { data, time: Date.now() })
+  conversationCache.set(key, data, CACHE_TTL)
 }
 
 function invalidateCache(key) {
-  conversationCache.delete(key)
+  conversationCache.del(key)
 }
 
 // ══════════════════════════════════════
@@ -134,7 +125,7 @@ async function clearMemory(userId, guildId = null, channelId = null) {
       // امسح كل كاش المستخدم
       for (const key of conversationCache.keys()) {
         if (key.startsWith(`${userId}:`)) {
-          conversationCache.delete(key)
+          conversationCache.del(key)
         }
       }
     }
