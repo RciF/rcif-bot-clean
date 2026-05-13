@@ -16,7 +16,6 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/Dialog';
@@ -488,13 +487,14 @@ function CreateGiveawayModal({ guildId, onClose, onCreated }) {
           {/* Description */}
           <div>
             <label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value.slice(0, 1000))}
-              placeholder="تفاصيل إضافية..."
-              rows={2}
-              maxLength={1000}
-            />
+            <textarea
+  value={description}
+  onChange={(e) => setDescription(e.target.value.slice(0, 1000))}
+  placeholder="تفاصيل إضافية..."
+  rows={2}
+  maxLength={1000}
+  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:border-primary/50"
+/>
           </div>
 
           {/* Channel */}
