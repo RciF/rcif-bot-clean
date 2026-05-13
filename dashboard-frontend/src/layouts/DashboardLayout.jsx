@@ -5,7 +5,7 @@ import {
   Ticket, Bell, LogOut, Menu, X, Moon, Sun, PartyPopper, ScrollText,
   Gavel, ToggleRight, Sparkles, BarChart3, Users, History, Layers,
   CreditCard, Terminal, CalendarDays, Clock, ChevronDown, Crown,
-  Search,
+  Search, UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
