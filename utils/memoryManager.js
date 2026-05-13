@@ -1,6 +1,7 @@
 const memoryRepository = require("../repositories/memoryRepository")
 const databaseSystem = require("../systems/databaseSystem")
 const logger = require("../systems/loggerSystem")
+const scheduler = require("../systems/schedulerSystem")
 
 // ══════════════════════════════════════
 //  CONFIG
@@ -161,8 +162,13 @@ async function cleanupOldConversations() {
   }
 }
 
-// تنظيف تلقائي كل 6 ساعات
-setInterval(cleanupOldConversations, 6 * 60 * 60 * 1000)
+// تنظيف تلقائي كل 6 ساعات — مسجّل في scheduler عشان graceful shutdown
+scheduler.register(
+  "memory-cleanup",
+  6 * 60 * 60 * 1000,
+  cleanupOldConversations,
+  false
+)
 
 // ══════════════════════════════════════
 //  LONG-TERM MEMORY (موجود — ما نلمسه)
