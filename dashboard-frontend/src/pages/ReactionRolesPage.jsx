@@ -514,12 +514,12 @@ function PanelDesigner({ panel, saving, onSave, onClose }) {
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
-                    value={intToHexColor(draft.color || 0x9b59b6)}
+                    value={intToHexColor(draft.color || '#9B59B6')}
                     onChange={(e) => update('color', hexToIntColor(e.target.value))}
                     className="w-10 h-9 rounded-lg border border-border cursor-pointer"
                   />
                   <Input
-                    value={intToHexColor(draft.color || 0x9b59b6)}
+                    value={intToHexColor(draft.color || '#9B59B6')}
                     onChange={(e) => update('color', hexToIntColor(e.target.value))}
                     className="flex-1 num"
                   />
@@ -658,7 +658,7 @@ function PanelDesigner({ panel, saving, onSave, onClose }) {
                   <div
                     className="rounded border-s-4 bg-[#2f3136] p-3"
                     style={{
-                      borderInlineStartColor: intToHexColor(draft.color || 0x9b59b6),
+                      borderInlineStartColor: intToHexColor(draft.color || '#9B59B6'),
                     }}
                   >
                     <div className="font-bold text-base mb-1">{draft.title}</div>
