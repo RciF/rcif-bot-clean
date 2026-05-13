@@ -1,4 +1,6 @@
 const logger = require("./loggerSystem")
+const cacheSystem = require("../utils/cacheSystem")
+const awarenessCache = cacheSystem.ns("ai-awareness")
 
 // ═══════════════════════════════════════════════════════
 //  أدوات وعي السيرفر — Server Awareness Tools
@@ -17,39 +19,21 @@ class AIServerAwarenessSystem {
     // حدود حجم السيرفر
     this.largeServerThreshold = 500
 
-    // كاش الإحصائيات
-    this.statsCache = new Map()
+    // TTLs للكاش (موحّد عبر cacheSystem.ns("ai-awareness"))
     this.statsCacheTTL = 60000 // 60 ثانية
-
-    // كاش البحث
-    this.searchCache = new Map()
     this.searchCacheTTL = 30000 // 30 ثانية
-    this.maxCacheSize = 100
   }
 
   // ═══════════════════════════════════════════════════════
   //  CACHE HELPERS
   // ═══════════════════════════════════════════════════════
 
-  getCached(cache, key) {
-    const entry = cache.get(key)
-    if (!entry) return null
-    if (Date.now() > entry.expires) {
-      cache.delete(key)
-      return null
-    }
-    return entry.data
+  getCached(_unused, key) {
+    return awarenessCache.get(key)
   }
 
-  setCached(cache, key, data, ttl) {
-    if (cache.size >= this.maxCacheSize) {
-      const firstKey = cache.keys().next().value
-      cache.delete(firstKey)
-    }
-    cache.set(key, {
-      data,
-      expires: Date.now() + ttl
-    })
+  setCached(_unused, key, data, ttl) {
+    awarenessCache.set(key, data, ttl)
   }
 
   isLargeServer(guild) {
