@@ -1,32 +1,22 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Command Aliases — Resolver
+ *  Command Aliases — Resolver (Batch 5 Update)
  *
  *  يحول نص رسالة إلى تطابق مع أمر:
- *  - يفحص النص كاملاً (عشان aliases مع spaces ما تشتغل)
- *  - يفحص أول كلمة من النص (للأوامر اللي بعدها arguments)
- *  - يرجع { commandName, originalAlias, args } لو لقى تطابق
  *
- *  ⚠️ في الباتش 2: ما زلنا ندعم الأوامر بدون arguments فقط.
- *  args يكون مصفوفة فاضية. الباتش 4-5 يدعم الـ arguments الكاملة.
+ *  Strategy:
+ *  1. فحص النص كاملاً (للـ aliases بدون args مثل "!p")
+ *  2. فحص أول كلمة (للـ aliases مع args مثل "#حظر @user 7d")
+ *
+ *  Returns:
+ *    {
+ *      commandName: "حظر",
+ *      matchedAlias: "#حظر",
+ *      rawArgs: "@user 7d مزعج"    // باقي النص بعد الـ alias
+ *    }
+ *    أو null
  * ═══════════════════════════════════════════════════════════
  */
-
-// ════════════════════════════════════════════════════════════
-//  resolve
-//
-//  Inputs:
-//    messageText: نص الرسالة كاملاً (string)
-//    config: { aliases: { "alias": "commandName" }, ... }
-//
-//  Returns:
-//    {
-//      commandName: "yawmi",
-//      matchedAlias: "d",
-//      args: []  // حالياً فاضية، الباتش 5 راح يملأها
-//    }
-//    أو null لو ما فيه تطابق
-// ════════════════════════════════════════════════════════════
 
 function resolve(messageText, config) {
   if (!messageText || typeof messageText !== "string") return null
@@ -35,26 +25,22 @@ function resolve(messageText, config) {
   const aliases = config.aliases
   if (Object.keys(aliases).length === 0) return null
 
-  // ─── Trim + normalize ───
   const trimmed = messageText.trim()
   if (!trimmed) return null
 
-  // ─── 1) فحص النص كاملاً (مطابقة دقيقة) ───
-  // هذا يدعم aliases زي "p" أو "!p" أو "$p" — نص الرسالة كاملاً يساوي الـ alias
+  // ─── 1) فحص النص كاملاً (alias فقط بدون args) ───
   if (aliases[trimmed]) {
     return {
       commandName: aliases[trimmed],
       matchedAlias: trimmed,
-      args: [],
+      rawArgs: "",
     }
   }
 
-  // ─── 2) فحص أول كلمة (للأوامر مع arguments) ───
-  // مثلاً "!حظر @user reason" → الـ alias هو "!حظر"
-  // نقسم النص بأول مسافة فقط
+  // ─── 2) فحص أول كلمة (alias + args) ───
   const firstSpaceIdx = trimmed.search(/\s/)
   if (firstSpaceIdx === -1) {
-    // ما فيه مسافة، نفحص النص كاملاً مرة واحدة بس
+    // ما فيه مسافة، النص كاملاً مو alias
     return null
   }
 
@@ -65,10 +51,7 @@ function resolve(messageText, config) {
     return {
       commandName: aliases[firstToken],
       matchedAlias: firstToken,
-      // args = نص باقي الرسالة كـ string
-      // (الباتش 5 راح يـ parse هذا حسب نوع الأمر)
-      args: restOfText ? [restOfText] : [],
-      rawArgs: restOfText, // الـ string الكامل بدون split
+      rawArgs: restOfText,
     }
   }
 
@@ -77,11 +60,10 @@ function resolve(messageText, config) {
 
 // ════════════════════════════════════════════════════════════
 //  isCommandEnabled
-//  يفحص إن الأمر مو معطّل من قبل المالك
 // ════════════════════════════════════════════════════════════
 
 function isCommandEnabled(commandName, config) {
-  if (!config || !config.legacy) return true // افتراضي مفعّل
+  if (!config || !config.legacy) return true
 
   const legacy = config.legacy[commandName]
   if (!legacy) return true

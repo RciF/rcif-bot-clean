@@ -1,19 +1,11 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  useCommandsData — Hook موحّد لكل بيانات وعمليات الأوامر
+ *  useCommandsData — Hook موحّد (Batch 8 Update)
  *
- *  يجلب:
- *  - قائمة الأوامر كاملة (مع aliases, restrictions, defaults, custom_name)
- *  - Leaderboard أكثر الأوامر استخداماً
- *
- *  يوفر mutations:
- *  - toggleEnabled(commandName, enabled)
- *  - renameCommand(commandName, newName)
- *  - resetAll()
- *  - addAlias(commandName, alias)
- *  - removeAlias(commandName, alias)
- *
- *  كل المutations تستخدم optimistic updates ثم refresh.
+ *  أُضيفت mutations جديدة:
+ *  - saveRestrictions(commandName, restrictions)
+ *  - saveDefaults(commandName, defaults)
+ *  - saveAdvanced(commandName, { restrictions, defaults }) — combined
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -27,15 +19,10 @@ export function useCommandsData(guildId) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // ────────────────────────────────────────────
-  //  Load main commands list
-  // ────────────────────────────────────────────
   const loadData = useCallback(async (silent = false) => {
     if (!guildId) return;
-
     if (!silent) setIsLoading(true);
     setError(null);
-
     try {
       const result = await commandsApi.list(guildId);
       const payload = result?.data ?? result;
@@ -49,12 +36,8 @@ export function useCommandsData(guildId) {
     }
   }, [guildId]);
 
-  // ────────────────────────────────────────────
-  //  Load leaderboard (lighter, secondary)
-  // ────────────────────────────────────────────
   const loadLeaderboard = useCallback(async () => {
     if (!guildId) return;
-
     try {
       const result = await commandsApi.leaderboard(guildId, 10);
       const payload = result?.data ?? result;
@@ -65,9 +48,6 @@ export function useCommandsData(guildId) {
     }
   }, [guildId]);
 
-  // ────────────────────────────────────────────
-  //  Initial load
-  // ────────────────────────────────────────────
   useEffect(() => {
     if (guildId) {
       loadData();
@@ -75,26 +55,15 @@ export function useCommandsData(guildId) {
     }
   }, [guildId, loadData, loadLeaderboard]);
 
-  // ────────────────────────────────────────────
-  //  Refresh (silent, after mutations)
-  // ────────────────────────────────────────────
   const refresh = useCallback(async () => {
-    await Promise.all([
-      loadData(true),
-      loadLeaderboard(),
-    ]);
+    await Promise.all([loadData(true), loadLeaderboard()]);
   }, [loadData, loadLeaderboard]);
 
   // ────────────────────────────────────────────
-  //  Mutations — Optimistic updates
+  //  Toggle enabled
   // ────────────────────────────────────────────
-
-  /**
-   * تفعيل/تعطيل أمر
-   */
   const toggleEnabled = useCallback(
     async (commandName, newEnabled) => {
-      // ─── Optimistic update ───
       setData((prev) => {
         if (!prev) return prev;
         return {
@@ -109,7 +78,6 @@ export function useCommandsData(guildId) {
         await commandsApi.update(guildId, commandName, { enabled: newEnabled });
         toast.success(newEnabled ? 'تم تفعيل الأمر' : 'تم تعطيل الأمر');
       } catch (err) {
-        // ─── Revert on failure ───
         setData((prev) => {
           if (!prev) return prev;
           return {
@@ -126,19 +94,16 @@ export function useCommandsData(guildId) {
     [guildId],
   );
 
-  /**
-   * تغيير اسم الأمر (custom_name)
-   * - newName === '' → استعادة الاسم الأصلي
-   */
+  // ────────────────────────────────────────────
+  //  Rename
+  // ────────────────────────────────────────────
   const renameCommand = useCallback(
     async (commandName, newName) => {
       const finalName = newName.trim();
-
       try {
         await commandsApi.update(guildId, commandName, {
           custom_name: finalName === '' ? '' : finalName,
         });
-
         setData((prev) => {
           if (!prev) return prev;
           return {
@@ -150,10 +115,7 @@ export function useCommandsData(guildId) {
             ),
           };
         });
-
-        toast.success(
-          finalName ? 'تم تغيير اسم الأمر' : 'تم استعادة الاسم الأصلي',
-        );
+        toast.success(finalName ? 'تم تغيير اسم الأمر' : 'تم استعادة الاسم الأصلي');
       } catch (err) {
         if (err?.code === 'PLAN_REQUIRED') {
           toast.error('تحتاج خطة Silver أو أعلى');
@@ -166,13 +128,12 @@ export function useCommandsData(guildId) {
     [guildId],
   );
 
-  /**
-   * إعادة كل الأوامر للافتراضي
-   */
+  // ────────────────────────────────────────────
+  //  Reset all
+  // ────────────────────────────────────────────
   const resetAll = useCallback(async () => {
     try {
       await commandsApi.reset(guildId);
-
       setData((prev) => {
         if (!prev) return prev;
         return {
@@ -185,7 +146,6 @@ export function useCommandsData(guildId) {
           custom_settings: {},
         };
       });
-
       toast.success('تم إعادة كل الأوامر للافتراضي');
     } catch (err) {
       toast.error(err?.message || 'فشل الإعادة');
@@ -193,14 +153,13 @@ export function useCommandsData(guildId) {
     }
   }, [guildId]);
 
-  /**
-   * إضافة alias
-   */
+  // ────────────────────────────────────────────
+  //  Aliases
+  // ────────────────────────────────────────────
   const addAlias = useCallback(
     async (commandName, alias) => {
       try {
         await commandsApi.addAlias(guildId, commandName, alias);
-
         setData((prev) => {
           if (!prev) return prev;
           return {
@@ -212,11 +171,9 @@ export function useCommandsData(guildId) {
             ),
           };
         });
-
         toast.success(`أُضيف الاختصار: ${alias}`);
       } catch (err) {
-        const message =
-          err?.response?.data?.error || err?.message || 'فشلت الإضافة';
+        const message = err?.response?.data?.error || err?.message || 'فشلت الإضافة';
         toast.error(message);
         throw err;
       }
@@ -224,33 +181,56 @@ export function useCommandsData(guildId) {
     [guildId],
   );
 
-  /**
-   * حذف alias
-   */
   const removeAlias = useCallback(
     async (commandName, alias) => {
       try {
         await commandsApi.removeAlias(guildId, commandName, alias);
-
         setData((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
             commands: prev.commands.map((c) =>
               c.name === commandName
-                ? {
-                    ...c,
-                    aliases: (c.aliases || []).filter((a) => a !== alias),
-                  }
+                ? { ...c, aliases: (c.aliases || []).filter((a) => a !== alias) }
                 : c,
             ),
           };
         });
-
         toast.success(`حُذف الاختصار: ${alias}`);
       } catch (err) {
-        const message =
-          err?.response?.data?.error || err?.message || 'فشل الحذف';
+        const message = err?.response?.data?.error || err?.message || 'فشل الحذف';
+        toast.error(message);
+        throw err;
+      }
+    },
+    [guildId],
+  );
+
+  // ────────────────────────────────────────────
+  //  ✅ NEW (Batch 8): saveAdvanced
+  //  يحفظ restrictions + defaults في طلبتين متوازيتين
+  // ────────────────────────────────────────────
+  const saveAdvanced = useCallback(
+    async (commandName, { restrictions, defaults }) => {
+      try {
+        await Promise.all([
+          commandsApi.saveRestrictions(guildId, commandName, restrictions),
+          commandsApi.saveDefaults(guildId, commandName, defaults),
+        ]);
+
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            commands: prev.commands.map((c) =>
+              c.name === commandName ? { ...c, restrictions, defaults } : c,
+            ),
+          };
+        });
+
+        toast.success('تم حفظ الإعدادات المتقدمة');
+      } catch (err) {
+        const message = err?.response?.data?.error || err?.message || 'فشل الحفظ';
         toast.error(message);
         throw err;
       }
@@ -259,23 +239,21 @@ export function useCommandsData(guildId) {
   );
 
   return {
-    // Data
     commands: data?.commands ?? [],
     categories: data?.categories ?? {},
     guildPlan: data?.guild_plan ?? 'free',
     leaderboard: leaderboard?.leaderboard ?? [],
     totalCommandsUsed: leaderboard?.total_commands_used ?? 0,
 
-    // States
     isLoading,
     error,
 
-    // Actions
     refresh,
     toggleEnabled,
     renameCommand,
     resetAll,
     addAlias,
     removeAlias,
+    saveAdvanced,
   };
 }

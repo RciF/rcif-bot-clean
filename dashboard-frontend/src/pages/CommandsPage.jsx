@@ -1,24 +1,23 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  CommandsPage — الصفحة الرئيسية (Batch 3 Final)
+ *  CommandsPage — الصفحة الرئيسية (Batch 8 Final)
  *
- *  المعمارية:
+ *  Layout:
  *  ┌──────────────────────────────────────────┐
  *  │ Header + Stats + Reset Button            │
  *  ├──────────┬─────────────┬─────────────────┤
  *  │ Sidebar  │ Commands    │ Leaderboard     │
  *  │ (filters)│ List        │ (top 10)        │
- *  │          │             │                 │
  *  └──────────┴─────────────┴─────────────────┘
  *
  *  المميزات:
- *  - تفعيل/تعطيل (toggle)
- *  - تعديل الاسم (custom_name) مع plan gate
- *  - إعادة كل الأوامر للافتراضي
+ *  - تفعيل/تعطيل
+ *  - تعديل الاسم (plan gate)
+ *  - إعادة الكل
  *  - aliases (إضافة/حذف)
- *  - بحث متقدم
- *  - فلتر فئة + tier + quick filters
+ *  - بحث + tier filter + quick filters
  *  - leaderboard
+ *  - ✅ NEW: Advanced Editor (restrictions + defaults)
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -34,11 +33,11 @@ import { CommandsSidebar } from '@/components/commands/CommandsSidebar';
 import { CommandsList } from '@/components/commands/CommandsList';
 import { CommandsLeaderboard } from '@/components/commands/CommandsLeaderboard';
 import { RenameCommandDialog } from '@/components/commands/RenameCommandDialog';
+import { AdvancedEditor } from '@/components/commands/AdvancedEditor';
 
 export default function CommandsPage() {
   const { selectedGuildId } = useGuildStore();
 
-  // ─── Data + mutations ───
   const {
     commands,
     categories,
@@ -51,11 +50,14 @@ export default function CommandsPage() {
     resetAll,
     addAlias,
     removeAlias,
+    saveAdvanced,
   } = useCommandsData(selectedGuildId);
 
-  // ─── Plan gate for renaming ───
+  // ─── Plan gate for renaming + advanced edit ───
   const renamePlanGate = usePlanGate('commands.rename', PLAN_TIERS.SILVER);
+  const advancedPlanGate = usePlanGate('commands.advanced', PLAN_TIERS.GOLD);
   const canRename = !renamePlanGate.isLocked;
+  const canAdvancedEdit = !advancedPlanGate.isLocked;
 
   // ─── UI state ───
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,8 +65,9 @@ export default function CommandsPage() {
   const [quickFilter, setQuickFilter] = useState(null);
   const [tierFilter, setTierFilter] = useState(null);
   const [renameTarget, setRenameTarget] = useState(null);
+  const [advancedTarget, setAdvancedTarget] = useState(null);
 
-  // ─── Loading state ───
+  // ─── Loading ───
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -90,16 +93,13 @@ export default function CommandsPage() {
   return (
     <>
       <div className="space-y-6">
-        {/* Header + Stats + Reset */}
         <CommandsHeader
           commands={commands}
           totalCommandsUsed={totalCommandsUsed}
           onResetAll={resetAll}
         />
 
-        {/* Main layout: 3 columns on desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_300px] gap-4 items-start">
-          {/* ─── Sidebar ─── */}
           <div className="order-2 lg:order-1">
             <CommandsSidebar
               categories={categories}
@@ -115,7 +115,6 @@ export default function CommandsPage() {
             />
           </div>
 
-          {/* ─── List ─── */}
           <div className="order-1 lg:order-2 min-w-0">
             <CommandsList
               commands={commands}
@@ -128,7 +127,6 @@ export default function CommandsPage() {
               tierFilter={tierFilter}
               onToggle={toggleEnabled}
               onRename={(cmd) => {
-                // Plan gate check
                 if (!canRename) {
                   renamePlanGate.gateAction(() => {})();
                   return;
@@ -137,10 +135,16 @@ export default function CommandsPage() {
               }}
               onAddAlias={addAlias}
               onRemoveAlias={removeAlias}
+              onAdvancedEdit={(cmd) => {
+                if (!canAdvancedEdit) {
+                  advancedPlanGate.gateAction(() => {})();
+                  return;
+                }
+                setAdvancedTarget(cmd);
+              }}
             />
           </div>
 
-          {/* ─── Leaderboard ─── */}
           <div className="order-3 lg:order-3">
             <CommandsLeaderboard leaderboard={leaderboard} />
           </div>
@@ -155,10 +159,22 @@ export default function CommandsPage() {
         onSave={renameCommand}
       />
 
-      {/* Plan lock modal (لو حاول يعدل اسم ما يقدر) */}
+      {/* Advanced Editor */}
+      <AdvancedEditor
+        command={advancedTarget}
+        isOpen={!!advancedTarget}
+        onClose={() => setAdvancedTarget(null)}
+        onSave={(values) => saveAdvanced(advancedTarget.name, values)}
+      />
+
+      {/* Plan lock modals */}
       <PlanLockModal
         {...renamePlanGate.lockModalProps}
         featureName="تغيير أسماء الأوامر"
+      />
+      <PlanLockModal
+        {...advancedPlanGate.lockModalProps}
+        featureName="الإعدادات المتقدمة للأوامر"
       />
     </>
   );

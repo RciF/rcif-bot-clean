@@ -1,52 +1,40 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Command Aliases — Executor
+ *  Command Aliases — Executor (Batch 5-7 Update)
  *
- *  ينفذ الأمر باستخدام رسالة بدلاً من interaction.
+ *  هذا الـ executor الجديد يدعم:
+ *  - الأوامر البسيطة (بدون args) — يبني fake interaction (الباتش 2)
+ *  - أوامر الإشراف (مع args) — يستخدم moderationExecutors (الباتش 5)
  *
- *  الفكرة:
- *  - الأوامر في discord.js v14 تتوقع interaction object
- *  - في الباتش 2، ندعم الأوامر اللي ما تستخدم interaction.options
- *    (الأوامر البسيطة بدون arguments)
- *  - نبني "fake interaction" خفيف يكفي لتشغيل الأمر
- *  - لو الأمر يحتاج arguments → نرسل رسالة توضيحية للمستخدم
- *
- *  ⚠️ الباتش 5 راح يدعم الـ arguments الكاملة بـ proper parsing
+ *  ⚠️ ما يكسر السلوك القديم — يمدّده فقط
  * ═══════════════════════════════════════════════════════════
  */
 
 const { PermissionFlagsBits } = require("discord.js")
 const logger = require("../loggerSystem")
+const moderationExecutors = require("./moderationExecutors")
 
 // ════════════════════════════════════════════════════════════
 //  detectArgsRequired
-//  يفحص إن الأمر يحتاج arguments
 //
-//  نفحص data.options في SlashCommandBuilder
+//  يفحص إن الأمر يحتاج arguments من خلال SlashCommandBuilder
 // ════════════════════════════════════════════════════════════
 
 function detectArgsRequired(command) {
   if (!command?.data) return false
 
-  // discord.js v14 — data.options
   const options = command.data.options || []
 
-  // فحص لو في أي option مع required: true
-  // ⚠️ الـ subcommands نحسبها كـ required
   return options.some((opt) => {
-    // SubcommandBuilder
-    if (opt.type === 1 || opt.type === 2) return true // SUBCOMMAND or SUBCOMMAND_GROUP
-    // أي option بـ required = true
+    if (opt.type === 1 || opt.type === 2) return true // SUBCOMMAND
     return opt.required === true
   })
 }
 
 // ════════════════════════════════════════════════════════════
 //  buildFakeInteraction
-//  يبني interaction خفيف من message
 //
-//  مهم: هذا interaction ما يدعم options.getXxx()
-//  لكن يدعم reply, deferReply, editReply, channel, user, member, guild
+//  للأوامر البسيطة فقط (بدون args)
 // ════════════════════════════════════════════════════════════
 
 function buildFakeInteraction(message, commandName) {
@@ -55,16 +43,14 @@ function buildFakeInteraction(message, commandName) {
   let _replyMessage = null
 
   return {
-    // Identity
     isChatInputCommand: () => true,
     isAutocomplete: () => false,
     isButton: () => false,
     isStringSelectMenu: () => false,
     isModalSubmit: () => false,
-    type: 2, // ApplicationCommand
+    type: 2,
     commandName,
 
-    // User & member info
     user: message.author,
     member: message.member,
     guild: message.guild,
@@ -73,12 +59,9 @@ function buildFakeInteraction(message, commandName) {
     channelId: message.channel?.id,
     client: message.client,
 
-    // Locale
     locale: message.guild?.preferredLocale || "ar",
     guildLocale: message.guild?.preferredLocale || "ar",
 
-    // Options stub — يرجع null/افتراضي لكل شي
-    // (الباتش 5 راح يبني هذا بشكل كامل)
     options: {
       getString: () => null,
       getInteger: () => null,
@@ -92,9 +75,7 @@ function buildFakeInteraction(message, commandName) {
       getAttachment: () => null,
       getFocused: () => null,
       getSubcommand: (required = false) => {
-        if (required) {
-          throw new Error("SubcommandRequired")
-        }
+        if (required) throw new Error("SubcommandRequired")
         return null
       },
       getSubcommandGroup: () => null,
@@ -102,23 +83,12 @@ function buildFakeInteraction(message, commandName) {
       _hoistedOptions: [],
     },
 
-    // Reply states (mutable)
-    get replied() {
-      return _replied
-    },
-    get deferred() {
-      return _deferred
-    },
+    get replied() { return _replied },
+    get deferred() { return _deferred },
 
-    // Reply methods → نرسل في القناة كرسالة
     async reply(payload) {
       _replied = true
-
-      // ephemeral مو متاح في الرسائل العادية
-      // نشيله من الـ payload لو موجود
-      const cleanPayload = typeof payload === "string"
-        ? { content: payload }
-        : { ...payload }
+      const cleanPayload = typeof payload === "string" ? { content: payload } : { ...payload }
       delete cleanPayload.ephemeral
       delete cleanPayload.flags
 
@@ -130,22 +100,16 @@ function buildFakeInteraction(message, commandName) {
       return _replyMessage
     },
 
-    async deferReply(opts = {}) {
+    async deferReply() {
       _deferred = true
-      // ما فيه typing indicator مفيد، نرسل رسالة "جاري..."
-      try {
-        await message.channel.sendTyping()
-      } catch {}
+      try { await message.channel.sendTyping() } catch {}
     },
 
     async editReply(payload) {
-      const cleanPayload = typeof payload === "string"
-        ? { content: payload }
-        : { ...payload }
+      const cleanPayload = typeof payload === "string" ? { content: payload } : { ...payload }
       delete cleanPayload.ephemeral
       delete cleanPayload.flags
 
-      // لو ما فيه رسالة سابقة، أرسل جديدة
       if (!_replyMessage) {
         _replyMessage = await message.channel.send({
           ...cleanPayload,
@@ -154,24 +118,19 @@ function buildFakeInteraction(message, commandName) {
         return _replyMessage
       }
 
-      // عدّل الرسالة السابقة
       try {
         await _replyMessage.edit(cleanPayload)
         return _replyMessage
       } catch {
-        // فشل التعديل → أرسل جديدة
         _replyMessage = await message.channel.send(cleanPayload).catch(() => null)
         return _replyMessage
       }
     },
 
     async followUp(payload) {
-      const cleanPayload = typeof payload === "string"
-        ? { content: payload }
-        : { ...payload }
+      const cleanPayload = typeof payload === "string" ? { content: payload } : { ...payload }
       delete cleanPayload.ephemeral
       delete cleanPayload.flags
-
       return await message.channel.send(cleanPayload).catch(() => null)
     },
 
@@ -181,13 +140,13 @@ function buildFakeInteraction(message, commandName) {
 
     async deleteReply() {
       if (_replyMessage) {
-        try {
-          await _replyMessage.delete()
-        } catch {}
+        try { await _replyMessage.delete() } catch {}
       }
     },
 
-    // Permissions على الـ member
+    // helpers للوصول للـ reply
+    _getReplyMessage: () => _replyMessage,
+
     memberPermissions: message.member?.permissions || null,
     appPermissions: message.guild?.members?.me?.permissions || null,
   }
@@ -195,22 +154,55 @@ function buildFakeInteraction(message, commandName) {
 
 // ════════════════════════════════════════════════════════════
 //  execute
+//
 //  ينفذ أمر باستخدام رسالة
 //
+//  Inputs:
+//    message:  رسالة Discord
+//    command:  client.commands.get(name) (للأوامر البسيطة)
+//    resolved: { commandName, matchedAlias, rawArgs }
+//    defaults: { default_duration, ... }
+//
 //  Returns:
-//    { success: true } لو نجح
-//    { success: false, reason: "..." } لو فشل
-//    { needsSlash: true, command } لو الأمر يحتاج arguments (الباتش 5)
+//    { success: true, replyMessage }
+//    { success: false, reason: "..." }
 // ════════════════════════════════════════════════════════════
 
-async function execute(message, command, resolved) {
+async function execute(message, command, resolved, defaults = {}) {
+  const { commandName, rawArgs = "" } = resolved
+
+  // ════════════════════════════════════════════════════════
+  //  Path 1: أمر إشراف معروف (له moderationExecutor مخصص)
+  // ════════════════════════════════════════════════════════
+
+  if (moderationExecutors.canHandle(commandName)) {
+    try {
+      const result = await moderationExecutors.execute(
+        commandName,
+        message,
+        rawArgs,
+        defaults,
+      )
+      return result
+    } catch (err) {
+      logger.error("MOD_EXECUTOR_FAILED", {
+        commandName,
+        error: err.message,
+      })
+      return { success: false, reason: err.message }
+    }
+  }
+
+  // ════════════════════════════════════════════════════════
+  //  Path 2: أمر slash command عادي
+  // ════════════════════════════════════════════════════════
+
   if (!command || !command.execute) {
     return { success: false, reason: "command_missing" }
   }
 
-  // ─── 1) فحص لو الأمر يحتاج arguments ───
-  // في الباتش 2: لو يحتاج → نرسل رسالة توضيحية
-  // في الباتش 5: نـ parse ونمرر بشكل كامل
+  // لو الأمر يحتاج args ولم يكن في moderationExecutors
+  // نرسل توجيه للمستخدم
   if (detectArgsRequired(command)) {
     return {
       success: false,
@@ -219,13 +211,15 @@ async function execute(message, command, resolved) {
     }
   }
 
-  // ─── 2) بناء interaction خفيف ───
+  // الأمر بسيط — fake interaction
   const fakeInteraction = buildFakeInteraction(message, command.data.name)
 
-  // ─── 3) تشغيل ───
   try {
     await command.execute(fakeInteraction, message.client)
-    return { success: true }
+    return {
+      success: true,
+      replyMessage: fakeInteraction._getReplyMessage(),
+    }
   } catch (err) {
     logger.error("ALIAS_EXECUTE_FAILED", {
       command: command.data.name,
@@ -233,7 +227,6 @@ async function execute(message, command, resolved) {
       error: err.message,
     })
 
-    // محاولة إخبار المستخدم
     try {
       if (!fakeInteraction.replied && !fakeInteraction.deferred) {
         await message.reply("❌ صار خطأ في تنفيذ الأمر.").catch(() => {})

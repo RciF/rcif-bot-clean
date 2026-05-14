@@ -9,6 +9,16 @@ module.exports = {
       if (message.author?.bot) return
       if (message.partial) return
       const content = message.content || "بدون محتوى نصي"
+      const eventsPath = path.join(__dirname, "events")
+   const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith(".js"))
+   for (const file of eventFiles) {
+     const event = require(path.join(eventsPath, file))
+     if (event.once) {
+       client.once(event.name, (...args) => event.execute(...args, client))
+     } else {
+       client.on(event.name, (...args) => event.execute(...args, client))
+     }
+   }
       await sendLog(client, message.guild.id, "message_delete", {
         title: "🗑️ رسالة محذوفة",
         color: LOG_COLORS.delete,

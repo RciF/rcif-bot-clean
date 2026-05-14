@@ -1,37 +1,28 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  CommandCard — كرت أمر كامل (يجمع كل المميزات)
+ *  CommandCard — كرت أمر كامل (Batch 8 Final)
  *
  *  Features:
- *  - عرض اسم الأمر (الأصلي أو custom_name)
- *  - Badge "أصلاً: xxx" لو فيه custom_name
- *  - Tier badge
- *  - Plan lock badge لو ما يقدر يستخدمه
- *  - Subcommand badge
- *  - زر تعديل الاسم (مع plan gate)
+ *  - عرض اسم الأمر + custom_name badge
+ *  - Tier badge + Plan lock + Subcommand badges
+ *  - Usage count badge
+ *  - زر تعديل الاسم (plan gate)
+ *  - ✅ NEW: زر "تعديل متقدم" يفتح AdvancedEditor (plan gate)
  *  - Switch تفعيل/تعطيل
  *  - AliasesInput
- *  - Usage badge
  * ═══════════════════════════════════════════════════════════
  */
 
-import {
-  Edit3,
-  Tag,
-  TrendingUp,
-  Lock,
-  Crown,
-} from 'lucide-react';
+import { Edit3, Tag, TrendingUp, Lock, Crown, Settings2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { QuickTooltip } from '@/components/ui/Tooltip';
 import { AliasesInput } from './AliasesInput';
-import { hasAccess, PLAN_TIERS } from '@/lib/plans';
+import { hasAccess } from '@/lib/plans';
 import { formatNumber, cn } from '@/lib/utils';
 
-// ─── Tier metadata ───
 const TIER_META = {
   free:    { label: 'مجاني',  color: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
   silver:  { label: 'فضي',    color: 'bg-zinc-400/10 text-zinc-300 border-zinc-400/30' },
@@ -47,32 +38,28 @@ export function CommandCard({
   onRename,
   onAddAlias,
   onRemoveAlias,
+  onAdvancedEdit,
 }) {
   const tier = command.subscriptionTier || 'free';
   const tierMeta = TIER_META[tier];
-
   const userHasAccess = hasAccess(guildPlan, tier);
   const isEnabled = command.enabled !== false;
   const displayName = command.custom_name || command.name;
 
-  // ─── Handlers ───
-  const handleToggle = (newValue) => {
-    onToggle(command.name, newValue);
-  };
+  // ─── فحص لو فيه إعدادات متقدمة نشطة ───
+  const hasActiveRestrictions =
+    (command.restrictions?.enabled_roles?.length || 0) > 0 ||
+    (command.restrictions?.disabled_roles?.length || 0) > 0 ||
+    (command.restrictions?.enabled_channels?.length || 0) > 0 ||
+    (command.restrictions?.disabled_channels?.length || 0) > 0;
 
-  const handleAddAlias = async (alias) => {
-    await onAddAlias(command.name, alias);
-  };
+  const hasActiveDefaults =
+    !!command.defaults?.default_duration ||
+    command.defaults?.delete_invocation ||
+    command.defaults?.delete_response ||
+    command.defaults?.delete_on_user_delete;
 
-  const handleRemoveAlias = async (alias) => {
-    await onRemoveAlias(command.name, alias);
-  };
-
-  const handleRenameClick = () => {
-    if (canRename) {
-      onRename(command);
-    }
-  };
+  const hasAdvancedConfig = hasActiveRestrictions || hasActiveDefaults;
 
   return (
     <Card
@@ -83,19 +70,14 @@ export function CommandCard({
       )}
     >
       <div className="space-y-3">
-        {/* ─── Row 1: name + badges + actions ─── */}
+        {/* ─── Row 1 ─── */}
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              {/* Command name */}
-              <h3
-                className="font-bold text-base font-mono num"
-                dir="ltr"
-              >
+              <h3 className="font-bold text-base font-mono num" dir="ltr">
                 /{displayName}
               </h3>
 
-              {/* Original name badge */}
               {command.custom_name && (
                 <Badge
                   variant="outline"
@@ -105,7 +87,6 @@ export function CommandCard({
                 </Badge>
               )}
 
-              {/* Tier badge */}
               <Badge
                 variant="outline"
                 size="sm"
@@ -115,14 +96,15 @@ export function CommandCard({
                 <span>{tierMeta?.label}</span>
               </Badge>
 
-              {/* Subcommand */}
               {command.isSubcommand && (
-                <Badge variant="secondary" className="text-[10px] py-0 h-4 px-1.5">
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] py-0 h-4 px-1.5"
+                >
                   فرعي
                 </Badge>
               )}
 
-              {/* Plan lock indicator */}
               {!userHasAccess && (
                 <Badge
                   variant="outline"
@@ -134,7 +116,6 @@ export function CommandCard({
                 </Badge>
               )}
 
-              {/* Usage */}
               {command.usage_count > 0 && (
                 <Badge
                   variant="outline"
@@ -145,18 +126,43 @@ export function CommandCard({
                   <span className="num">{formatNumber(command.usage_count)}</span>
                 </Badge>
               )}
+
+              {/* ✅ Advanced config indicator */}
+              {hasAdvancedConfig && (
+                <Badge
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 bg-primary/10 text-primary border-primary/30"
+                >
+                  <Settings2 className="w-3 h-3" />
+                  <span>متقدم</span>
+                </Badge>
+              )}
             </div>
 
             <p className="text-sm text-muted-foreground">{command.description}</p>
           </div>
 
-          {/* Right side: rename + toggle */}
           <div className="flex items-center gap-1 flex-shrink-0">
+            {/* ✅ Advanced edit button */}
+            {onAdvancedEdit && (
+              <QuickTooltip content="إعدادات متقدمة">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onAdvancedEdit(command)}
+                  disabled={!userHasAccess}
+                >
+                  <Settings2 className="w-4 h-4" />
+                </Button>
+              </QuickTooltip>
+            )}
+
             <QuickTooltip content={canRename ? 'تغيير الاسم' : 'يحتاج Silver أو أعلى'}>
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={handleRenameClick}
+                onClick={() => onRename(command)}
                 disabled={!userHasAccess}
               >
                 {canRename ? (
@@ -169,7 +175,7 @@ export function CommandCard({
 
             <Switch
               checked={isEnabled}
-              onCheckedChange={handleToggle}
+              onCheckedChange={(v) => onToggle(command.name, v)}
               disabled={!userHasAccess}
             />
           </div>
@@ -189,8 +195,8 @@ export function CommandCard({
 
           <AliasesInput
             aliases={command.aliases || []}
-            onAdd={handleAddAlias}
-            onRemove={handleRemoveAlias}
+            onAdd={(alias) => onAddAlias(command.name, alias)}
+            onRemove={(alias) => onRemoveAlias(command.name, alias)}
             max={5}
             disabled={!isEnabled || !userHasAccess}
           />

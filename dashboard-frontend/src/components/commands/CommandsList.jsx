@@ -1,12 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  CommandsList — قائمة الأوامر مع كل الفلاتر
- *
- *  يفلتر حسب:
- *  - search (في الاسم، الوصف، الاختصارات)
- *  - category
- *  - quick filter (with-aliases, renamed, enabled, disabled)
- *  - tier filter
+ *  CommandsList — قائمة الأوامر (Batch 8 — مع onAdvancedEdit)
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -29,24 +23,19 @@ export function CommandsList({
   onRename,
   onAddAlias,
   onRemoveAlias,
+  onAdvancedEdit,
 }) {
-  // ─── فلترة الأوامر ───
   const filteredCommands = useMemo(() => {
     let result = commands;
 
-    // 1) Category
     if (activeCategory) {
       result = result.filter((cmd) => cmd.category === activeCategory);
     }
-
-    // 2) Tier
     if (tierFilter) {
       result = result.filter(
         (cmd) => (cmd.subscriptionTier || 'free') === tierFilter,
       );
     }
-
-    // 3) Quick filter
     if (quickFilter === 'with-aliases') {
       result = result.filter((cmd) => (cmd.aliases?.length || 0) > 0);
     } else if (quickFilter === 'renamed') {
@@ -56,8 +45,6 @@ export function CommandsList({
     } else if (quickFilter === 'disabled') {
       result = result.filter((cmd) => cmd.enabled === false);
     }
-
-    // 4) Search (last — أكثر تكلفة)
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       result = result.filter((cmd) => {
@@ -75,36 +62,30 @@ export function CommandsList({
         );
       });
     }
-
     return result;
   }, [commands, activeCategory, tierFilter, quickFilter, searchQuery]);
 
-  // ─── تجميع حسب الفئة (لو ما فيه active category) ───
   const grouped = useMemo(() => {
     if (activeCategory) {
       return [{ category: null, commands: filteredCommands }];
     }
-
     const groups = {};
     for (const cmd of filteredCommands) {
       const catId = cmd.category || 'other';
       if (!groups[catId]) groups[catId] = [];
       groups[catId].push(cmd);
     }
-
     const sortedCategoryIds = Object.keys(groups).sort((a, b) => {
       const aOrder = categories[a]?.order ?? 99;
       const bOrder = categories[b]?.order ?? 99;
       return aOrder - bOrder;
     });
-
     return sortedCategoryIds.map((catId) => ({
       category: categories[catId] || { id: catId, label: catId, icon: '📁' },
       commands: groups[catId],
     }));
   }, [filteredCommands, activeCategory, categories]);
 
-  // ─── Empty state ───
   if (filteredCommands.length === 0) {
     return (
       <Card className="p-5">
@@ -125,7 +106,6 @@ export function CommandsList({
     <div className="space-y-6">
       {grouped.map(({ category, commands: groupCommands }, idx) => (
         <div key={category?.id || idx}>
-          {/* Category header (لو ما فيه active category) */}
           {category && (
             <div className="flex items-center gap-2 mb-3 px-1">
               <span className="text-xl">{category.icon}</span>
@@ -136,7 +116,6 @@ export function CommandsList({
             </div>
           )}
 
-          {/* Commands */}
           <div className="space-y-3">
             {groupCommands.map((cmd) => (
               <CommandCard
@@ -148,6 +127,7 @@ export function CommandsList({
                 onRename={onRename}
                 onAddAlias={onAddAlias}
                 onRemoveAlias={onRemoveAlias}
+                onAdvancedEdit={onAdvancedEdit}
               />
             ))}
           </div>
