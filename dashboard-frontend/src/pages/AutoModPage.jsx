@@ -30,6 +30,9 @@ import { PlanLockBanner, PlanLockModal } from '@/components/shared/PlanLockOverl
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { RolePicker } from '@/components/shared/RolePicker';
+import { BulkCheckbox } from '@/components/shared/BulkCheckbox';
+import { BulkDeleteToolbar } from '@/components/shared/BulkDeleteToolbar';
+import { useBulkSelection } from '@/hooks/useBulkSelection';
 import { useGuildSettings } from '@/hooks/useGuildSettings';
 import { usePlanGate } from '@/hooks/usePlanGate';
 import { useGuildStore } from '@/store/guildStore';
@@ -428,7 +431,7 @@ function TagsField({ field, value, onChange }) {
 }
 
 // ────────────────────────────────────────────────────────────
-//  Custom Words Tab
+//  Custom Words Tab — ⭐ مع Bulk Delete
 // ────────────────────────────────────────────────────────────
 
 function CustomWordsTab({ guildId, planGate }) {
@@ -436,8 +439,12 @@ function CustomWordsTab({ guildId, planGate }) {
   const [newWord, setNewWord] = useState('');
   const [adding, setAdding] = useState(false);
 
+  // ⭐ Bulk selection
+  const selection = useBulkSelection(words || [], { idKey: 'id', max: 500 });
+
   const load = async () => {
     if (!guildId) return;
+    selection.clear();
     try {
       const res = await apiClient.get(`/api/guild/${guildId}/automod/words`);
       setWords(res.words || []);
@@ -475,67 +482,118 @@ function CustomWordsTab({ guildId, planGate }) {
   };
 
   return (
-    <Card className="p-4">
-      <div className="mb-4">
-        <h3 className="font-bold mb-1">كلمات مخصصة</h3>
-        <p className="text-xs text-muted-foreground">
-          أضف كلمات خاصة بسيرفرك. الكلمات الموجودة في القائمة الافتراضية تُحظر تلقائياً.
-        </p>
-      </div>
-
-      {/* Add input */}
-      <div className="flex gap-2 mb-4">
-        <Input
-          value={newWord}
-          onChange={(e) => setNewWord(e.target.value.slice(0, 100))}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          placeholder="اكتب الكلمة..."
-          maxLength={100}
-          className="flex-1"
-        />
-        <Button onClick={add} disabled={!newWord.trim() || adding} loading={adding}>
-          <Plus className="w-4 h-4" />
-          <span>إضافة</span>
-        </Button>
-      </div>
-
-      {/* List */}
-      {words === null ? (
-        <Skeleton className="h-32 rounded-xl" />
-      ) : words.length === 0 ? (
-        <EmptyState
-          icon={Type}
-          title="لا توجد كلمات مخصصة"
-          description="أضف كلمات خاصة لتُحظر في سيرفرك"
-        />
-      ) : (
-        <div className="space-y-1.5 max-h-96 overflow-y-auto">
-          {words.map((w) => (
-            <div key={w.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <Badge variant={w.type === 'banned' ? 'destructive' : 'secondary'} size="sm">
-                  {w.type === 'banned' ? 'محظورة' : 'تحذير'}
-                </Badge>
-                <code className="text-sm truncate">{w.word}</code>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => remove(w.id)}
-                className="text-destructive h-7 w-7"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          ))}
+    <>
+      <Card className="p-4">
+        <div className="mb-4">
+          <h3 className="font-bold mb-1">كلمات مخصصة</h3>
+          <p className="text-xs text-muted-foreground">
+            أضف كلمات خاصة بسيرفرك. الكلمات الموجودة في القائمة الافتراضية تُحظر تلقائياً.
+          </p>
         </div>
-      )}
 
-      <div className="mt-4 text-xs text-muted-foreground flex items-center gap-1.5">
-        <Info className="w-3.5 h-3.5" />
-        <span>الحد الأقصى: 500 كلمة • <span className="num">{words?.length || 0}</span> مضافة</span>
-      </div>
-    </Card>
+        {/* Add input */}
+        <div className="flex gap-2 mb-4">
+          <Input
+            value={newWord}
+            onChange={(e) => setNewWord(e.target.value.slice(0, 100))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            placeholder="اكتب الكلمة..."
+            maxLength={100}
+            className="flex-1"
+          />
+          <Button onClick={add} disabled={!newWord.trim() || adding} loading={adding}>
+            <Plus className="w-4 h-4" />
+            <span>إضافة</span>
+          </Button>
+        </div>
+
+        {/* ⭐ Master checkbox */}
+        {words && words.length > 0 && (
+          <div className="flex items-center gap-2 pb-3 mb-3 border-b border-border">
+            <BulkCheckbox
+              checked={selection.allSelected}
+              indeterminate={selection.someSelected && !selection.allSelected}
+              onChange={selection.toggleAll}
+              size="sm"
+            />
+            <span className="text-xs text-muted-foreground">
+              {selection.allSelected ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+            </span>
+          </div>
+        )}
+
+        {/* List */}
+        {words === null ? (
+          <Skeleton className="h-32 rounded-xl" />
+        ) : words.length === 0 ? (
+          <EmptyState
+            icon={Type}
+            title="لا توجد كلمات مخصصة"
+            description="أضف كلمات خاصة لتُحظر في سيرفرك"
+          />
+        ) : (
+          <div className="space-y-1.5 max-h-96 overflow-y-auto pb-20">
+            {words.map((w) => {
+              const isSelected = selection.isSelected(w.id);
+              return (
+                <div
+                  key={w.id}
+                  onClick={() => selection.toggle(w.id)}
+                  className={cn(
+                    'flex items-center justify-between gap-2 p-2.5 rounded-lg transition-colors cursor-pointer',
+                    isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'bg-muted/30 hover:bg-muted/50',
+                  )}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {/* ⭐ Checkbox */}
+                    <BulkCheckbox
+                      checked={isSelected}
+                      onChange={() => selection.toggle(w.id)}
+                      size="sm"
+                    />
+                    <Badge variant={w.type === 'banned' ? 'destructive' : 'secondary'} size="sm">
+                      {w.type === 'banned' ? 'محظورة' : 'تحذير'}
+                    </Badge>
+                    <code className="text-sm truncate">{w.word}</code>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      remove(w.id);
+                    }}
+                    className="text-destructive h-7 w-7"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-4 text-xs text-muted-foreground flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5" />
+          <span>الحد الأقصى: 500 كلمة • <span className="num">{words?.length || 0}</span> مضافة</span>
+        </div>
+      </Card>
+
+      {/* ⭐ Bulk Delete Toolbar */}
+      <BulkDeleteToolbar
+        selectedCount={selection.selectedCount}
+        onClear={selection.clear}
+        itemLabel="كلمة"
+        onDelete={async () => {
+          const res = await apiClient.post(
+            `/api/guild/${guildId}/automod/words/bulk-delete`,
+            { ids: Array.from(selection.selectedIds) }
+          );
+          toast.success(`تم حذف ${res.deleted_count} كلمة`);
+          load();
+        }}
+      />
+    </>
   );
 }
 

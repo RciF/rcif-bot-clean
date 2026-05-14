@@ -279,5 +279,64 @@ router.post(
     res.json(result)
   }),
 )
+// ══════════════════════════════════════════════════════════════════
+//  PATCH: يضاف لملف dashboard-backend/routes/giveaway.js
+//  المكان: قبل module.exports = router مباشرة
+// ══════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════
+//  POST /giveaway/bulk-delete — حذف جماعي
+//  يحذف فقط السحوبات المنتهية أو الملغية (الـ active يستخدم /cancel)
+// ════════════════════════════════════════════════════════════
+
+router.post(
+  "/giveaway/bulk-delete",
+  requireAuth,
+  requireGuildAdmin,
+  auditLog("giveaway.bulk_delete"),
+  asyncHandler(async (req, res) => {
+    const { guildId } = req.params
+    const { ids } = req.body
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new ApiError("ids مطلوب", 400, "INVALID_IDS")
+    }
+
+    if (ids.length > 100) {
+      throw new ApiError("الحد الأقصى 100 سحب", 400, "TOO_MANY")
+    }
+
+    // فلتر للأرقام الصالحة
+    const validIds = ids
+      .map(id => parseInt(id))
+      .filter(id => isFinite(id) && id > 0)
+
+    if (validIds.length === 0) {
+      throw new ApiError("لا توجد أرقام صالحة", 400, "INVALID_IDS")
+    }
+
+    // حذف من DB — فقط للسحوبات اللي خلصت أو ألغيت (مش الـ active)
+    const result = await query(
+      `DELETE FROM giveaways
+       WHERE guild_id = $1
+         AND id = ANY($2::int[])
+         AND status IN ('ended', 'cancelled')
+       RETURNING id`,
+      [guildId, validIds],
+    )
+
+    const deletedCount = result.rows?.length || 0
+    const skippedCount = validIds.length - deletedCount
+
+    res.json({
+      success: true,
+      deleted_count: deletedCount,
+      skipped_count: skippedCount,
+      message: skippedCount > 0
+        ? `تم حذف ${deletedCount}, تخطّى ${skippedCount} (نشطة أو غير موجودة)`
+        : `تم حذف ${deletedCount} سحب`,
+    })
+  }),
+)
 
 module.exports = router

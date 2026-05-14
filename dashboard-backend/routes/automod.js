@@ -266,4 +266,51 @@ router.get(
   }),
 )
 
+// ══════════════════════════════════════════════════════════════════
+//  PATCH: يضاف لملف dashboard-backend/routes/automod.js
+//  المكان: قبل module.exports = router مباشرة
+// ══════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════
+//  POST /automod/words/bulk-delete — حذف كلمات جماعي
+// ════════════════════════════════════════════════════════════
+
+router.post(
+  "/automod/words/bulk-delete",
+  requireAuth,
+  requireGuildAdmin,
+  auditLog("automod.word.bulk_delete"),
+  asyncHandler(async (req, res) => {
+    const { guildId } = req.params
+    const { ids } = req.body
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new ApiError("ids مطلوب", 400, "INVALID_IDS")
+    }
+
+    if (ids.length > 500) {
+      throw new ApiError("الحد الأقصى 500 كلمة", 400, "TOO_MANY")
+    }
+
+    const validIds = ids
+      .map(id => parseInt(id))
+      .filter(id => isFinite(id) && id > 0)
+
+    if (validIds.length === 0) {
+      throw new ApiError("لا توجد أرقام صالحة", 400, "INVALID_IDS")
+    }
+
+    const result = await query(
+      `DELETE FROM automod_words
+       WHERE guild_id = $1 AND id = ANY($2::int[])
+       RETURNING id`,
+      [guildId, validIds],
+    )
+
+    res.json({
+      success: true,
+      deleted_count: result.rows?.length || 0,
+    })
+  }),
+)
 module.exports = router

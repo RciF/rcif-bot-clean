@@ -31,10 +31,13 @@ import { PlanLockBanner, PlanLockModal } from '@/components/shared/PlanLockOverl
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ChannelPicker } from '@/components/shared/ChannelPicker';
 import { RolePicker } from '@/components/shared/RolePicker';
+import { BulkCheckbox } from '@/components/shared/BulkCheckbox';
+import { BulkDeleteToolbar } from '@/components/shared/BulkDeleteToolbar';
+import { useBulkSelection } from '@/hooks/useBulkSelection';
 import { usePlanGate } from '@/hooks/usePlanGate';
 import { useGuildStore } from '@/store/guildStore';
 import { PLAN_TIERS } from '@/lib/plans';
-import { apiClient } from '@/api/client';
+import { apiClient } from '@/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -111,13 +114,17 @@ export default function GiveawayPage() {
   const [giveaways, setGiveaways] = useState(null);
   const [filter, setFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
-  const [confirmAction, setConfirmAction] = useState(null); // { type, giveaway }
+  const [confirmAction, setConfirmAction] = useState(null);
   const planGate = usePlanGate('giveaway', PLAN_TIERS.SILVER);
+
+  // ⭐ Bulk selection
+  const selection = useBulkSelection(giveaways || [], { idKey: 'id', max: 100 });
 
   // ─── Load ───
   const load = async () => {
     if (!selectedGuildId) return;
     setGiveaways(null);
+    selection.clear();
     try {
       const params = filter !== 'all' ? `?status=${filter}` : '';
       const res = await apiClient.get(`/api/guild/${selectedGuildId}/giveaway${params}`);
@@ -266,11 +273,13 @@ export default function GiveawayPage() {
           }
         />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 pb-24">
           {giveaways.map((g) => (
             <GiveawayCard
               key={g.id}
               giveaway={g}
+              isSelected={selection.isSelected(g.id)}
+              onToggleSelect={() => selection.toggle(g.id)}
               onEnd={() => setConfirmAction({ type: 'end', giveaway: g })}
               onCancel={() => setConfirmAction({ type: 'cancel', giveaway: g })}
               onReroll={() => setConfirmAction({ type: 'reroll', giveaway: g })}
@@ -327,6 +336,22 @@ export default function GiveawayPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ⭐ Bulk Delete Toolbar */}
+      <BulkDeleteToolbar
+        selectedCount={selection.selectedCount}
+        onClear={selection.clear}
+        itemLabel="سحب"
+        deleteWarning="ملاحظة: السحوبات النشطة لن تُحذف. استخدم 'إلغاء' بدلاً من ذلك."
+        onDelete={async () => {
+          const res = await apiClient.post(
+            `/api/guild/${selectedGuildId}/giveaway/bulk-delete`,
+            { ids: Array.from(selection.selectedIds) }
+          );
+          toast.success(res.message || `تم حذف ${res.deleted_count} سحب`);
+          load();
+        }}
+      />
+
       <PlanLockModal {...planGate.lockModalProps} featureName="نظام السحوبات" />
     </>
   );
@@ -336,14 +361,23 @@ export default function GiveawayPage() {
 //  Giveaway Card
 // ────────────────────────────────────────────────────────────
 
-function GiveawayCard({ giveaway, onEnd, onCancel, onReroll }) {
+function GiveawayCard({ giveaway, isSelected, onToggleSelect, onEnd, onCancel, onReroll }) {
   const config = STATUS_CONFIG[giveaway.status] || STATUS_CONFIG.active;
   const winners = Array.isArray(giveaway.winners) ? giveaway.winners : [];
 
   return (
-    <Card className={cn('p-4 border-2 transition-colors', config.border)}>
+    <Card className={cn(
+      'p-4 border-2 transition-colors',
+      isSelected ? 'border-primary/50 bg-primary/5' : config.border,
+    )}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
+          {/* ⭐ Bulk Checkbox */}
+          <BulkCheckbox
+            checked={isSelected}
+            onChange={onToggleSelect}
+          />
+
           <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', config.bg)}>
             <Gift className={cn('w-5 h-5', config.color)} />
           </div>
@@ -488,13 +522,13 @@ function CreateGiveawayModal({ guildId, onClose, onCreated }) {
           <div>
             <label className="text-xs font-medium mb-1.5 block">الوصف (اختياري)</label>
             <textarea
-  value={description}
-  onChange={(e) => setDescription(e.target.value.slice(0, 1000))}
-  placeholder="تفاصيل إضافية..."
-  rows={2}
-  maxLength={1000}
-  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:border-primary/50"
-/>
+              value={description}
+              onChange={(e) => setDescription(e.target.value.slice(0, 1000))}
+              placeholder="تفاصيل إضافية..."
+              rows={2}
+              maxLength={1000}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:border-primary/50"
+            />
           </div>
 
           {/* Channel */}
