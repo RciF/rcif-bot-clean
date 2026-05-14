@@ -128,6 +128,9 @@ function pushCommand(filePath, commands) {
     const giveawaySystem = require("./systems/giveawaySystem")
     giveawaySystem.startScheduler(client)
 
+    const automodSystem = require("./systems/automodSystem")
+    automodSystem.startScheduler()
+
     // ✅ Auto-close scheduler للتذاكر الخاملة
     const ticketSystem = require("./systems/ticketSystem")
     ticketSystem.startAutoCloseScheduler(client)

@@ -21,6 +21,7 @@ const commandAliases = require("../systems/commandAliases")
 const { handleProtection } = require("./handlers/protectionHandler")
 const { handleAI } = require("./handlers/aiHandler")
 const { handleXP } = require("./handlers/xpHandler")
+const { handleAutoMod } = require("./handlers/automodHandler")
 
 // ══════════════════════════════════════════════════════════
 //  Deduplication
@@ -81,6 +82,9 @@ module.exports = {
       // 4) Protection
       await handleProtection(message)
 
+      // 4.5) AutoMod
+      await handleAutoMod(message)
+      
       // 5) AI
       await handleAI(message)
 
