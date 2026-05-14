@@ -128,6 +128,10 @@ function pushCommand(filePath, commands) {
     const giveawaySystem = require("./systems/giveawaySystem")
     giveawaySystem.startScheduler(client)
 
+    const bulkActionsSystem = require("./systems/bulkActionsSystem")
+    bulkActionsSystem.setClient(client)
+    bulkActionsSystem.startScheduler()
+
     const automodSystem = require("./systems/automodSystem")
     automodSystem.startScheduler()
 

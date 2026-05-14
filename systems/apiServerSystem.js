@@ -24,6 +24,7 @@ const subscriptionRoleSystem = require("./subscriptionRoleSystem")
 // ✅ NEW (Batch 2): معالج aliases
 const commandAliases = require("./commandAliases")
 const giveawayInternalRoutes = require("./giveawayRoutes")
+const bulkActionsInternalRoutes = require("./bulkActionsRoutes")
 
 
 function startApiServer(client) {
@@ -245,6 +246,7 @@ function startApiServer(client) {
 // ─── Giveaway internal routes ───
   app.locals.discordClient = client
   app.use("/api/internal/giveaway", giveawayInternalRoutes)
+  app.use("/api/internal/bulk", bulkActionsInternalRoutes)
   
   app.listen(PORT, "0.0.0.0", () => {
     logger.success(`API_SERVER_RUNNING ${PORT}`)
