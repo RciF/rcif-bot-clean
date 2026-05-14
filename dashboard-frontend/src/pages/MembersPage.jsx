@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Users, Search, Filter, Bot, ArrowUpDown, Calendar, Crown } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Users, Search, Filter, Bot, ArrowUpDown, Calendar, Crown, Check } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Skeleton, SkeletonRow } from '@/components/ui/Skeleton';
@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SettingsPageHeader } from '@/components/shared/SettingsPageHeader';
 import { PlanLockBanner } from '@/components/shared/PlanLockOverlay';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { BulkActionsToolbar } from '@/components/shared/BulkActionsToolbar';
 import { usePlanGate } from '@/hooks/usePlanGate';
 import { useGuildStore } from '@/store/guildStore';
 import { useGuildResources } from '@/hooks/useGuildResources';
@@ -101,6 +102,9 @@ export default function MembersPage() {
   const [sortBy, setSortBy] = useState('joined_desc');
   const [includeBots, setIncludeBots] = useState(false);
 
+  // ─── ⭐ Selection state للـ bulk actions ───
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
   const planGate = usePlanGate('membersHub', PLAN_TIERS.SILVER);
 
   // ─── Roles من API الحقيقي للفلتر ───
@@ -113,6 +117,26 @@ export default function MembersPage() {
   }, [rawRoles]);
 
   // ─── جلب الأعضاء ───
+  const loadMembers = useCallback(() => {
+    if (!selectedGuildId) {
+      setMembers([]);
+      return;
+    }
+    setMembers(null);
+    setSelectedIds(new Set()); // امسح التحديد
+
+    return guildApi
+      .members(selectedGuildId, { limit: 200 })
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res.members || [];
+        setMembers(list.map(normalizeMember).filter((m) => m.id));
+      })
+      .catch((err) => {
+        setMembers([]);
+        toast.error(err.message || 'فشل تحميل الأعضاء');
+      });
+  }, [selectedGuildId]);
+
   useEffect(() => {
     let mounted = true;
     if (!selectedGuildId) {
@@ -120,6 +144,7 @@ export default function MembersPage() {
       return;
     }
     setMembers(null);
+    setSelectedIds(new Set());
 
     guildApi
       .members(selectedGuildId, { limit: 200 })
@@ -192,7 +217,7 @@ export default function MembersPage() {
     return sorted;
   }, [members, search, roleFilter, sortBy, includeBots]);
 
-  // ─── Top role helper (لعرض البادج بلون الرتبة) ───
+  // ─── Top role helper ───
   const getTopRole = (memberRoles) => {
     if (!memberRoles?.length || !roleMap.size) return null;
     let top = null;
@@ -218,12 +243,52 @@ export default function MembersPage() {
       .sort((a, b) => (b.position ?? 0) - (a.position ?? 0));
   }, [rawRoles, selectedGuildId]);
 
+  // ─── ⭐ Selection helpers ───
+  const visibleMembers = filtered.slice(0, 200);
+  const allVisibleSelected = visibleMembers.length > 0 &&
+    visibleMembers.every((m) => selectedIds.has(m.id));
+  const someVisibleSelected = visibleMembers.some((m) => selectedIds.has(m.id));
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else {
+        if (next.size >= 50) {
+          toast.warning('الحد الأقصى 50 عضو لكل عملية');
+          return prev;
+        }
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelectedIds(new Set());
+    } else {
+      // اختر الأول 50 من المرئيين
+      const newIds = new Set();
+      for (const m of visibleMembers) {
+        if (newIds.size >= 50) break;
+        newIds.add(m.id);
+      }
+      if (visibleMembers.length > 50) {
+        toast.info('تم اختيار أول 50 عضو (الحد الأقصى)');
+      }
+      setSelectedIds(newIds);
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
   return (
     <>
       <SettingsPageHeader
         icon={<Users />}
         title="الأعضاء"
-        description="استكشف وابحث وافلتر أعضاء سيرفرك"
+        description="استكشف وابحث وافلتر أعضاء سيرفرك — مع عمليات جماعية"
         plan="silver"
       />
 
@@ -303,7 +368,7 @@ export default function MembersPage() {
             </Select>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Switch
                 checked={includeBots}
@@ -318,9 +383,17 @@ export default function MembersPage() {
                 إظهار البوتات
               </label>
             </div>
-            <div className="text-xs text-muted-foreground">
-              <span className="num">{filtered.length}</span> من{' '}
-              <span className="num">{totalCount}</span>
+            <div className="flex items-center gap-3">
+              {/* ⭐ Selection summary */}
+              {selectedIds.size > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  <span className="num">{selectedIds.size}</span> محدد
+                </Badge>
+              )}
+              <div className="text-xs text-muted-foreground">
+                <span className="num">{filtered.length}</span> من{' '}
+                <span className="num">{totalCount}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -344,34 +417,81 @@ export default function MembersPage() {
           }
         />
       ) : (
-        <Card className="p-3">
+        <Card className="p-3 pb-24"> {/* pb-24 للـ toolbar */}
+          {/* ⭐ Select All header */}
+          <div className="flex items-center gap-3 px-3 pb-2 mb-2 border-b border-border">
+            <button
+              onClick={toggleSelectAll}
+              className={cn(
+                'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0',
+                allVisibleSelected
+                  ? 'bg-primary border-primary'
+                  : someVisibleSelected
+                    ? 'bg-primary/30 border-primary'
+                    : 'border-border hover:border-primary/50',
+              )}
+              title={allVisibleSelected ? 'إلغاء الكل' : 'تحديد الكل'}
+            >
+              {allVisibleSelected && <Check className="w-3 h-3 text-white" />}
+              {!allVisibleSelected && someVisibleSelected && (
+                <div className="w-2 h-0.5 bg-primary" />
+              )}
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {allVisibleSelected ? 'إلغاء تحديد الكل' : 'تحديد الكل المرئي'}
+            </span>
+          </div>
+
           <div className="space-y-1">
-            {filtered.slice(0, 200).map((m) => {
+            {visibleMembers.map((m) => {
               const topRole = getTopRole(m.roles);
               const initial = m.username.slice(0, 1).toUpperCase();
               const joinedLabel = formatJoinDate(m.joinedAt);
+              const isSelected = selectedIds.has(m.id);
 
               return (
                 <div
                   key={m.id}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/40 transition-colors group"
+                  onClick={() => toggleSelect(m.id)}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-xl transition-colors cursor-pointer group',
+                    isSelected
+                      ? 'bg-primary/10 hover:bg-primary/15'
+                      : 'hover:bg-accent/40',
+                  )}
                 >
+                  {/* Checkbox */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelect(m.id);
+                    }}
+                    className={cn(
+                      'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0',
+                      isSelected
+                        ? 'bg-primary border-primary'
+                        : 'border-border group-hover:border-primary/50',
+                    )}
+                  >
+                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                  </button>
+
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
                     {m.avatarUrl ? (
                       <img
                         src={m.avatarUrl}
-                        alt={m.username}
-                        loading="lazy"
+                        alt=""
                         className="w-10 h-10 rounded-full"
+                        loading="lazy"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-bold">
+                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold">
                         {initial}
                       </div>
                     )}
                     {m.isBot && (
-                      <div className="absolute -bottom-0.5 -end-0.5 w-4 h-4 rounded-full bg-violet-500 border-2 border-background flex items-center justify-center">
+                      <div className="absolute -bottom-1 -end-1 w-4 h-4 rounded-full bg-violet-500 flex items-center justify-center">
                         <Bot className="w-2.5 h-2.5 text-white" />
                       </div>
                     )}
@@ -380,25 +500,32 @@ export default function MembersPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <div className="font-medium text-sm truncate">
-                        {m.username}
-                      </div>
-                      {m.isBot && (
+                      <span className="font-medium truncate">{m.username}</span>
+                      {topRole && (
                         <Badge
                           variant="secondary"
-                          className="text-[10px] py-0 px-1.5 h-4"
+                          className="text-[10px] py-0 px-1.5 flex-shrink-0"
+                          style={
+                            topRole.color
+                              ? {
+                                  color: intToHexColor(topRole.color),
+                                  borderColor: intToHexColor(topRole.color) + '40',
+                                }
+                              : {}
+                          }
                         >
-                          BOT
+                          <Crown className="w-2.5 h-2.5" />
+                          {topRole.name}
                         </Badge>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground font-mono ltr truncate flex items-center gap-2">
-                      <span>{m.id}</span>
+                    <div className="text-[10px] text-muted-foreground ltr flex items-center gap-2 mt-0.5">
+                      <span>ID: {m.id.slice(-8)}</span>
                       {joinedLabel && (
                         <>
-                          <span className="opacity-50">•</span>
-                          <span className="inline-flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
+                          <span>•</span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-2.5 h-2.5" />
                             {joinedLabel}
                           </span>
                         </>
@@ -406,31 +533,9 @@ export default function MembersPage() {
                     </div>
                   </div>
 
-                  {/* Top role badge */}
-                  {topRole && (
-                    <div
-                      className="hidden md:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border"
-                      style={{
-                        color: topRole.color
-                          ? intToHexColor(topRole.color)
-                          : undefined,
-                        borderColor: topRole.color
-                          ? intToHexColor(topRole.color) + '40'
-                          : undefined,
-                        backgroundColor: topRole.color
-                          ? intToHexColor(topRole.color) + '15'
-                          : undefined,
-                      }}
-                    >
-                      <Crown className="w-3 h-3" />
-                      {topRole.name}
-                    </div>
-                  )}
-
                   {/* Roles count */}
-                  <div className="text-xs text-muted-foreground num flex-shrink-0">
-                    <span className="num font-semibold">{m.roles.length}</span>{' '}
-                    رتبة
+                  <div className="text-xs text-muted-foreground flex-shrink-0">
+                    <span className="num">{m.roles.length}</span> رتبة
                   </div>
                 </div>
               );
@@ -438,13 +543,19 @@ export default function MembersPage() {
           </div>
 
           {filtered.length > 200 && (
-            <div className="text-center text-xs text-muted-foreground py-3 border-t border-border mt-2">
-              عرض أول <span className="num">200</span> — استخدم البحث لتضييق
-              النتائج
+            <div className="mt-3 text-center text-xs text-muted-foreground">
+              عرض أول 200 — استخدم الفلاتر لتضييق النتائج
             </div>
           )}
         </Card>
       )}
+
+      {/* ⭐ Bulk Actions Toolbar */}
+      <BulkActionsToolbar
+        selectedIds={Array.from(selectedIds)}
+        onClear={clearSelection}
+        onSuccess={loadMembers}
+      />
     </>
   );
 }
