@@ -5,7 +5,7 @@ import {
   Ticket, Bell, LogOut, Menu, X, Moon, Sun, PartyPopper, ScrollText,
   Gavel, ToggleRight, Sparkles, BarChart3, Users, History, Layers,
   CreditCard, Terminal, CalendarDays, Clock, ChevronDown, Crown,
-  Search, UserPlus,
+  Search, UserPlus, ShieldAlert,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
@@ -34,6 +34,7 @@ const BASE_NAV_SECTIONS = [
     items: [
       { to: '/dashboard/welcome',    label: 'الترحيب', icon: PartyPopper },
       { to: '/dashboard/protection', label: 'الحماية', icon: Shield },
+      { to: '/dashboard/automod', label: 'الإشراف التلقائي', icon: ShieldAlert },
       { to: '/dashboard/logs',       label: 'السجلات', icon: ScrollText },
       { to: '/dashboard/moderation', label: 'الإشراف', icon: Gavel },
       { to: '/dashboard/members',    label: 'الأعضاء', icon: Users },
