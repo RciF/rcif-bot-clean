@@ -527,7 +527,7 @@ function CustomWordsTab({ guildId, planGate }) {
           <Skeleton className="h-32 rounded-xl" />
         ) : words.length === 0 ? (
           <EmptyState
-            icon={Type}
+            icon={<Type />}
             title="لا توجد كلمات مخصصة"
             description="أضف كلمات خاصة لتُحظر في سيرفرك"
           />
@@ -745,7 +745,7 @@ function ViolationsTab({ guildId }) {
         <h3 className="font-bold mb-3">آخر المخالفات</h3>
         {data.violations.length === 0 ? (
           <EmptyState
-            icon={AlertTriangle}
+            icon={<AlertTriangle />}
             title="لا توجد مخالفات"
             description="السيرفر نظيف! 🎉"
           />
