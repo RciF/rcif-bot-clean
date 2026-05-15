@@ -39,8 +39,8 @@ export const Switch = forwardRef(
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           'disabled:cursor-not-allowed disabled:opacity-50',
           // states
-          'data-[state=checked]:lyn-gradient data-[state=checked]:lyn-glow',
-          'data-[state=unchecked]:bg-input',
+          'data-[state=checked]:bg-emerald-500 data-[state=checked]:shadow-[0_0_12px_rgba(16,185,129,0.5)]',
+'data-[state=unchecked]:bg-zinc-600',
           sz.root,
           className,
         )}
