@@ -13,19 +13,19 @@ import { cn } from '@/lib/utils';
 export const Switch = forwardRef(
   ({ className, size = 'default', ...props }, ref) => {
     const sizes = {
-      sm: {
-        root: 'h-5 w-9',
-        thumb: 'h-4 w-4 data-[state=checked]:translate-x-[-16px] data-[state=unchecked]:translate-x-0',
-      },
-      default: {
-        root: 'h-6 w-11',
-        thumb: 'h-5 w-5 data-[state=checked]:translate-x-[-20px] data-[state=unchecked]:translate-x-0',
-      },
-      lg: {
-        root: 'h-7 w-14',
-        thumb: 'h-6 w-6 data-[state=checked]:translate-x-[-28px] data-[state=unchecked]:translate-x-0',
-      },
-    };
+  sm: {
+    root: 'h-5 w-9',
+    thumb: 'h-4 w-4 data-[state=checked]:translate-x-0 data-[state=unchecked]:translate-x-[-16px]',
+  },
+  default: {
+    root: 'h-6 w-11',
+    thumb: 'h-5 w-5 data-[state=checked]:translate-x-0 data-[state=unchecked]:translate-x-[-20px]',
+  },
+  lg: {
+    root: 'h-7 w-14',
+    thumb: 'h-6 w-6 data-[state=checked]:translate-x-0 data-[state=unchecked]:translate-x-[-28px]',
+  },
+};
 
     const sz = sizes[size] || sizes.default;
 
