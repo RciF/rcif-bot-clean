@@ -6,6 +6,7 @@
  */
 
 import { apiClient } from "./client"
+export { apiClient }
 import { env } from "@/config/env"
 
 // ════════════════════════════════════════════════════════════
