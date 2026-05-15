@@ -123,9 +123,11 @@ export default function DashboardLayout() {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl lyn-gradient flex items-center justify-center">
-              <span className="text-white font-bold">L</span>
-            </div>
+            <img
+              src="/lyn-logo.png"
+              alt="Lyn Bot"
+              className="w-9 h-9 rounded-xl object-cover"
+            />
             <span className="font-bold text-lg lyn-text-gradient">Lyn Bot</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 hover:bg-sidebar-accent rounded-lg">
