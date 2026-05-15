@@ -124,7 +124,7 @@ export default function DashboardLayout() {
         <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border flex-shrink-0">
           <div className="flex items-center gap-3">
             <img
-              src="/lyn-logo.png"
+              src="/lyn-icon.png"
               alt="Lyn Bot"
               className="w-9 h-9 rounded-xl object-cover"
             />
