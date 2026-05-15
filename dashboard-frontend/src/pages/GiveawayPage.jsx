@@ -262,7 +262,7 @@ export default function GiveawayPage() {
         </div>
       ) : giveaways.length === 0 ? (
         <EmptyState
-          icon={Gift}
+          icon={<Gift />}
           title={filter === 'active' ? 'لا توجد سحوبات نشطة' : 'لا توجد سحوبات'}
           description="أنشئ سحبك الأول الآن!"
           action={
