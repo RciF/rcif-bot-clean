@@ -86,19 +86,24 @@ function ServerCard({ guild, plan, onManage, botInviteUrl }) {
               <img
                 src={iconUrl}
                 alt={guild.name}
+                referrerPolicy="no-referrer"
                 className="w-14 h-14 rounded-xl object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling.style.display = 'flex';
+                }}
               />
-            ) : (
-              <div
-                className={cn(
-                  'w-14 h-14 rounded-xl flex items-center justify-center',
-                  'bg-gradient-to-br text-white font-bold text-xl',
-                  cfg.gradient,
-                )}
-              >
-                {guild.name.slice(0, 1)}
-              </div>
-            )}
+            ) : null}
+            <div
+              className={cn(
+                'w-14 h-14 rounded-xl items-center justify-center',
+                'bg-gradient-to-br text-white font-bold text-xl',
+                cfg.gradient,
+                iconUrl ? 'hidden' : 'flex',
+              )}
+            >
+              {guild.name.slice(0, 1)}
+            </div>
             <span
               className={cn(
                 'absolute -bottom-1 -left-1 w-4 h-4 rounded-full border-2 border-card',
