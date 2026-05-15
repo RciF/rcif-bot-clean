@@ -25,7 +25,6 @@ const aiIdentitySystem = require("../systems/aiIdentitySystem");
 const aiContextSystem = require("../systems/aiContextSystem");
 const aiResponseFormatterSystem = require("../systems/aiResponseFormatterSystem");
 const aiMemorySystem = require("../systems/aiMemorySystem");
-const aiKnowledgeSystem = require("../systems/aiKnowledgeSystem");
 const aiDecisionSystem = require("../systems/aiDecisionSystem");
 const aiEmotionSystem = require("../systems/aiEmotionSystem");
 const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem");
@@ -397,23 +396,14 @@ class AIHandler {
         logger.error("MEMORY_FETCH_FAILED", { error: err.message });
       }
 
-      // 6) المعرفة
-      let knowledge = [];
-      try {
-        const rawKnowledge = await aiKnowledgeSystem.searchKnowledge?.(message, userId);
-        if (Array.isArray(rawKnowledge)) knowledge = rawKnowledge;
-      } catch (err) {
-        logger.error("KNOWLEDGE_FETCH_FAILED", { error: err.message });
-      }
-
-      // 7) العلاقات الاجتماعية
+      // 6) العلاقات الاجتماعية
       let socialScore = 0;
       try {
         const relation = await aiSocialAwarenessSystem.getOrLoadRelationship?.(userId, context.user?.id);
         if (relation && relation.score) socialScore = relation.score;
       } catch (err) {}
 
-      // 8) السياق الموحد
+      // 7) السياق الموحد
       let contextBlock = "";
       try {
         contextBlock = aiContextSystem.buildContext({
@@ -424,7 +414,7 @@ class AIHandler {
           messageObj,
           intent,
           memories,
-          knowledge,
+          knowledge: [],
           emotion,
           socialScore
         }) || "";
@@ -432,68 +422,31 @@ class AIHandler {
         logger.error("CONTEXT_BUILD_FAILED", { error: err.message });
       }
 
-      // 9) توجيهات الأدوات
+      // 8) توجيهات الأدوات
       const toolsGuide = guild.id ? `
 [⚠️ قواعد صارمة — قراءة إلزامية]
 
 لديك أدوات حقيقية للوصول إلى معلومات هذا السيرفر. **لا تخمن أبداً**.
-
-الأدوات المتاحة:
-- find_channel(name) — للبحث عن قناة
-- find_role(name) — للبحث عن رتبة
-- get_server_stats() — لإحصائيات السيرفر
-- get_my_info() — لمعلومات المستخدم الحالي عن نفسه
-
-========================================
-🔴 متى يجب استخدام الأدوات (إجباري):
-========================================
-
-✅ "فين قناة X" / "وين قناة X" / "قناة X موجودة" → استدعِ find_channel
-✅ "رتبة X موجودة" / "وش رتبة X" → استدعِ find_role
-✅ "كم عضو" / "كم قناة" / "السيرفر كبير" → استدعِ get_server_stats
-✅ "متى انضميت" / "كم صار لي" / "وش رتبي" → استدعِ get_my_info
-
-========================================
-🔴 قواعد عرض النتائج:
-========================================
-
-عندما ترجع الأداة حقل "mention" يجب نسخه حرفياً في ردك:
-- قناة: الصيغة <#123456> (تظهر كلون أزرق في Discord)
-- رتبة: الصيغة <@&123456>
-
-❌ ممنوع تخمّن أن قناة/رتبة موجودة بدون استدعاء الأداة
+استخدم الأدوات لما تحتاج معلومة عن قناة، رتبة، أو إحصائية في السيرفر.
 ` : "";
 
-      // 9.5) قيد طول الرد (لو الداش حدّدته)
-      const lengthBlock = (typeof context.maxResponseLength === "number" && context.maxResponseLength > 0)
-        ? `\n[قيد الطول]\n- التزم بألا يتجاوز ردك ${context.maxResponseLength} حرف.\n- اختصر بدون فقدان المعنى.\n`
-        : "";
+      // 9) دمج كل شيء
+      const fullPrompt = [
+        identityPrompt,
+        personalityPrompt,
+        personaBlock,
+        contextBlock,
+        toolsGuide
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .trim();
 
-      // 10) دمج كل شي
-      const systemPrompt = `
-${identityPrompt}
+      return fullPrompt || "أنت Lyn — بوت Discord ذكي وودود. تتكلم عربي. تتصرف كشخص حقيقي داخل سيرفر Discord. لا تقول أنك AI.";
 
-${personalityPrompt}
-
-${personaBlock}
-
-${contextBlock}
-
-${toolsGuide}
-
-${lengthBlock}
-
-[معلومات الجلسة]
-المستخدم: ${user.username || "مجهول"}
-السيرفر: ${guild.name || "غير معروف"}
-القناة: ${channel.name || "عام"}
-`.trim();
-
-      return systemPrompt;
-
-    } catch (error) {
-      logger.error("SYSTEM_PROMPT_BUILD_FAILED", { error: error.message });
-      return "اسمك لين. تتكلم عربي. تتصرف كشخص حقيقي داخل سيرفر Discord. لا تقول أنك AI.";
+    } catch (err) {
+      logger.error("BUILD_SYSTEM_PROMPT_FAILED", { error: err.message });
+      return "أنت Lyn — بوت Discord ذكي وودود. تتكلم عربي. تتصرف كشخص حقيقي داخل سيرفر Discord. لا تقول أنك AI.";
     }
   }
 

@@ -869,21 +869,52 @@ router.get(
 
 // ════════════════════════════════════════════════════════════
 //  ════════════ EVENTS ════════════
+//  Schema موحّد: guild_events
+//
+//  Mapping بين الفرونت و guild_events:
+//   - starts_at (datetime) ↔ start_time (BIGINT ms)
+//   - channel ↔ channel_id
+//   - max_participants ↔ max_attendees
+//   - image ↔ image_url
 // ════════════════════════════════════════════════════════════
-
+ 
+function mapEventToFrontend(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    guild_id: row.guild_id,
+    title: row.title,
+    description: row.description,
+    image: row.image_url,
+    channel: row.channel_id,
+    starts_at: row.start_time ? new Date(Number(row.start_time)).toISOString() : null,
+    max_participants: row.max_attendees,
+    reminder_hours: 1,
+    status: row.status || "upcoming",
+    created_by: row.creator_id,
+    created_at: row.created_at,
+    registered: row.registered || 0,
+  }
+}
+ 
 router.get(
   "/events",
   requireAuth,
   requireGuildAdmin,
   asyncHandler(async (req, res) => {
     const r = await query(
-      `SELECT * FROM events WHERE guild_id = $1 ORDER BY starts_at DESC`,
+      `SELECT e.*,
+              COALESCE((SELECT COUNT(*)::int FROM event_attendees a
+                        WHERE a.event_id = e.id AND a.status = 'going'), 0) AS registered
+       FROM guild_events e
+       WHERE e.guild_id = $1
+       ORDER BY e.start_time DESC`,
       [req.params.guildId],
     ).catch(() => ({ rows: [] }))
-    res.json(r.rows)
+    res.json(r.rows.map(mapEventToFrontend))
   }),
 )
-
+ 
 router.post(
   "/events",
   requireAuth,
@@ -891,26 +922,31 @@ router.post(
   requirePlan(PLAN_TIERS.GOLD),
   auditLog("event.create"),
   asyncHandler(async (req, res) => {
-    const { title, description, image, starts_at, max_participants, channel, reminder_hours } = req.body
+    const { title, description, image, starts_at, max_participants, channel } = req.body
+    const startTime = starts_at ? new Date(starts_at).getTime() : Date.now()
+ 
     const r = await query(
-      `INSERT INTO events (guild_id, title, description, image, starts_at, max_participants, channel, reminder_hours, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      `INSERT INTO guild_events
+         (guild_id, channel_id, creator_id, title, description, category,
+          start_time, max_attendees, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
       [
         req.params.guildId,
-        title,
-        description,
-        image,
-        starts_at,
-        max_participants,
         channel,
-        reminder_hours,
         req.user.id,
+        title,
+        description || null,
+        "other",
+        startTime,
+        max_participants ? parseInt(max_participants) : null,
+        image || null,
       ],
     )
-    res.json(r.rows[0])
+    res.json(mapEventToFrontend(r.rows[0]))
   }),
 )
-
+ 
 router.put(
   "/events/:id",
   requireAuth,
@@ -918,18 +954,25 @@ router.put(
   requirePlan(PLAN_TIERS.GOLD),
   auditLog("event.update"),
   asyncHandler(async (req, res) => {
-    const { title, description, image, starts_at, max_participants, channel, reminder_hours } = req.body
+    const { title, description, image, starts_at, max_participants, channel } = req.body
+    const startTime = starts_at ? new Date(starts_at).getTime() : null
+ 
     await query(
-      `UPDATE events SET title=$1, description=$2, image=$3, starts_at=$4, max_participants=$5, channel=$6, reminder_hours=$7
-       WHERE id=$8 AND guild_id=$9`,
+      `UPDATE guild_events SET
+         title = $1,
+         description = $2,
+         image_url = $3,
+         start_time = COALESCE($4, start_time),
+         max_attendees = $5,
+         channel_id = $6
+       WHERE id = $7 AND guild_id = $8`,
       [
         title,
-        description,
-        image,
-        starts_at,
-        max_participants,
+        description || null,
+        image || null,
+        startTime,
+        max_participants ? parseInt(max_participants) : null,
         channel,
-        reminder_hours,
         req.params.id,
         req.params.guildId,
       ],
@@ -937,17 +980,22 @@ router.put(
     res.json({ success: true })
   }),
 )
-
+ 
 router.delete(
   "/events/:id",
   requireAuth,
   requireGuildAdmin,
   auditLog("event.delete"),
   asyncHandler(async (req, res) => {
-    await query(`DELETE FROM events WHERE id = $1 AND guild_id = $2`, [
-      req.params.id,
-      req.params.guildId,
-    ])
+    await query(
+      `DELETE FROM event_attendees WHERE event_id = $1`,
+      [req.params.id],
+    ).catch(() => {})
+ 
+    await query(
+      `DELETE FROM guild_events WHERE id = $1 AND guild_id = $2`,
+      [req.params.id, req.params.guildId],
+    )
     res.json({ success: true })
   }),
 )
@@ -1236,7 +1284,7 @@ router.delete(
     }
 
     // ── 3) قائمة الجداول للحذف (guild-scoped) ──
-    const tables = [
+   const tables = [
       // إعدادات
       "welcome_settings",
       "protection_settings",
@@ -1248,11 +1296,12 @@ router.delete(
       "stats_config",
       "guild_command_settings",
       "guild_prefix_settings",
-
+      "automod_settings",
+      "auto_role_settings",
+      "event_settings",
+ 
       // بيانات (per-guild)
       "xp",
-      "inventory",
-      "users",
       "tickets",
       "economy_shop",
       "moderation_bans",
@@ -1268,8 +1317,18 @@ router.delete(
       "stats_channels",
       "stats_snapshots",
       "stats_hourly",
-      "guild_analytics",
-
+      "automod_words",
+      "automod_violations",
+      "auto_role_assignments",
+      "auto_role_history",
+      "bulk_actions",
+      "giveaways",
+      "guild_command_aliases",
+      "guild_command_defaults",
+      "guild_command_restrictions",
+      "command_usage_stats",
+      "help_hidden_categories",
+ 
       // الجدول الأساسي للسيرفر (آخر شيء)
       "guilds",
     ]

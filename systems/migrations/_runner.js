@@ -5,6 +5,9 @@
 //  - يقرأ كل ملفات migrations/*.js (ما عدا اللي تبدأ بـ _)
 //  - يتجاهل اللي طُبّقت (مسجّلة في schema_migrations)
 //  - يشغّل الباقي بترتيب الاسم
+//
+//  ⚠️ تم حذف autoMarkLegacy() لأنه كان يتجاوز migrations مهمة
+//  ⚠️ كل الجداول الآن لها migrations فعلية (001-016)
 // ══════════════════════════════════════════════════════════════════
 
 const fs = require("fs")
@@ -33,28 +36,8 @@ async function markApplied(id) {
   )
 }
 
-async function autoMarkLegacy() {
-  // لو الجداول القديمة موجودة من قبل (سيرفر شغّال) — نسجل الـ migrations الأساسية كمُطبَّقة
-  // عشان ما نعيد تشغيلها بدون داعي
-  try {
-    const r = await databaseSystem.queryOne(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = 'users'
-      ) AS exists
-    `)
-    if (r?.exists) {
-      const legacy = ["001_initial","002_log_settings","003_tickets","004_welcome","005_protection","006_button_roles","007_events","008_economy_extras"]
-      for (const id of legacy) {
-        await markApplied(id)
-      }
-    }
-  } catch {}
-}
-
 async function runAll() {
   await ensureMigrationsTable()
-  await autoMarkLegacy()
   const applied = await getAppliedMigrations()
 
   const dir = __dirname
