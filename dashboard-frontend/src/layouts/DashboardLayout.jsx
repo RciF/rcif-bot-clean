@@ -243,9 +243,17 @@ export default function DashboardLayout() {
         <div className="p-4 border-t border-sidebar-border space-y-3 flex-shrink-0">
           {user && (
             <div className="flex items-center gap-3 px-2">
-              <div className="w-9 h-9 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-semibold">
-                {userInitial}
-              </div>
+              {user.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.username}
+                  className="w-9 h-9 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-semibold">
+                  {userInitial}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm truncate">{user.username}</div>
                 <div className="text-xs text-muted-foreground">
@@ -289,9 +297,17 @@ export default function DashboardLayout() {
               <Bell className="w-5 h-5" />
               <span className="absolute top-1.5 left-1.5 w-2 h-2 bg-lyn-pink-500 rounded-full" />
             </button>
-            <div className="w-9 h-9 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-semibold">
-              {userInitial}
-            </div>
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.username}
+                className="w-9 h-9 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full lyn-gradient flex items-center justify-center text-white text-sm font-semibold">
+                {userInitial}
+              </div>
+            )}
           </div>
         </header>
 
