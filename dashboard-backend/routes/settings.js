@@ -19,7 +19,7 @@ const { query, transaction } = require("../config/database")
 const { getGuildPlan } = require("../services/guildPlan")
 const { hasAccess, PLAN_TIERS } = require("../plans")
 const botApi = require("../utils/botApi")
-
+const { invalidateGuildCommands } = require("../services/commandsCache")
 const router = express.Router({ mergeParams: true })
 
 // ════════════════════════════════════════════════════════════
@@ -63,31 +63,35 @@ async function getSettings(table, guildId, defaults = {}) {
 
 /**
  * UPSERT settings — نسخة محسّنة تتعامل مع JSONB تلقائياً
+ * + cache invalidation تلقائي بعد كل save
  */
 async function upsertSettings(table, guildId, data) {
   const cleaned = { ...data }
   delete cleaned.guild_id
   delete cleaned.created_at
   delete cleaned.updated_at
-
+ 
   const keys = Object.keys(cleaned)
   if (keys.length === 0) return
-
+ 
   const values = keys.map((k) => {
     const v = cleaned[k]
     return typeof v === "object" && v !== null ? JSON.stringify(v) : v
   })
-
+ 
   const setClauses = keys.map((k, i) => `${k} = $${i + 2}`).join(", ")
   const insertColumns = ["guild_id", ...keys].join(", ")
   const insertValues = ["$1", ...keys.map((_, i) => `$${i + 2}`)].join(", ")
-
+ 
   await query(
     `INSERT INTO ${table} (${insertColumns})
      VALUES (${insertValues})
      ON CONFLICT (guild_id) DO UPDATE SET ${setClauses}`,
     [guildId, ...values],
   )
+ 
+  // ✅ مسح cache البوت بعد كل save — يضمن التغييرات فورية
+  invalidateGuildCommands(guildId).catch(() => {})
 }
 
 // ════════════════════════════════════════════════════════════

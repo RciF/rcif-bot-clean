@@ -228,15 +228,37 @@ function startApiServer(client) {
   app.post("/api/internal/invalidate-commands", requireBotSecret, async (req, res) => {
     try {
       const { guildId } = req.body || {}
-
+ 
       if (!guildId || typeof guildId !== "string") {
         return res.status(400).json({ error: "guildId required" })
       }
-
+ 
+      // ─── 1) مسح كاش aliases ───
       commandAliases.invalidate(guildId)
-
+ 
+      // ─── 2) مسح كاش الـ settings الموحد (ai, welcome, protection, ...) ───
+      try {
+        const cacheSystem = require("../utils/cacheSystem")
+ 
+        // AI settings
+        cacheSystem.ns("ai-settings").del(guildId)
+ 
+        // Settings caches موحّدة (يمكن إضافة المزيد لاحقاً)
+        cacheSystem.ns("welcome-settings").del(guildId)
+        cacheSystem.ns("protection-settings").del(guildId)
+        cacheSystem.ns("log-settings").del(guildId)
+        cacheSystem.ns("xp-settings").del(guildId)
+        cacheSystem.ns("economy-settings").del(guildId)
+        cacheSystem.ns("ticket-settings").del(guildId)
+        cacheSystem.ns("automod-settings").del(guildId)
+        cacheSystem.ns("auto-role-settings").del(guildId)
+        cacheSystem.ns("event-settings").del(guildId)
+      } catch (err) {
+        logger.warn("CACHE_NAMESPACE_CLEAR_FAILED", { error: err.message })
+      }
+ 
       logger.info("COMMANDS_CACHE_INVALIDATED_VIA_API", { guildId })
-
+ 
       return res.json({ success: true })
     } catch (err) {
       logger.error("INVALIDATE_COMMANDS_API_FAILED", { error: err.message })
