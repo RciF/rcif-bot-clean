@@ -30,29 +30,41 @@ const BASE_NAV_SECTIONS = [
     ],
   },
   {
-    label: 'إدارة السيرفر',
+    label: 'الإعدادات الأساسية',
     items: [
-      { to: '/dashboard/welcome',    label: 'الترحيب', icon: PartyPopper },
-      { to: '/dashboard/protection', label: 'الحماية', icon: Shield },
-      { to: '/dashboard/automod', label: 'الإشراف التلقائي', icon: ShieldAlert },
-      { to: '/dashboard/logs',       label: 'السجلات', icon: ScrollText },
-      { to: '/dashboard/moderation', label: 'الإشراف', icon: Gavel },
-      { to: '/dashboard/members',    label: 'الأعضاء', icon: Users },
-      { to: '/dashboard/auto-role', label: 'الرتبة التلقائية', icon: UserPlus },
+      { to: '/dashboard/commands', label: 'الأوامر',  icon: Terminal },
+      { to: '/dashboard/settings', label: 'إعدادات', icon: Settings },
+    ],
+  },
+  {
+    label: 'الأمان والإشراف',
+    items: [
+      { to: '/dashboard/protection', label: 'الحماية',           icon: Shield },
+      { to: '/dashboard/automod',    label: 'الإشراف التلقائي', icon: ShieldAlert },
+      { to: '/dashboard/moderation', label: 'الإشراف اليدوي',    icon: Gavel },
+      { to: '/dashboard/logs',       label: 'السجلات',           icon: ScrollText },
+    ],
+  },
+  {
+    label: 'الأعضاء',
+    items: [
+      { to: '/dashboard/welcome',        label: 'الترحيب',          icon: PartyPopper },
+      { to: '/dashboard/auto-role',      label: 'الرتبة التلقائية', icon: UserPlus },
+      { to: '/dashboard/members',        label: 'الأعضاء',          icon: Users },
+      { to: '/dashboard/reaction-roles', label: 'لوحات الرتب',      icon: ToggleRight },
     ],
   },
   {
     label: 'التفاعل',
     items: [
-      { to: '/dashboard/tickets',        label: 'التذاكر',      icon: Ticket },
-      { to: '/dashboard/reaction-roles', label: 'لوحات الرتب', icon: ToggleRight },
-      { to: '/dashboard/levels',         label: 'المستويات',    icon: TrendingUp },
-      { to: '/dashboard/economy',        label: 'الاقتصاد',     icon: Coins },
-      { to: '/dashboard/events',         label: 'الفعاليات',    icon: CalendarDays },
+      { to: '/dashboard/tickets',  label: 'التذاكر',   icon: Ticket },
+      { to: '/dashboard/levels',   label: 'المستويات', icon: TrendingUp },
+      { to: '/dashboard/economy',  label: 'الاقتصاد',  icon: Coins },
+      { to: '/dashboard/events',   label: 'الفعاليات', icon: CalendarDays },
     ],
   },
   {
-    label: 'المتقدم',
+    label: 'الأدوات الذكية',
     items: [
       { to: '/dashboard/ai',        label: 'الذكاء الاصطناعي', icon: Bot },
       { to: '/dashboard/embed',     label: 'منشئ الإيمبيد',    icon: Sparkles },
@@ -61,11 +73,9 @@ const BASE_NAV_SECTIONS = [
     ],
   },
   {
-    label: 'الإعدادات',
+    label: 'الحساب',
     items: [
-      { to: '/dashboard/commands',     label: 'الأوامر',   icon: Terminal },
-      { to: '/dashboard/subscription', label: 'الاشتراك',  icon: CreditCard },
-      { to: '/dashboard/settings',     label: 'إعدادات',   icon: Settings },
+      { to: '/dashboard/subscription', label: 'الاشتراك', icon: CreditCard },
     ],
   },
 ];
