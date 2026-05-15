@@ -1185,22 +1185,50 @@ router.get(
   asyncHandler(async (req, res) => {
     const guildId = req.params.guildId
 
-    const [protection, logs] = await Promise.all([
+    const [protection, logs, snapshots, ticketStats, warningCount] = await Promise.all([
       getSettings("protection_settings", guildId),
       getSettings("log_settings", guildId),
+      query(
+        `SELECT member_count, online_peak, joined_today, left_today
+         FROM stats_snapshots
+         WHERE guild_id = $1
+           AND date >= CURRENT_DATE - INTERVAL '7 days'
+         ORDER BY date DESC`,
+        [guildId],
+      ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = 'open')::int AS open,
+           COUNT(*)::int AS total
+         FROM tickets WHERE guild_id = $1`,
+        [guildId],
+      ).catch(() => ({ rows: [{ open: 0, total: 0 }] })),
+      query(
+        `SELECT COUNT(*)::int AS count
+         FROM warnings
+         WHERE guild_id = $1
+           AND created_at >= NOW() - INTERVAL '7 days'`,
+        [guildId],
+      ).catch(() => ({ rows: [{ count: 0 }] })),
     ])
 
     const securityScore = calculateSecurityScore(protection)
     const organizationScore = calculateOrganizationScore(logs)
+    const activityScore = calculateActivityScore(snapshots.rows)
+    const engagementScore = calculateEngagementScore(
+      snapshots.rows,
+      ticketStats.rows[0],
+      warningCount.rows[0]?.count || 0,
+    )
 
     res.json({
       healthScore: {
-        total: Math.round((securityScore + organizationScore + 75 + 80) / 4),
+        total: Math.round((securityScore + organizationScore + activityScore + engagementScore) / 4),
         breakdown: {
           security: { score: securityScore, label: "الأمان" },
-          activity: { score: 75, label: "النشاط" },
+          activity: { score: activityScore, label: "النشاط" },
           organization: { score: organizationScore, label: "التنظيم" },
-          engagement: { score: 80, label: "التفاعل" },
+          engagement: { score: engagementScore, label: "التفاعل" },
         },
       },
       stats: {
@@ -1239,7 +1267,60 @@ function calculateOrganizationScore(logs) {
   const enabled = Object.values(events).filter((e) => e?.enabled).length
   return Math.round(30 + (enabled / keys.length) * 70)
 }
+function calculateActivityScore(snapshots) {
+  if (!Array.isArray(snapshots) || snapshots.length === 0) return 40
 
+  // متوسط نسبة المتصلين خلال آخر 7 أيام
+  let totalRatio = 0
+  let count = 0
+
+  for (const snap of snapshots) {
+    const members = parseInt(snap.member_count) || 0
+    const online = parseInt(snap.online_peak) || 0
+    if (members > 0) {
+      totalRatio += (online / members)
+      count++
+    }
+  }
+
+  if (count === 0) return 40
+
+  const avgOnlineRatio = totalRatio / count
+  // 20%+ متصلين = 100 score (سيرفر صحي جداً)
+  const score = Math.min(100, Math.round(avgOnlineRatio * 500))
+  return Math.max(30, score)
+}
+
+function calculateEngagementScore(snapshots, ticketStats, recentWarnings) {
+  if (!Array.isArray(snapshots) || snapshots.length === 0) return 40
+
+  let score = 40
+
+  // 1) نمو الأعضاء (الانضمامات > المغادرات؟)
+  let totalJoins = 0
+  let totalLeaves = 0
+  for (const snap of snapshots) {
+    totalJoins += parseInt(snap.joined_today) || 0
+    totalLeaves += parseInt(snap.left_today) || 0
+  }
+
+  if (totalJoins > totalLeaves) score += 20
+  else if (totalJoins === totalLeaves) score += 10
+
+  // 2) نشاط التذاكر (يعني الأعضاء بيتفاعلون مع الستاف)
+  if (ticketStats?.total > 0) {
+    score += Math.min(20, ticketStats.total * 2)
+  }
+
+  // 3) خصم على التحذيرات الكثيرة (مشاكل = خلل في التفاعل)
+  if (recentWarnings > 10) score -= 10
+  else if (recentWarnings > 5) score -= 5
+
+  // 4) إذا فيه joins كثيرة، علامة سيرفر نشط
+  if (totalJoins >= 5) score += 10
+
+  return Math.max(30, Math.min(100, score))
+}
 // ════════════════════════════════════════════════════════════
 //  ════════════ DANGER ZONE ════════════
 //  هذا الكود يضاف داخل dashboard-backend/routes/settings.js
