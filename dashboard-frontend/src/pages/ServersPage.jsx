@@ -65,9 +65,7 @@ function ServerCard({ guild, plan, onManage, botInviteUrl }) {
   const PlanIcon = cfg.icon;
   const hasBot = guild.hasBot;
 
-  const iconUrl = guild.icon
-    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128`
-    : null;
+  const iconUrl = guild.icon || null;
 
   return (
     <div

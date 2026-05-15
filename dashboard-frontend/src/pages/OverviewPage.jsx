@@ -252,9 +252,7 @@ export default function OverviewPage() {
   const PlanIcon = planCfg.icon;
 
   const guild = guildInfo || selectedGuild || {};
-  const iconUrl = guild?.icon
-    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128`
-    : null;
+  const iconUrl = guild?.icon || null;
 
   const healthScore = overview?.healthScore?.total || 0;
   const breakdown = overview?.healthScore?.breakdown || {};

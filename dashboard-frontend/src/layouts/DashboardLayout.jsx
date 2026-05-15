@@ -109,9 +109,7 @@ export default function DashboardLayout() {
 
   const userInitial = user?.username?.[0]?.toUpperCase() || 'م';
 
-  const guildIconUrl = selectedGuild?.icon
-    ? `https://cdn.discordapp.com/icons/${selectedGuild.id}/${selectedGuild.icon}.png?size=64`
-    : null;
+  const guildIconUrl = selectedGuild?.icon || null;
 
   return (
     <div className="min-h-screen flex bg-background">
