@@ -73,15 +73,23 @@ module.exports = {
             .setDescription("رسالة الوداع — استخدم {username} {server} و \\n للسطر الجديد")
             .setRequired(false)
         )
-        .addBooleanOption(o =>
+        .addStringOption(o =>
           o.setName("منشن_العضو")
-            .setDescription("هل يتم منشن العضو في رسالة الترحيب؟ (افتراضي: نعم)")
+            .setDescription("هل يتم منشن العضو في رسالة الترحيب؟")
             .setRequired(false)
+            .addChoices(
+              { name: "✅ نعم — منشن العضو", value: "yes" },
+              { name: "❌ لا — بدون منشن",    value: "no"  }
+            )
         )
-        .addBooleanOption(o =>
+        .addStringOption(o =>
           o.setName("تفعيل_الوداع")
             .setDescription("هل يتم إرسال رسالة وداع عند مغادرة عضو؟")
             .setRequired(false)
+            .addChoices(
+              { name: "✅ نعم — إرسال رسالة وداع", value: "yes" },
+              { name: "❌ لا — بدون وداع",          value: "no"  }
+            )
         )
     )
 
@@ -117,8 +125,8 @@ module.exports = {
         description: "ضبط إعدادات الترحيب (القناة، الرسالة، منشن، تفعيل الوداع)",
         examples: [
           "/ترحيب ضبط قناة_الترحيب:#welcome رسالة_الترحيب:أهلاً {user}!",
-          "/ترحيب ضبط قناة_الترحيب:#welcome منشن_العضو:false",
-          "/ترحيب ضبط قناة_الترحيب:#welcome قناة_الوداع:#bye تفعيل_الوداع:true"
+          "/ترحيب ضبط قناة_الترحيب:#welcome منشن_العضو:❌ لا — بدون منشن",
+          "/ترحيب ضبط قناة_الترحيب:#welcome قناة_الوداع:#bye تفعيل_الوداع:✅ نعم — إرسال رسالة وداع"
         ],
         notes: [
           "يدعم متغيرات: {user} = منشن العضو، {username} = اسم العضو، {server} = اسم السيرفر، {count} = عدد الأعضاء",

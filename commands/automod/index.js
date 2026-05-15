@@ -51,11 +51,11 @@ module.exports = {
         .setDescription("تشغيل أو إيقاف النظام كاملاً")
         .addStringOption(o =>
           o.setName("الحالة")
-            .setDescription("on أو off")
+            .setDescription("تشغيل أو إيقاف")
             .setRequired(true)
             .addChoices(
-              { name: "✅ تشغيل | on", value: "on" },
-              { name: "❌ إيقاف | off", value: "off" }
+              { name: "✅ تشغيل", value: "on" },
+              { name: "❌ إيقاف", value: "off" }
             )
         )
     )
@@ -72,7 +72,7 @@ module.exports = {
         )
         .addStringOption(o =>
           o.setName("الحالة")
-            .setDescription("on أو off")
+            .setDescription("تشغيل أو إيقاف")
             .setRequired(true)
             .addChoices(
               { name: "✅ تشغيل", value: "on" },

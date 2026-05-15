@@ -21,16 +21,16 @@ const COLORS = {
 }
 
 const COLOR_CHOICES = [
-  { name: "أزرق | Blue",      value: "blue"   },
-  { name: "أخضر | Green",     value: "green"  },
-  { name: "أحمر | Red",       value: "red"    },
-  { name: "أصفر | Yellow",    value: "yellow" },
-  { name: "بنفسجي | Purple",  value: "purple" },
-  { name: "برتقالي | Orange", value: "orange" },
-  { name: "وردي | Pink",      value: "pink"   },
-  { name: "سماوي | Cyan",     value: "cyan"   },
-  { name: "ذهبي | Gold",      value: "gold"   },
-  { name: "داكن | Dark",      value: "dark"   }
+  { name: "🔵 أزرق",    value: "blue"   },
+  { name: "🟢 أخضر",    value: "green"  },
+  { name: "🔴 أحمر",    value: "red"    },
+  { name: "🟡 أصفر",    value: "yellow" },
+  { name: "🟣 بنفسجي",  value: "purple" },
+  { name: "🟠 برتقالي", value: "orange" },
+  { name: "🩷 وردي",    value: "pink"   },
+  { name: "🩵 سماوي",   value: "cyan"   },
+  { name: "🟨 ذهبي",    value: "gold"   },
+  { name: "⚫ داكن",    value: "dark"   }
 ]
 
 // ══════════════════════════════════════

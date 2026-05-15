@@ -63,12 +63,12 @@ module.exports = {
         .setDescription("وحدة الوقت")
         .setRequired(true)
         .addChoices(
-          { name: "ثانية | Second", value: "ثانية" },
-          { name: "دقيقة | Minute", value: "دقيقة" },
-          { name: "ساعة | Hour",    value: "ساعة"  },
-          { name: "يوم | Day",      value: "يوم"   },
-          { name: "أسبوع | Week",   value: "اسبوع" },
-          { name: "شهر | Month (28 يوم)", value: "شهر" }
+          { name: "⏱️ ثانية",          value: "ثانية" },
+          { name: "🕐 دقيقة",          value: "دقيقة" },
+          { name: "🕒 ساعة",           value: "ساعة"  },
+          { name: "📅 يوم",            value: "يوم"   },
+          { name: "📆 أسبوع",          value: "اسبوع" },
+          { name: "🗓️ شهر (28 يوم)",  value: "شهر"   }
         )
     )
     .addStringOption(option =>

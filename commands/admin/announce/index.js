@@ -108,9 +108,9 @@ module.exports = {
             .setDescription("منشن قبل الإعلان (اختياري)")
             .setRequired(false)
             .addChoices(
-              { name: "الكل | @everyone",   value: "everyone" },
-              { name: "الموجودين | @here", value: "here"     },
-              { name: "بدون منشن | None",   value: "none"     }
+              { name: "📢 منشن الكل",          value: "everyone" },
+              { name: "👥 منشن الموجودين",    value: "here"     },
+              { name: "🔕 بدون منشن",         value: "none"     }
             )
         )
     )

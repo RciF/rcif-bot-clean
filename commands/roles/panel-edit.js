@@ -30,7 +30,15 @@ module.exports = {
     )
     .addStringOption(o => o.setName("صورة").setDescription("رابط جديد — أو 'إزالة' للحذف").setRequired(false))
     .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط جديد — أو 'إزالة' للحذف").setRequired(false))
-    .addBooleanOption(o => o.setName("حصري").setDescription("تغيير وضع الحصري").setRequired(false)),
+    .addStringOption(o => o
+      .setName("حصري")
+      .setDescription("تغيير وضع الحصري (رتبة واحدة فقط؟)")
+      .setRequired(false)
+      .addChoices(
+        { name: "✅ نعم — رتبة واحدة فقط",  value: "yes" },
+        { name: "❌ لا — أكثر من رتبة",     value: "no"  }
+      )
+    ),
 
   helpMeta: {
     category: "roles",
@@ -76,7 +84,8 @@ module.exports = {
       const color     = interaction.options.getString("اللون")
       const imageRaw  = interaction.options.getString("صورة")
       const thumbRaw  = interaction.options.getString("ثمبنيل")
-      const exclusive = interaction.options.getBoolean("حصري")
+      const exclusiveRaw = interaction.options.getString("حصري")
+      const exclusive = exclusiveRaw === null ? null : (exclusiveRaw === "yes")
 
       if (imageRaw && imageRaw.trim() !== "إزالة" && !isValidHttpUrl(imageRaw)) {
         return interaction.editReply({

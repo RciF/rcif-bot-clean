@@ -50,7 +50,7 @@ const ROUTES = {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("حماية")
-    .setDescription("إعداد نظام الحماية (Anti-Spam, Anti-Raid, Anti-Nuke)")
+    .setDescription("إعداد نظام الحماية الشامل للسيرفر")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 
@@ -63,7 +63,7 @@ module.exports = {
     // ─── سبام ───
     .addSubcommand(sub =>
       sub.setName("سبام")
-        .setDescription("إعداد نظام Anti-Spam")
+        .setDescription("إعداد نظام مكافحة السبام")
         .addStringOption(o =>
           o.setName("الحالة").setDescription("تفعيل أو إيقاف").setRequired(true)
             .addChoices(
@@ -82,9 +82,9 @@ module.exports = {
         .addStringOption(o =>
           o.setName("العقوبة").setDescription("الإجراء عند الكشف")
             .addChoices(
-              { name: "🔇 كتم | Mute", value: "mute" },
-              { name: "👢 طرد | Kick", value: "kick" },
-              { name: "🚫 حظر | Ban",  value: "ban"  }
+              { name: "🔇 كتم", value: "mute" },
+              { name: "👢 طرد", value: "kick" },
+              { name: "🚫 حظر", value: "ban"  }
             )
         )
         .addIntegerOption(o =>
@@ -96,7 +96,7 @@ module.exports = {
     // ─── رايد ───
     .addSubcommand(sub =>
       sub.setName("رايد")
-        .setDescription("إعداد نظام Anti-Raid")
+        .setDescription("إعداد نظام مكافحة الرايد")
         .addStringOption(o =>
           o.setName("الحالة").setDescription("تفعيل أو إيقاف").setRequired(true)
             .addChoices(
@@ -115,8 +115,8 @@ module.exports = {
         .addStringOption(o =>
           o.setName("العقوبة").setDescription("الإجراء عند الكشف")
             .addChoices(
-              { name: "🔒 قفل السيرفر | Lockdown", value: "lockdown" },
-              { name: "👢 طرد الجدد | Kick",       value: "kick"     }
+              { name: "🔒 قفل السيرفر", value: "lockdown" },
+              { name: "👢 طرد الجدد",   value: "kick"     }
             )
         )
     )
@@ -124,7 +124,7 @@ module.exports = {
     // ─── نيوك ───
     .addSubcommand(sub =>
       sub.setName("نيوك")
-        .setDescription("إعداد نظام Anti-Nuke")
+        .setDescription("إعداد نظام مكافحة التدمير")
         .addStringOption(o =>
           o.setName("الحالة").setDescription("تفعيل أو إيقاف").setRequired(true)
             .addChoices(
@@ -147,9 +147,9 @@ module.exports = {
         .addStringOption(o =>
           o.setName("العقوبة").setDescription("الإجراء على المنفذ")
             .addChoices(
-              { name: "🚫 حظر | Ban",                value: "ban"          },
-              { name: "👢 طرد | Kick",               value: "kick"         },
-              { name: "🔑 سلب الصلاحيات | Strip",   value: "strip_roles"  }
+              { name: "🚫 حظر",            value: "ban"          },
+              { name: "👢 طرد",            value: "kick"         },
+              { name: "🔑 سلب الصلاحيات", value: "strip_roles"  }
             )
         )
     )

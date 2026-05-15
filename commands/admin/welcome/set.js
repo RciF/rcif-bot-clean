@@ -20,8 +20,8 @@ module.exports = async function handleSet(interaction, guildId) {
   const welcomeMsg = parseMessage(interaction.options.getString("رسالة_الترحيب"))
   const goodbyeMsg = parseMessage(interaction.options.getString("رسالة_الوداع"))
 
-  const mentionUser = interaction.options.getBoolean("منشن_العضو")
-  const leaveEnabled = interaction.options.getBoolean("تفعيل_الوداع")
+  const mentionUserRaw = interaction.options.getString("منشن_العضو")
+  const leaveEnabledRaw = interaction.options.getString("تفعيل_الوداع")
 
   // اجلب الإعدادات الحالية للحفاظ على القيم اللي ما تغيّرت
   const current = await databaseSystem.queryOne(

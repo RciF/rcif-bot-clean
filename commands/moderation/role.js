@@ -16,8 +16,8 @@ module.exports = {
         .setDescription("إعطاء أو سحب الرتبة")
         .setRequired(true)
         .addChoices(
-          { name: "➕ إعطاء الرتبة | Add Role",   value: "add"    },
-          { name: "➖ سحب الرتبة | Remove Role",   value: "remove" }
+          { name: "➕ إعطاء الرتبة", value: "add"    },
+          { name: "➖ سحب الرتبة",   value: "remove" }
         )
     )
     .addStringOption(option =>
@@ -26,10 +26,10 @@ module.exports = {
         .setDescription("لمين تبي تعدل الرتبة؟")
         .setRequired(true)
         .addChoices(
-          { name: "👤 عضو محدد | Single Member",     value: "single"     },
-          { name: "👥 كل الأعضاء البشر | All Humans", value: "all_humans" },
-          { name: "🤖 كل البوتات | All Bots",         value: "all_bots"   },
-          { name: "🌐 الكل بشر وبوتات | Everyone",   value: "everyone"   }
+          { name: "👤 عضو محدد",            value: "single"     },
+          { name: "👥 كل الأعضاء البشر",   value: "all_humans" },
+          { name: "🤖 كل البوتات",          value: "all_bots"   },
+          { name: "🌐 الكل (بشر وبوتات)",  value: "everyone"   }
         )
     )
     .addUserOption(option =>

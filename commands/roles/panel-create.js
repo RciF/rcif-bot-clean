@@ -27,7 +27,15 @@ module.exports = {
     )
     .addStringOption(o => o.setName("صورة").setDescription("رابط صورة كبيرة (http/https)").setRequired(false))
     .addStringOption(o => o.setName("ثمبنيل").setDescription("رابط صورة صغيرة (http/https)").setRequired(false))
-    .addBooleanOption(o => o.setName("حصري").setDescription("رتبة واحدة فقط من اللوحة؟").setRequired(false)),
+    .addStringOption(o => o
+      .setName("حصري")
+      .setDescription("رتبة واحدة فقط من اللوحة؟")
+      .setRequired(false)
+      .addChoices(
+        { name: "✅ نعم — رتبة واحدة فقط",  value: "yes" },
+        { name: "❌ لا — أكثر من رتبة",     value: "no"  }
+      )
+    ),
 
   helpMeta: {
     category: "roles",
@@ -72,7 +80,8 @@ module.exports = {
       const color     = interaction.options.getString("اللون") || "أزرق"
       const imageRaw  = interaction.options.getString("صورة")
       const thumbRaw  = interaction.options.getString("ثمبنيل")
-      const exclusive = interaction.options.getBoolean("حصري") ?? false
+      const exclusiveRaw = interaction.options.getString("حصري")
+      const exclusive = exclusiveRaw === "yes"
 
       if (imageRaw && !isValidHttpUrl(imageRaw)) {
         return interaction.editReply({

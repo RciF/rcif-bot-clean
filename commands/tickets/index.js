@@ -110,8 +110,8 @@ module.exports = {
             .setDescription("حفظ المحادثة عند الإغلاق")
             .setRequired(false)
             .addChoices(
-              { name: "✅ مفعّل | Enabled",  value: "true"  },
-              { name: "❌ معطّل | Disabled", value: "false" }
+              { name: "✅ مفعّل", value: "true"  },
+              { name: "❌ معطّل", value: "false" }
             )
         )
         .addStringOption(option =>
@@ -120,8 +120,8 @@ module.exports = {
             .setDescription("تشغيل أو إيقاف نظام التذاكر")
             .setRequired(false)
             .addChoices(
-              { name: "✅ تشغيل | Enable",  value: "on"  },
-              { name: "❌ إيقاف | Disable", value: "off" }
+              { name: "✅ تشغيل", value: "on"  },
+              { name: "❌ إيقاف", value: "off" }
             )
         )
     )
