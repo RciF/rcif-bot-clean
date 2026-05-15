@@ -1216,19 +1216,28 @@ router.get(
 function calculateSecurityScore(protection) {
   if (!protection) return 30
   let score = 30
-  if (protection.anti_spam?.enabled) score += 25
-  if (protection.anti_raid?.enabled) score += 20
-  if (protection.anti_nuke?.enabled) score += 25
+  // يدعم الاثنين: nested (anti_spam.enabled) + flat (antispam_enabled)
+  if (protection.antispam_enabled || protection.anti_spam?.enabled) score += 25
+  if (protection.antiraid_enabled || protection.anti_raid?.enabled) score += 20
+  if (protection.antinuke_enabled || protection.anti_nuke?.enabled) score += 25
   return Math.min(score, 100)
 }
 
 function calculateOrganizationScore(logs) {
   if (!logs) return 30
   if (!logs.enabled) return 30
-  const events = logs.events || {}
+
+  // events ممكن يجي JSONB string أو object
+  let events = logs.events || {}
+  if (typeof events === "string") {
+    try { events = JSON.parse(events) } catch { events = {} }
+  }
+
+  const keys = Object.keys(events)
+  if (keys.length === 0) return 60 // فعّل اللوقات بدون events محددة → نقاط جزئية
+
   const enabled = Object.values(events).filter((e) => e?.enabled).length
-  const total = Math.max(Object.keys(events).length, 1)
-  return Math.round(30 + (enabled / total) * 70)
+  return Math.round(30 + (enabled / keys.length) * 70)
 }
 
 // ════════════════════════════════════════════════════════════
