@@ -181,3 +181,4 @@ function buildProgressBar(percent) {
   const empty  = 10 - filled
   return "🟦".repeat(filled) + "⬜".repeat(empty)
 }
+
