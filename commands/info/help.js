@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════════
 //  /help — دليل أوامر البوت الكامل
 //  المسار: commands/info/help.js
 //
@@ -118,7 +118,7 @@ async function handleAutocomplete(interaction) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("help")
+    .setName("مساعدة")
     .setDescription("دليل أوامر البوت الكامل")
     .setDMPermission(false)
     .addStringOption(option =>

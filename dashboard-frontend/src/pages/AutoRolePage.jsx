@@ -268,7 +268,7 @@ export default function AutoRolePage() {
         {/* Empty state */}
         {assignments.length === 0 ? (
           <EmptyState
-            icon={UserPlus}
+            icon={<UserPlus />}
             title="لا توجد رتب تلقائية"
             description="أضف رتبة من الأسفل لتعطى للأعضاء الجدد"
           />

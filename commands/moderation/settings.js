@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
+﻿const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const settingsSystem = require("../../systems/settingsSystem")
 const planGateSystem = require("../../systems/planGateSystem")
 
@@ -18,7 +18,7 @@ const PLAN_COLORS = {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("settings")
+    .setName("اعدادات")
     .setDescription("عرض إعدادات وحالة أنظمة السيرفر")
     .setDMPermission(false),
 

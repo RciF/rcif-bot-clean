@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════════
 //  /config — تفعيل/تعطيل أنظمة السيرفر
 //  المسار: commands/moderation/config.js
 //
@@ -68,7 +68,7 @@ async function checkAccess(interaction) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("config")
+    .setName("ضبط")
     .setDescription("تفعيل أو تعطيل أنظمة السيرفر")
     .setDMPermission(false)
     // ⚠️ Administrator = الحد الأدنى لرؤية الأمر بصرياً
