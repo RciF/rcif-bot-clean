@@ -49,11 +49,14 @@ function requirePlan(requiredPlan) {
 // ════════════════════════════════════════════════════════════
 
 async function callBot(path, body) {
-  if (!env.BOT_API_URL || !env.BOT_SECRET) {
+  const botUrl = env.BOT_URL || process.env.BOT_URL || env.BOT_API_URL || process.env.BOT_API_URL
+  const botSecret = env.BOT_SECRET || process.env.BOT_SECRET
+
+  if (!botUrl || !botSecret) {
     throw new ApiError("Bot API غير مكوّن", 500, "BOT_API_NOT_CONFIGURED")
   }
 
-  const response = await fetch(`${env.BOT_API_URL}${path}`, {
+  const response = await fetch(`${botUrl}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

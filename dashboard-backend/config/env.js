@@ -32,6 +32,10 @@ const env = {
   // ── Database ──
   DATABASE_URL: process.env.DATABASE_URL,
 
+  // ── Bot communication ──
+  BOT_URL: process.env.BOT_URL || "",
+  BOT_SECRET: process.env.BOT_SECRET || "",
+
   // ── Frontend URLs المسموحة (CORS) ──
   ALLOWED_ORIGINS: [
     "http://localhost:3000",
