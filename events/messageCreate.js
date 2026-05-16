@@ -91,6 +91,18 @@ module.exports = {
       // 6) XP
       await handleXP(message)
 
+      // 7) Stats counter (fire & forget — لا ننتظر)
+      try {
+        const databaseSystem = require("../systems/databaseSystem")
+        databaseSystem.query(
+          `INSERT INTO stats_counters (guild_id, date, messages_count)
+           VALUES ($1, CURRENT_DATE, 1)
+           ON CONFLICT (guild_id, date)
+           DO UPDATE SET messages_count = stats_counters.messages_count + 1`,
+          [message.guild.id]
+        ).catch(() => {})
+      } catch {}
+
     } catch (error) {
       logger.error("MESSAGE_EVENT_FATAL_ERROR", {
         error: error.message,

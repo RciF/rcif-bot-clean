@@ -135,7 +135,24 @@ module.exports = {
 
       // تسجيل إحصائيات
       analyticsTracker.trackCommand(commandName)
-      if (guildId) trackToDashboard(commandName, guildId)
+      if (guildId) {
+        trackToDashboard(commandName, guildId)
+
+        // counter يومي للداش
+        try {
+          const databaseSystem = require("../systems/databaseSystem")
+          const isAI = commandName === "اسأل" || commandName === "ai"
+          databaseSystem.query(
+            `INSERT INTO stats_counters (guild_id, date, commands_count, ai_commands_count)
+             VALUES ($1, CURRENT_DATE, 1, $2)
+             ON CONFLICT (guild_id, date)
+             DO UPDATE SET
+               commands_count = stats_counters.commands_count + 1,
+               ai_commands_count = stats_counters.ai_commands_count + $2`,
+            [guildId, isAI ? 1 : 0]
+          ).catch(() => {})
+        } catch {}
+      }
 
       try {
         await command.execute(interaction, client)

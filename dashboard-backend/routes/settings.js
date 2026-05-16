@@ -1189,7 +1189,17 @@ router.get(
   asyncHandler(async (req, res) => {
     const guildId = req.params.guildId
 
-    const [protection, logs, snapshots, ticketStats, warningCount] = await Promise.all([
+    const [
+      protection,
+      logs,
+      snapshots,
+      ticketStats,
+      warningCount,
+      countersToday,
+      countersYesterday,
+      modActions7d,
+      modActions14d,
+    ] = await Promise.all([
       getSettings("protection_settings", guildId),
       getSettings("log_settings", guildId),
       query(
@@ -1214,7 +1224,53 @@ router.get(
            AND created_at >= NOW() - INTERVAL '7 days'`,
         [guildId],
       ).catch(() => ({ rows: [{ count: 0 }] })),
+      query(
+        `SELECT messages_count, commands_count, ai_commands_count
+         FROM stats_counters
+         WHERE guild_id = $1 AND date = CURRENT_DATE`,
+        [guildId],
+      ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT messages_count, commands_count
+         FROM stats_counters
+         WHERE guild_id = $1 AND date = CURRENT_DATE - INTERVAL '1 day'`,
+        [guildId],
+      ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT
+           (SELECT COUNT(*) FROM warnings WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '7 days')::int +
+           (SELECT COUNT(*) FROM moderation_bans WHERE guild_id = $1 AND banned_at >= NOW() - INTERVAL '7 days')::int +
+           (SELECT COUNT(*) FROM moderation_mutes WHERE guild_id = $1 AND muted_at >= NOW() - INTERVAL '7 days')::int
+         AS total`,
+        [guildId],
+      ).catch(() => ({ rows: [{ total: 0 }] })),
+      query(
+        `SELECT
+           (SELECT COUNT(*) FROM warnings WHERE guild_id = $1 AND created_at >= NOW() - INTERVAL '14 days' AND created_at < NOW() - INTERVAL '7 days')::int +
+           (SELECT COUNT(*) FROM moderation_bans WHERE guild_id = $1 AND banned_at >= NOW() - INTERVAL '14 days' AND banned_at < NOW() - INTERVAL '7 days')::int +
+           (SELECT COUNT(*) FROM moderation_mutes WHERE guild_id = $1 AND muted_at >= NOW() - INTERVAL '14 days' AND muted_at < NOW() - INTERVAL '7 days')::int
+         AS total`,
+        [guildId],
+      ).catch(() => ({ rows: [{ total: 0 }] })),
     ])
+
+    const pctChange = (today, yesterday) => {
+      if (!yesterday || yesterday === 0) return today > 0 ? 100 : 0
+      return Math.round(((today - yesterday) / yesterday) * 100)
+    }
+
+    const todayMsgs = parseInt(countersToday.rows[0]?.messages_count) || 0
+    const todayCmds = parseInt(countersToday.rows[0]?.commands_count) || 0
+    const todayAi = parseInt(countersToday.rows[0]?.ai_commands_count) || 0
+    const yesterdayMsgs = parseInt(countersYesterday.rows[0]?.messages_count) || 0
+    const yesterdayCmds = parseInt(countersYesterday.rows[0]?.commands_count) || 0
+    const mod7 = parseInt(modActions7d.rows[0]?.total) || 0
+    const mod14 = parseInt(modActions14d.rows[0]?.total) || 0
+
+    const latestSnap = snapshots.rows[0]
+    const yesterdaySnap = snapshots.rows[1]
+    const todayMembers = parseInt(latestSnap?.member_count) || 0
+    const yesterdayMembers = parseInt(yesterdaySnap?.member_count) || 0
 
     const securityScore = calculateSecurityScore(protection)
     const organizationScore = calculateOrganizationScore(logs)
@@ -1236,10 +1292,23 @@ router.get(
         },
       },
       stats: {
-        members: { value: 0, change: 0 },
-        messages24h: { value: 0, change: 0 },
-        commands24h: { value: 0, change: 0, aiPortion: 0 },
-        modActions7d: { value: 0, change: 0 },
+        members: {
+          value: todayMembers,
+          change: pctChange(todayMembers, yesterdayMembers),
+        },
+        messages24h: {
+          value: todayMsgs,
+          change: pctChange(todayMsgs, yesterdayMsgs),
+        },
+        commands24h: {
+          value: todayCmds,
+          change: pctChange(todayCmds, yesterdayCmds),
+          aiPortion: todayAi,
+        },
+        modActions7d: {
+          value: mod7,
+          change: pctChange(mod7, mod14),
+        },
       },
     })
   }),
