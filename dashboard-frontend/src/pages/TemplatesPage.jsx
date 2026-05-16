@@ -29,6 +29,44 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 // ════════════════════════════════════════════════════════════
+//  LEGACY_KEY_MAP — تحويل camelCase → snake_case
+//  مطابق للـ map في LogsPage.jsx
+// ════════════════════════════════════════════════════════════
+
+const LEGACY_KEY_MAP = {
+  messageDelete: 'message_delete',
+  messageEdit: 'message_update',
+  messageUpdate: 'message_update',
+  messageDeleteBulk: 'message_delete_bulk',
+  memberJoin: 'member_join',
+  memberLeave: 'member_leave',
+  memberBan: 'member_ban',
+  memberUnban: 'member_unban',
+  memberKick: 'member_leave',
+  memberUpdate: 'member_update',
+  roleCreate: 'role_create',
+  roleDelete: 'role_delete',
+  roleUpdate: 'role_update',
+  channelCreate: 'channel_create',
+  channelDelete: 'channel_delete',
+  channelUpdate: 'channel_update',
+  voiceJoin: 'voice_join',
+  voiceLeave: 'voice_leave',
+  voiceMove: 'voice_move',
+  guildUpdate: 'guild_update',
+};
+
+function normalizeLogEvents(events) {
+  if (!events || typeof events !== 'object') return {};
+  const out = {};
+  for (const [key, value] of Object.entries(events)) {
+    const newKey = LEGACY_KEY_MAP[key] || key;
+    out[newKey] = { ...(out[newKey] || {}), ...value };
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════
 //  PRESETS — قوالب جاهزة (client-side)
 //  كل preset يحدد إعدادات كل نظام يأثر عليه + apply() يطبقها
 // ════════════════════════════════════════════════════════════
@@ -65,12 +103,12 @@ const PRESETS = [
         }),
         settingsApi.saveLogs(guildId, {
           enabled: true,
-          events: {
+          events: normalizeLogEvents({
             messageDelete: { enabled: true },
             messageEdit: { enabled: true },
             memberJoin: { enabled: true },
             memberLeave: { enabled: true },
-          },
+          }),
         }),
       ]);
     },
@@ -146,7 +184,7 @@ const PRESETS = [
         }),
         settingsApi.saveLogs(guildId, {
           enabled: true,
-          events: {
+          events: normalizeLogEvents({
             messageDelete: { enabled: true },
             messageEdit: { enabled: true },
             memberJoin: { enabled: true },
@@ -157,7 +195,7 @@ const PRESETS = [
             roleDelete: { enabled: true },
             channelCreate: { enabled: true },
             channelDelete: { enabled: true },
-          },
+          }),
         }),
       ]);
     },
@@ -189,11 +227,11 @@ const PRESETS = [
         }),
         settingsApi.saveLogs(guildId, {
           enabled: true,
-          events: {
+          events: normalizeLogEvents({
             memberJoin: { enabled: true },
             memberLeave: { enabled: true },
             memberBan: { enabled: true },
-          },
+          }),
         }),
       ]);
     },
