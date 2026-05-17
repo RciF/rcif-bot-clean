@@ -15,26 +15,25 @@
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
   --font-display: 'IBM Plex Sans Arabic', system-ui, sans-serif;
 
-  /* Lyn Brand Colors — Cyan/Teal Gradient System */
-  --color-lyn-50: oklch(0.984 0.019 200.873);
+  /* Lyn Brand Colors — Default (overridden by daily themes below) */
+  --color-lyn-50:  oklch(0.984 0.019 200.873);
   --color-lyn-100: oklch(0.956 0.045 203.388);
   --color-lyn-200: oklch(0.917 0.080 205.041);
   --color-lyn-300: oklch(0.865 0.127 207.078);
   --color-lyn-400: oklch(0.789 0.154 211.530);
-  --color-lyn-500: oklch(0.715 0.143 215.221); /* Primary Cyan */
+  --color-lyn-500: oklch(0.715 0.143 215.221);
   --color-lyn-600: oklch(0.609 0.126 221.723);
   --color-lyn-700: oklch(0.520 0.105 223.128);
   --color-lyn-800: oklch(0.450 0.085 224.283);
   --color-lyn-900: oklch(0.398 0.070 227.392);
   --color-lyn-950: oklch(0.302 0.056 229.695);
 
-  /* Lyn Teal Accent */
-  --color-lyn-pink-50: oklch(0.984 0.014 180.720);
+  --color-lyn-pink-50:  oklch(0.984 0.014 180.720);
   --color-lyn-pink-100: oklch(0.953 0.051 180.801);
   --color-lyn-pink-200: oklch(0.910 0.096 180.426);
   --color-lyn-pink-300: oklch(0.855 0.138 181.071);
   --color-lyn-pink-400: oklch(0.777 0.152 181.912);
-  --color-lyn-pink-500: oklch(0.704 0.140 182.503); /* Accent Teal */
+  --color-lyn-pink-500: oklch(0.704 0.140 182.503);
   --color-lyn-pink-600: oklch(0.600 0.118 184.704);
   --color-lyn-pink-700: oklch(0.511 0.096 186.391);
   --color-lyn-pink-800: oklch(0.437 0.078 188.216);
@@ -48,8 +47,8 @@
 
   /* Shadows */
   --shadow-glow-violet: 0 0 30px -5px oklch(0.715 0.143 215.221 / 0.4);
-  --shadow-glow-pink: 0 0 30px -5px oklch(0.704 0.140 182.503 / 0.4);
-  --shadow-glow-mixed: 0 0 40px -8px oklch(0.715 0.143 215.221 / 0.35), 0 0 20px -4px oklch(0.704 0.140 182.503 / 0.25);
+  --shadow-glow-pink:   0 0 30px -5px oklch(0.704 0.140 182.503 / 0.4);
+  --shadow-glow-mixed:  0 0 40px -8px oklch(0.715 0.143 215.221 / 0.35), 0 0 20px -4px oklch(0.704 0.140 182.503 / 0.25);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -57,6 +56,12 @@
    ════════════════════════════════════════════════════════════ */
 :root {
   --radius: 0.75rem;
+
+  /* Theme-specific RGB values for effects (overridden per theme) */
+  --theme-primary-rgb: 99 102 241;
+  --theme-accent-rgb: 217 70 239;
+  --theme-mesh-1: oklch(0.715 0.143 215.221);
+  --theme-mesh-2: oklch(0.704 0.140 182.503);
 
   /* Base Colors (shadcn-compatible) */
   --background: oklch(1 0 0);
@@ -156,6 +161,337 @@
 }
 
 /* ════════════════════════════════════════════════════════════
+   ✨ 7 DAILY NEON THEMES — Legendary Edition ✨
+   Each theme overrides:
+   - Lyn brand colors (lyn-* + lyn-pink-*)
+   - shadcn primary/accent/ring
+   - Theme mesh colors for animated background
+   - Glow shadows
+   ════════════════════════════════════════════════════════════ */
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   🟣 SUNDAY — Violet Storm ⚡
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="sunday"] {
+  --color-lyn-50:  oklch(0.977 0.014 308.299);
+  --color-lyn-100: oklch(0.946 0.033 307.174);
+  --color-lyn-200: oklch(0.902 0.063 306.703);
+  --color-lyn-300: oklch(0.827 0.119 306.383);
+  --color-lyn-400: oklch(0.714 0.203 305.504);
+  --color-lyn-500: oklch(0.627 0.265 303.9);
+  --color-lyn-600: oklch(0.558 0.288 302.321);
+  --color-lyn-700: oklch(0.496 0.265 301.924);
+  --color-lyn-800: oklch(0.438 0.218 303.724);
+  --color-lyn-900: oklch(0.381 0.176 304.987);
+  --color-lyn-950: oklch(0.291 0.149 302.717);
+
+  --color-lyn-pink-50:  oklch(0.971 0.014 343.198);
+  --color-lyn-pink-100: oklch(0.948 0.028 342.258);
+  --color-lyn-pink-200: oklch(0.899 0.061 343.231);
+  --color-lyn-pink-300: oklch(0.823 0.12 346.018);
+  --color-lyn-pink-400: oklch(0.718 0.202 349.761);
+  --color-lyn-pink-500: oklch(0.656 0.241 354.308);
+  --color-lyn-pink-600: oklch(0.592 0.249 0.584);
+  --color-lyn-pink-700: oklch(0.525 0.223 3.958);
+  --color-lyn-pink-800: oklch(0.459 0.187 3.815);
+  --color-lyn-pink-900: oklch(0.41 0.159 2.93);
+  --color-lyn-pink-950: oklch(0.284 0.109 3.907);
+
+  --theme-mesh-1: oklch(0.627 0.265 303.9);
+  --theme-mesh-2: oklch(0.656 0.241 354.308);
+  --theme-primary-rgb: 168 85 247;
+  --theme-accent-rgb: 236 72 153;
+
+  --primary: oklch(0.714 0.203 305.504);
+  --primary-foreground: oklch(0.977 0.014 308.299);
+  --ring: oklch(0.714 0.203 305.504);
+  --chart-1: oklch(0.714 0.203 305.504);
+  --chart-2: oklch(0.718 0.202 349.761);
+  --sidebar-primary: oklch(0.714 0.203 305.504);
+  --sidebar-ring: oklch(0.714 0.203 305.504);
+
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.714 0.203 305.504 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.718 0.202 349.761 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.714 0.203 305.504 / 0.5), 0 0 25px -4px oklch(0.718 0.202 349.761 / 0.4);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   🔵 MONDAY — Cyan Pulse 🌊
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="monday"] {
+  --color-lyn-50:  oklch(0.984 0.019 200.873);
+  --color-lyn-100: oklch(0.956 0.045 203.388);
+  --color-lyn-200: oklch(0.917 0.080 205.041);
+  --color-lyn-300: oklch(0.865 0.127 207.078);
+  --color-lyn-400: oklch(0.789 0.154 211.530);
+  --color-lyn-500: oklch(0.715 0.170 215.221);
+  --color-lyn-600: oklch(0.609 0.155 221.723);
+  --color-lyn-700: oklch(0.520 0.130 223.128);
+  --color-lyn-800: oklch(0.450 0.105 224.283);
+  --color-lyn-900: oklch(0.398 0.085 227.392);
+  --color-lyn-950: oklch(0.302 0.065 229.695);
+
+  --color-lyn-pink-50:  oklch(0.970 0.014 254.604);
+  --color-lyn-pink-100: oklch(0.932 0.032 255.585);
+  --color-lyn-pink-200: oklch(0.882 0.059 254.128);
+  --color-lyn-pink-300: oklch(0.809 0.105 251.813);
+  --color-lyn-pink-400: oklch(0.707 0.165 254.624);
+  --color-lyn-pink-500: oklch(0.623 0.214 259.815);
+  --color-lyn-pink-600: oklch(0.546 0.245 262.881);
+  --color-lyn-pink-700: oklch(0.488 0.243 264.376);
+  --color-lyn-pink-800: oklch(0.424 0.199 265.638);
+  --color-lyn-pink-900: oklch(0.379 0.146 265.522);
+  --color-lyn-pink-950: oklch(0.282 0.091 267.935);
+
+  --theme-mesh-1: oklch(0.715 0.170 215.221);
+  --theme-mesh-2: oklch(0.623 0.214 259.815);
+  --theme-primary-rgb: 6 182 212;
+  --theme-accent-rgb: 59 130 246;
+
+  --primary: oklch(0.789 0.154 211.530);
+  --primary-foreground: oklch(0.302 0.056 229.695);
+  --ring: oklch(0.789 0.154 211.530);
+  --chart-1: oklch(0.789 0.154 211.530);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --sidebar-primary: oklch(0.789 0.154 211.530);
+  --sidebar-ring: oklch(0.789 0.154 211.530);
+
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.789 0.154 211.530 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.623 0.214 259.815 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.789 0.154 211.530 / 0.5), 0 0 25px -4px oklch(0.623 0.214 259.815 / 0.4);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   🟢 TUESDAY — Emerald Matrix 🟢
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="tuesday"] {
+  --color-lyn-50:  oklch(0.979 0.021 166.113);
+  --color-lyn-100: oklch(0.95 0.052 163.051);
+  --color-lyn-200: oklch(0.905 0.093 164.15);
+  --color-lyn-300: oklch(0.845 0.143 164.978);
+  --color-lyn-400: oklch(0.765 0.177 163.223);
+  --color-lyn-500: oklch(0.696 0.17 162.48);
+  --color-lyn-600: oklch(0.596 0.145 163.225);
+  --color-lyn-700: oklch(0.508 0.118 165.612);
+  --color-lyn-800: oklch(0.432 0.095 166.913);
+  --color-lyn-900: oklch(0.378 0.077 168.94);
+  --color-lyn-950: oklch(0.262 0.051 172.552);
+
+  --color-lyn-pink-50:  oklch(0.984 0.014 180.720);
+  --color-lyn-pink-100: oklch(0.953 0.051 180.801);
+  --color-lyn-pink-200: oklch(0.910 0.096 180.426);
+  --color-lyn-pink-300: oklch(0.855 0.138 181.071);
+  --color-lyn-pink-400: oklch(0.777 0.152 181.912);
+  --color-lyn-pink-500: oklch(0.704 0.140 182.503);
+  --color-lyn-pink-600: oklch(0.600 0.118 184.704);
+  --color-lyn-pink-700: oklch(0.511 0.096 186.391);
+  --color-lyn-pink-800: oklch(0.437 0.078 188.216);
+  --color-lyn-pink-900: oklch(0.386 0.063 188.416);
+  --color-lyn-pink-950: oklch(0.277 0.046 192.524);
+
+  --theme-mesh-1: oklch(0.696 0.17 162.48);
+  --theme-mesh-2: oklch(0.704 0.140 182.503);
+  --theme-primary-rgb: 16 185 129;
+  --theme-accent-rgb: 20 184 166;
+
+  --primary: oklch(0.765 0.177 163.223);
+  --primary-foreground: oklch(0.262 0.051 172.552);
+  --ring: oklch(0.765 0.177 163.223);
+  --chart-1: oklch(0.765 0.177 163.223);
+  --chart-2: oklch(0.777 0.152 181.912);
+  --sidebar-primary: oklch(0.765 0.177 163.223);
+  --sidebar-ring: oklch(0.765 0.177 163.223);
+
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.765 0.177 163.223 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.777 0.152 181.912 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.765 0.177 163.223 / 0.5), 0 0 25px -4px oklch(0.777 0.152 181.912 / 0.4);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   🟠 WEDNESDAY — Sunset Blaze 🔥
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="wednesday"] {
+  --color-lyn-50:  oklch(0.98 0.016 73.684);
+  --color-lyn-100: oklch(0.954 0.038 75.164);
+  --color-lyn-200: oklch(0.901 0.076 70.697);
+  --color-lyn-300: oklch(0.837 0.128 66.29);
+  --color-lyn-400: oklch(0.75 0.183 55.934);
+  --color-lyn-500: oklch(0.705 0.213 47.604);
+  --color-lyn-600: oklch(0.646 0.222 41.116);
+  --color-lyn-700: oklch(0.553 0.195 38.402);
+  --color-lyn-800: oklch(0.47 0.157 37.304);
+  --color-lyn-900: oklch(0.408 0.123 38.172);
+  --color-lyn-950: oklch(0.266 0.079 36.259);
+
+  --color-lyn-pink-50:  oklch(0.969 0.015 12.422);
+  --color-lyn-pink-100: oklch(0.941 0.03 12.58);
+  --color-lyn-pink-200: oklch(0.892 0.058 10.001);
+  --color-lyn-pink-300: oklch(0.81 0.117 11.638);
+  --color-lyn-pink-400: oklch(0.712 0.194 13.428);
+  --color-lyn-pink-500: oklch(0.645 0.246 16.439);
+  --color-lyn-pink-600: oklch(0.586 0.253 17.585);
+  --color-lyn-pink-700: oklch(0.514 0.222 16.935);
+  --color-lyn-pink-800: oklch(0.455 0.188 13.697);
+  --color-lyn-pink-900: oklch(0.41 0.159 10.272);
+  --color-lyn-pink-950: oklch(0.271 0.105 12.094);
+
+  --theme-mesh-1: oklch(0.705 0.213 47.604);
+  --theme-mesh-2: oklch(0.645 0.246 16.439);
+  --theme-primary-rgb: 249 115 22;
+  --theme-accent-rgb: 244 63 94;
+
+  --primary: oklch(0.75 0.183 55.934);
+  --primary-foreground: oklch(0.266 0.079 36.259);
+  --ring: oklch(0.75 0.183 55.934);
+  --chart-1: oklch(0.75 0.183 55.934);
+  --chart-2: oklch(0.712 0.194 13.428);
+  --sidebar-primary: oklch(0.75 0.183 55.934);
+  --sidebar-ring: oklch(0.75 0.183 55.934);
+
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.75 0.183 55.934 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.712 0.194 13.428 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.75 0.183 55.934 / 0.5), 0 0 25px -4px oklch(0.712 0.194 13.428 / 0.4);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   💗 THURSDAY — Pink Galaxy 💫
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="thursday"] {
+  --color-lyn-50:  oklch(0.971 0.014 343.198);
+  --color-lyn-100: oklch(0.948 0.028 342.258);
+  --color-lyn-200: oklch(0.899 0.061 343.231);
+  --color-lyn-300: oklch(0.823 0.12 346.018);
+  --color-lyn-400: oklch(0.718 0.202 349.761);
+  --color-lyn-500: oklch(0.656 0.241 354.308);
+  --color-lyn-600: oklch(0.592 0.249 0.584);
+  --color-lyn-700: oklch(0.525 0.223 3.958);
+  --color-lyn-800: oklch(0.459 0.187 3.815);
+  --color-lyn-900: oklch(0.41 0.159 2.93);
+  --color-lyn-950: oklch(0.284 0.109 3.907);
+
+  --color-lyn-pink-50:  oklch(0.977 0.014 308.299);
+  --color-lyn-pink-100: oklch(0.946 0.033 307.174);
+  --color-lyn-pink-200: oklch(0.902 0.063 306.703);
+  --color-lyn-pink-300: oklch(0.827 0.119 306.383);
+  --color-lyn-pink-400: oklch(0.714 0.203 305.504);
+  --color-lyn-pink-500: oklch(0.627 0.265 303.9);
+  --color-lyn-pink-600: oklch(0.558 0.288 302.321);
+  --color-lyn-pink-700: oklch(0.496 0.265 301.924);
+  --color-lyn-pink-800: oklch(0.438 0.218 303.724);
+  --color-lyn-pink-900: oklch(0.381 0.176 304.987);
+  --color-lyn-pink-950: oklch(0.291 0.149 302.717);
+
+  --theme-mesh-1: oklch(0.656 0.241 354.308);
+  --theme-mesh-2: oklch(0.627 0.265 303.9);
+  --theme-primary-rgb: 236 72 153;
+  --theme-accent-rgb: 168 85 247;
+
+  --primary: oklch(0.718 0.202 349.761);
+  --primary-foreground: oklch(0.971 0.014 343.198);
+  --ring: oklch(0.718 0.202 349.761);
+  --chart-1: oklch(0.718 0.202 349.761);
+  --chart-2: oklch(0.714 0.203 305.504);
+  --sidebar-primary: oklch(0.718 0.202 349.761);
+  --sidebar-ring: oklch(0.718 0.202 349.761);
+
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.718 0.202 349.761 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.714 0.203 305.504 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.718 0.202 349.761 / 0.5), 0 0 25px -4px oklch(0.714 0.203 305.504 / 0.4);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   👑 FRIDAY — Gold Royal 👑
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="friday"] {
+  --color-lyn-50:  oklch(0.987 0.022 95.277);
+  --color-lyn-100: oklch(0.962 0.058 95.617);
+  --color-lyn-200: oklch(0.924 0.12 95.746);
+  --color-lyn-300: oklch(0.879 0.169 91.605);
+  --color-lyn-400: oklch(0.828 0.189 84.429);
+  --color-lyn-500: oklch(0.769 0.188 70.08);
+  --color-lyn-600: oklch(0.666 0.179 58.318);
+  --color-lyn-700: oklch(0.555 0.163 48.998);
+  --color-lyn-800: oklch(0.473 0.137 46.201);
+  --color-lyn-900: oklch(0.414 0.112 45.904);
+  --color-lyn-950: oklch(0.279 0.077 45.635);
+
+  --color-lyn-pink-50:  oklch(0.98 0.016 73.684);
+  --color-lyn-pink-100: oklch(0.954 0.038 75.164);
+  --color-lyn-pink-200: oklch(0.901 0.076 70.697);
+  --color-lyn-pink-300: oklch(0.837 0.128 66.29);
+  --color-lyn-pink-400: oklch(0.75 0.183 55.934);
+  --color-lyn-pink-500: oklch(0.705 0.213 47.604);
+  --color-lyn-pink-600: oklch(0.646 0.222 41.116);
+  --color-lyn-pink-700: oklch(0.553 0.195 38.402);
+  --color-lyn-pink-800: oklch(0.47 0.157 37.304);
+  --color-lyn-pink-900: oklch(0.408 0.123 38.172);
+  --color-lyn-pink-950: oklch(0.266 0.079 36.259);
+
+  --theme-mesh-1: oklch(0.828 0.189 84.429);
+  --theme-mesh-2: oklch(0.705 0.213 47.604);
+  --theme-primary-rgb: 250 204 21;
+  --theme-accent-rgb: 249 115 22;
+
+  --primary: oklch(0.828 0.189 84.429);
+  --primary-foreground: oklch(0.279 0.077 45.635);
+  --ring: oklch(0.828 0.189 84.429);
+  --chart-1: oklch(0.828 0.189 84.429);
+  --chart-2: oklch(0.75 0.183 55.934);
+  --sidebar-primary: oklch(0.828 0.189 84.429);
+  --sidebar-ring: oklch(0.828 0.189 84.429);
+
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.828 0.189 84.429 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.75 0.183 55.934 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.828 0.189 84.429 / 0.5), 0 0 25px -4px oklch(0.75 0.183 55.934 / 0.4);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   🔴 SATURDAY — Crimson Fire 🔥
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+[data-theme="saturday"] {
+  --color-lyn-50:  oklch(0.971 0.013 17.38);
+  --color-lyn-100: oklch(0.936 0.032 17.717);
+  --color-lyn-200: oklch(0.885 0.062 18.334);
+  --color-lyn-300: oklch(0.808 0.114 19.571);
+  --color-lyn-400: oklch(0.704 0.191 22.216);
+  --color-lyn-500: oklch(0.637 0.237 25.331);
+  --color-lyn-600: oklch(0.577 0.245 27.325);
+  --color-lyn-700: oklch(0.505 0.213 27.518);
+  --color-lyn-800: oklch(0.444 0.177 26.899);
+  --color-lyn-900: oklch(0.396 0.141 25.723);
+  --color-lyn-950: oklch(0.258 0.092 26.042);
+
+  --color-lyn-pink-50:  oklch(0.969 0.015 12.422);
+  --color-lyn-pink-100: oklch(0.941 0.03 12.58);
+  --color-lyn-pink-200: oklch(0.892 0.058 10.001);
+  --color-lyn-pink-300: oklch(0.81 0.117 11.638);
+  --color-lyn-pink-400: oklch(0.712 0.194 13.428);
+  --color-lyn-pink-500: oklch(0.645 0.246 16.439);
+  --color-lyn-pink-600: oklch(0.586 0.253 17.585);
+  --color-lyn-pink-700: oklch(0.514 0.222 16.935);
+  --color-lyn-pink-800: oklch(0.455 0.188 13.697);
+  --color-lyn-pink-900: oklch(0.41 0.159 10.272);
+  --color-lyn-pink-950: oklch(0.271 0.105 12.094);
+
+  --theme-mesh-1: oklch(0.637 0.237 25.331);
+  --theme-mesh-2: oklch(0.645 0.246 16.439);
+  --theme-primary-rgb: 239 68 68;
+  --theme-accent-rgb: 244 63 94;
+
+  --primary: oklch(0.704 0.191 22.216);
+  --primary-foreground: oklch(0.258 0.092 26.042);
+  --ring: oklch(0.704 0.191 22.216);
+  --chart-1: oklch(0.704 0.191 22.216);
+  --chart-2: oklch(0.712 0.194 13.428);
+  --sidebar-primary: oklch(0.704 0.191 22.216);
+  --sidebar-ring: oklch(0.704 0.191 22.216);
+
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.704 0.191 22.216 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.712 0.194 13.428 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.704 0.191 22.216 / 0.5), 0 0 25px -4px oklch(0.712 0.194 13.428 / 0.4);
+}
+
+/* ════════════════════════════════════════════════════════════
    Inline Theme Mapping (shadcn/ui compatibility)
    ════════════════════════════════════════════════════════════ */
 @theme inline {
@@ -223,6 +559,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* ✨ Smooth color transitions when theme changes */
+    transition: background-color 0.8s var(--ease-lyn-smooth);
   }
 
   html[lang="en"],
@@ -234,6 +572,43 @@
     @apply bg-background text-foreground font-sans;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
     min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ✨ Animated Mesh Background — visible only in dark mode */
+  .dark body::before {
+    content: '';
+    position: fixed;
+    inset: -20%;
+    z-index: -2;
+    background:
+      radial-gradient(circle at 20% 20%, var(--theme-mesh-1) 0%, transparent 40%),
+      radial-gradient(circle at 80% 30%, var(--theme-mesh-2) 0%, transparent 40%),
+      radial-gradient(circle at 50% 80%, var(--theme-mesh-1) 0%, transparent 35%);
+    opacity: 0.15;
+    filter: blur(60px);
+    animation: lyn-mesh-drift 30s ease-in-out infinite;
+    pointer-events: none;
+    transition: background 1s var(--ease-lyn-smooth);
+  }
+
+  /* ✨ Subtle grid overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 50px 50px;
+    opacity: 0.03;
+    pointer-events: none;
+  }
+
+  .dark body::after {
+    opacity: 0.05;
   }
 
   /* Code/Mono should be LTR even in RTL context */
@@ -314,6 +689,8 @@
       var(--color-lyn-500) 0%,
       var(--color-lyn-pink-500) 100%
     );
+    background-size: 200% 200%;
+    animation: lyn-gradient-shift 8s var(--ease-lyn-smooth) infinite;
   }
 
   .lyn-gradient-soft {
@@ -338,26 +715,36 @@
       var(--color-lyn-500) 0%,
       var(--color-lyn-pink-500) 100%
     );
+    background-size: 200% 200%;
+    animation: lyn-gradient-shift 6s var(--ease-lyn-smooth) infinite;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
+    filter: drop-shadow(0 0 20px oklch(var(--color-lyn-500) / 0.3));
   }
 
-  /* Glass Effect */
+  /* ✨ Enhanced Glass Effect with theme glow */
   .lyn-glass {
     background: oklch(1 0 0 / 0.6);
-    backdrop-filter: blur(12px) saturate(180%);
-    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
     border: 1px solid oklch(1 0 0 / 0.2);
+    box-shadow:
+      0 4px 24px -8px oklch(0 0 0 / 0.1),
+      inset 0 1px 0 0 oklch(1 0 0 / 0.5);
   }
 
   .dark .lyn-glass {
     background: oklch(0.21 0.006 285.885 / 0.6);
-    border: 1px solid oklch(1 0 0 / 0.1);
+    border: 1px solid oklch(1 0 0 / 0.08);
+    box-shadow:
+      0 8px 32px -8px oklch(0 0 0 / 0.4),
+      inset 0 1px 0 0 oklch(1 0 0 / 0.05),
+      0 0 40px -10px var(--color-lyn-500);
   }
 
-  /* Glow Effect */
+  /* ✨ Glow Effects */
   .lyn-glow {
     box-shadow: var(--shadow-glow-mixed);
   }
@@ -370,7 +757,23 @@
     box-shadow: var(--shadow-glow-pink);
   }
 
-  /* Animated Border */
+  /* ✨ Strong Neon Glow (for hero elements) */
+  .lyn-glow-strong {
+    box-shadow:
+      0 0 20px -2px var(--color-lyn-500),
+      0 0 40px -8px var(--color-lyn-500),
+      0 0 60px -16px var(--color-lyn-pink-500);
+    transition: box-shadow 0.4s var(--ease-lyn-smooth);
+  }
+
+  .lyn-glow-strong:hover {
+    box-shadow:
+      0 0 30px -2px var(--color-lyn-500),
+      0 0 60px -8px var(--color-lyn-500),
+      0 0 90px -16px var(--color-lyn-pink-500);
+  }
+
+  /* ✨ Animated Border */
   .lyn-border-animated {
     position: relative;
     background: var(--card);
@@ -397,6 +800,29 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
+  }
+
+  /* ✨ Neon Text */
+  .lyn-text-neon {
+    color: var(--color-lyn-400);
+    text-shadow:
+      0 0 5px var(--color-lyn-400),
+      0 0 15px var(--color-lyn-500),
+      0 0 30px var(--color-lyn-600);
+  }
+
+  /* ✨ Theme Transition — applied when switching themes */
+  .lyn-theme-transitioning,
+  .lyn-theme-transitioning *,
+  .lyn-theme-transitioning *::before,
+  .lyn-theme-transitioning *::after {
+    transition:
+      background-color 0.8s var(--ease-lyn-smooth),
+      border-color 0.8s var(--ease-lyn-smooth),
+      color 0.8s var(--ease-lyn-smooth),
+      box-shadow 0.8s var(--ease-lyn-smooth),
+      fill 0.8s var(--ease-lyn-smooth),
+      stroke 0.8s var(--ease-lyn-smooth) !important;
   }
 }
 
@@ -434,6 +860,42 @@
   100% { background-position: 200% 0; }
 }
 
+/* ✨ Animated mesh drift — background motion */
+@keyframes lyn-mesh-drift {
+  0%, 100% {
+    transform: translate(0%, 0%) scale(1);
+  }
+  33% {
+    transform: translate(-3%, 2%) scale(1.05);
+  }
+  66% {
+    transform: translate(2%, -3%) scale(0.95);
+  }
+}
+
+/* ✨ Neon pulse — for important elements */
+@keyframes lyn-neon-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 5px var(--color-lyn-500),
+      0 0 15px var(--color-lyn-500),
+      0 0 25px var(--color-lyn-pink-500);
+  }
+  50% {
+    box-shadow:
+      0 0 10px var(--color-lyn-500),
+      0 0 25px var(--color-lyn-500),
+      0 0 45px var(--color-lyn-pink-500);
+  }
+}
+
+/* ✨ Theme switch flash — visual confirmation on theme change */
+@keyframes lyn-theme-flash {
+  0% { opacity: 0; }
+  20% { opacity: 0.15; }
+  100% { opacity: 0; }
+}
+
 
 @layer utilities {
   .animate-lyn-pulse {
@@ -458,7 +920,13 @@
     background-size: 200% 100%;
     animation: lyn-shimmer 2s linear infinite;
   }
+
+  /* ✨ NEW: Neon pulse animation */
+  .animate-lyn-neon-pulse {
+    animation: lyn-neon-pulse 2.5s var(--ease-lyn-smooth) infinite;
+  }
 }
+
 /* ════════════════════════════════════════════════════════════
    Page Transitions
    ════════════════════════════════════════════════════════════ */
@@ -479,6 +947,26 @@
 }
 
 /* ════════════════════════════════════════════════════════════
+   ✨ Theme Switch Flash Overlay
+   ════════════════════════════════════════════════════════════ */
+.lyn-theme-flash-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    var(--color-lyn-500),
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0;
+}
+
+.lyn-theme-flash-overlay.active {
+  animation: lyn-theme-flash 1s ease-out;
+}
+
+/* ════════════════════════════════════════════════════════════
    Reduced Motion
    ════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
@@ -491,6 +979,7 @@
     scroll-behavior: auto !important;
   }
 }
+
 /* ════════════════════════════════════════════════════════════
    Toast Styling (sonner)
    ════════════════════════════════════════════════════════════ */

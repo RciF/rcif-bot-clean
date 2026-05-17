@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ThemeProvider, useTheme } from '@/components/ui/ThemeProvider';
 import { QueryProvider } from '@/components/ui/QueryProvider';
+import { ThemeDevSwitcher } from '@/components/dev/ThemeDevSwitcher';
 
 /**
  * Toaster مع theme تلقائي
@@ -45,6 +46,8 @@ export default function RootLayout() {
         <div className="min-h-screen bg-background text-foreground">
           <Outlet />
           <ThemedToaster />
+          {/* ✨ Theme Dev Switcher — يظهر للـ OWNER فقط */}
+          <ThemeDevSwitcher />
         </div>
       </ThemeProvider>
     </QueryProvider>
