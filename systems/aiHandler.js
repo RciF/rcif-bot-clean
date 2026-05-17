@@ -481,7 +481,8 @@ class AIHandler {
         { role: "user", content: cleanMessage }
       ];
 
-      const cacheKey = this.buildCacheKey(userId, cleanMessage, context.persona || "", "");
+      // ❌ لا تستخدم cache للردود — كل رد يجب أن يكون فريد ويعتمد على السياق
+      const cacheKey = null;
 
       // ✅ تحديد المود — triggerType (mention/reply/always) يأخذ الأولوية لو موجود
       const mode = context.triggerType
