@@ -354,49 +354,49 @@
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   💗 THURSDAY — Pink Galaxy 💫
+   🟢 THURSDAY — Lime Burst 🌿
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 [data-theme="thursday"] {
-  --color-lyn-50:  oklch(0.971 0.014 343.198);
-  --color-lyn-100: oklch(0.948 0.028 342.258);
-  --color-lyn-200: oklch(0.899 0.061 343.231);
-  --color-lyn-300: oklch(0.823 0.12 346.018);
-  --color-lyn-400: oklch(0.718 0.202 349.761);
-  --color-lyn-500: oklch(0.656 0.241 354.308);
-  --color-lyn-600: oklch(0.592 0.249 0.584);
-  --color-lyn-700: oklch(0.525 0.223 3.958);
-  --color-lyn-800: oklch(0.459 0.187 3.815);
-  --color-lyn-900: oklch(0.41 0.159 2.93);
-  --color-lyn-950: oklch(0.284 0.109 3.907);
+  --color-lyn-50:  oklch(0.982 0.018 122.34);
+  --color-lyn-100: oklch(0.961 0.052 123.04);
+  --color-lyn-200: oklch(0.918 0.108 124.14);
+  --color-lyn-300: oklch(0.859 0.169 124.92);
+  --color-lyn-400: oklch(0.798 0.219 126.06);
+  --color-lyn-500: oklch(0.738 0.225 127.21);
+  --color-lyn-600: oklch(0.642 0.205 129.46);
+  --color-lyn-700: oklch(0.532 0.169 130.95);
+  --color-lyn-800: oklch(0.451 0.139 132.12);
+  --color-lyn-900: oklch(0.391 0.112 133.78);
+  --color-lyn-950: oklch(0.267 0.077 135.94);
 
-  --color-lyn-pink-50:  oklch(0.977 0.014 308.299);
-  --color-lyn-pink-100: oklch(0.946 0.033 307.174);
-  --color-lyn-pink-200: oklch(0.902 0.063 306.703);
-  --color-lyn-pink-300: oklch(0.827 0.119 306.383);
-  --color-lyn-pink-400: oklch(0.714 0.203 305.504);
-  --color-lyn-pink-500: oklch(0.627 0.265 303.9);
-  --color-lyn-pink-600: oklch(0.558 0.288 302.321);
-  --color-lyn-pink-700: oklch(0.496 0.265 301.924);
-  --color-lyn-pink-800: oklch(0.438 0.218 303.724);
-  --color-lyn-pink-900: oklch(0.381 0.176 304.987);
-  --color-lyn-pink-950: oklch(0.291 0.149 302.717);
+  --color-lyn-pink-50:  oklch(0.979 0.021 166.113);
+  --color-lyn-pink-100: oklch(0.95 0.052 163.051);
+  --color-lyn-pink-200: oklch(0.905 0.093 164.15);
+  --color-lyn-pink-300: oklch(0.845 0.143 164.978);
+  --color-lyn-pink-400: oklch(0.792 0.181 156.012);
+  --color-lyn-pink-500: oklch(0.723 0.193 149.214);
+  --color-lyn-pink-600: oklch(0.627 0.194 149.214);
+  --color-lyn-pink-700: oklch(0.527 0.163 150.612);
+  --color-lyn-pink-800: oklch(0.448 0.134 152.124);
+  --color-lyn-pink-900: oklch(0.388 0.108 153.892);
+  --color-lyn-pink-950: oklch(0.262 0.075 156.421);
 
-  --theme-mesh-1: oklch(0.656 0.241 354.308);
-  --theme-mesh-2: oklch(0.627 0.265 303.9);
-  --theme-primary-rgb: 236 72 153;
-  --theme-accent-rgb: 168 85 247;
+  --theme-mesh-1: oklch(0.738 0.225 127.21);
+  --theme-mesh-2: oklch(0.723 0.193 149.214);
+  --theme-primary-rgb: 132 204 22;
+  --theme-accent-rgb: 34 197 94;
 
-  --primary: oklch(0.718 0.202 349.761);
-  --primary-foreground: oklch(0.971 0.014 343.198);
-  --ring: oklch(0.718 0.202 349.761);
-  --chart-1: oklch(0.718 0.202 349.761);
-  --chart-2: oklch(0.714 0.203 305.504);
-  --sidebar-primary: oklch(0.718 0.202 349.761);
-  --sidebar-ring: oklch(0.718 0.202 349.761);
+  --primary: oklch(0.798 0.219 126.06);
+  --primary-foreground: oklch(0.267 0.077 135.94);
+  --ring: oklch(0.798 0.219 126.06);
+  --chart-1: oklch(0.798 0.219 126.06);
+  --chart-2: oklch(0.792 0.181 156.012);
+  --sidebar-primary: oklch(0.798 0.219 126.06);
+  --sidebar-ring: oklch(0.798 0.219 126.06);
 
-  --shadow-glow-violet: 0 0 30px -5px oklch(0.718 0.202 349.761 / 0.6);
-  --shadow-glow-pink: 0 0 30px -5px oklch(0.714 0.203 305.504 / 0.6);
-  --shadow-glow-mixed: 0 0 50px -8px oklch(0.718 0.202 349.761 / 0.5), 0 0 25px -4px oklch(0.714 0.203 305.504 / 0.4);
+  --shadow-glow-violet: 0 0 30px -5px oklch(0.798 0.219 126.06 / 0.6);
+  --shadow-glow-pink: 0 0 30px -5px oklch(0.792 0.181 156.012 / 0.6);
+  --shadow-glow-mixed: 0 0 50px -8px oklch(0.798 0.219 126.06 / 0.5), 0 0 25px -4px oklch(0.792 0.181 156.012 / 0.4);
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
