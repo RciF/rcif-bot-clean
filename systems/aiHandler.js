@@ -1,103 +1,110 @@
-/**
- * ═══════════════════════════════════════════════════════════════════
- *  AI HANDLER — OpenAI Engine
- *
- *  المسؤولية: المحرك الأساسي للذكاء — يبني الـ prompt ويستدعي OpenAI
- *
- *  متى تستخدمه؟
- *  - من aiAutoReplySystem (للرد التلقائي)
- *  - من أمر /ذكاء (للرد المباشر)
- *
- *  متى لا تستخدمه؟
- *  - لفحص هل AI مفعّل → استخدم aiSystem
- *  - لكشف intent (balance/work/...) → استخدم aiBrainSystem
- *
- *  Cache: cacheSystem.ns("ai-responses") — TTL 15min
- *
- *  انظر: systems/_README.md للخريطة الكاملة
- * ═══════════════════════════════════════════════════════════════════
- */
+// ══════════════════════════════════════════════════════════════════
+//  AI Handler — Legendary Edition
+//
+//  المحرك الأساسي لـ"لين" — يبني الـ prompt ويستدعي OpenAI
+//
+//  المزايا الأسطورية:
+//   • System prompt متعدد الطبقات (هوية + شخصية + سياق)
+//   • نموذج gpt-4o الافتراضي (مو mini) للجودة
+//   • تكامل عميق مع كل الأنظمة الفرعية (15 نظام)
+//   • Tool calling للوصول لمعلومات السيرفر
+//   • Streaming-friendly architecture
+//   • لا cache على الردود (كل رد فريد)
+//   • Smart memory retrieval (يجيب الذكريات المرتبطة)
+//   • Active request locking (منع التكرار)
+// ══════════════════════════════════════════════════════════════════
+
 const OpenAI = require("openai");
 const memoryManager = require("../utils/memoryManager");
 
-const aiPersonalitySystem = require("../systems/aiPersonalitySystem");
-const aiIdentitySystem = require("../systems/aiIdentitySystem");
-const aiContextSystem = require("../systems/aiContextSystem");
-const aiResponseFormatterSystem = require("../systems/aiResponseFormatterSystem");
-const aiMemorySystem = require("../systems/aiMemorySystem");
-const aiDecisionSystem = require("../systems/aiDecisionSystem");
-const aiEmotionSystem = require("../systems/aiEmotionSystem");
-const aiSocialAwarenessSystem = require("../systems/aiSocialAwarenessSystem");
-const aiServerAwarenessSystem = require("../systems/aiServerAwarenessSystem");
-const logger = require("../systems/loggerSystem");
-const cacheSystem = require("../utils/cacheSystem");
-const aiResponseCache = cacheSystem.ns("ai-responses");
+// ─── الأنظمة الفرعية ───
+const aiPersonalitySystem = require("./aiPersonalitySystem");
+const aiIdentitySystem = require("./aiIdentitySystem");
+const aiContextSystem = require("./aiContextSystem");
+const aiResponseFormatterSystem = require("./aiResponseFormatterSystem");
+const aiMemorySystem = require("./aiMemorySystem");
+const aiDecisionSystem = require("./aiDecisionSystem");
+const aiEmotionSystem = require("./aiEmotionSystem");
+const aiSocialAwarenessSystem = require("./aiSocialAwarenessSystem");
+const aiServerAwarenessSystem = require("./aiServerAwarenessSystem");
+const logger = require("./loggerSystem");
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
 // ═══════════════════════════════════════════════════════
-//  Persona presets — محقونة في system prompt
+//  Persona Presets — محقونة في system prompt
 //  IDs مطابقة للداش (AIPersonaTab.jsx)
 // ═══════════════════════════════════════════════════════
 const PERSONA_PRESETS = {
   friendly: `
-[الشخصية: ودود]
-- نبرة دافئة ومرحبة
-- استخدم إيموجيات بشكل معتدل (😊 🌸 ✨)
+[الشخصية المختارة: ودود]
+- نبرة دافئة وحنونة بدون مبالغة
+- إيموجي خفيف عند الحاجة (😊 ✨)
 - لغة قريبة من القلب
-- أكثر استخدامًا للسؤال "كيف أقدر أساعدك"
+- تجنبي "كيف أقدر أساعدك" — كوني مبادرة بطريقة طبيعية
 `,
   serious: `
-[الشخصية: جدي]
+[الشخصية المختارة: جدي]
 - نبرة مهنية ومباشرة
 - بدون إيموجيات
 - لغة فصحى/رسمية
-- ركز على الإجابة بدقة بدون حشو
+- ركزي على الجواب بدقة بدون حشو
 `,
   fun: `
-[الشخصية: مرح]
-- خفيف الظل، نكت لطيفة بدون تجاوز
-- استخدم تعبيرات سعودية/خليجية ودودة
-- إيموجيات تعبيرية (😄 🤣 🔥)
-- الردود قصيرة وحيوية
+[الشخصية المختارة: مرح]
+- خفيفة الظل، تمزحي بذكاء بدون تجاوز
+- تعبيرات سعودية/خليجية ودودة طبيعية
+- إيموجيات تعبيرية معتدلة (😄 🔥)
+- ردود قصيرة وحيوية
 `,
   professional: `
-[الشخصية: محترف]
-- متخصص ودقيق
-- مناسب لسيرفرات تعليمية ومهنية
-- لغة فصحى عالية، اقتباسات وتعريفات دقيقة
+[الشخصية المختارة: محترف]
+- متخصصة ودقيقة
+- مناسبة للسيرفرات التعليمية والمهنية
+- لغة فصحى عالية
 - بدون إيموجيات إلا للضرورة
 `
 };
 
 function buildPersonaBlock(persona, customPrompt) {
+  // شخصية مخصصة من الداش
   if (persona === "custom" && typeof customPrompt === "string" && customPrompt.trim()) {
-    return `\n[الشخصية المخصصة]\n${customPrompt.trim()}\n`;
+    return `\n[الشخصية المخصصة من الداش]\n${customPrompt.trim()}\n`;
   }
+
+  // شخصية جاهزة
   if (persona && PERSONA_PRESETS[persona]) {
     return PERSONA_PRESETS[persona];
   }
+
+  // الافتراضي
   return PERSONA_PRESETS.friendly;
 }
+
+// ═══════════════════════════════════════════════════════
+//  AI Handler Class
+// ═══════════════════════════════════════════════════════
 
 class AIHandler {
 
   constructor() {
-    this.maxConversationMessages = 12;
+    // ─── إعدادات الذاكرة ───
+    this.maxConversationMessages = 20;  // عدد الرسائل اللي نرسلها للنموذج (من 30 المخزّنة)
     this.maxMessageLength = 2000;
     this.maxModelTokens = 800;
 
-    this.cacheTTL = 15 * 60 * 1000;
-
+    // ─── Active requests (منع التكرار) ───
     this.activeRequests = new Map();
     this.activeRequestTTL = 30 * 1000;
 
+    // ─── Feedback memory ───
     this.feedbackMemory = new Map();
   }
 
   // ═══════════════════════════════════════════════════════
-  //  ACTIVE REQUEST HELPERS
+  //  Active Request Locking
   // ═══════════════════════════════════════════════════════
 
   lockRequest(requestKey) {
@@ -120,40 +127,41 @@ class AIHandler {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  CACHE
-  // ═══════════════════════════════════════════════════════
-
-  getCached(key) {
-    return aiResponseCache.get(key);
-  }
-
-  setCached(key, content) {
-    aiResponseCache.set(key, content, this.cacheTTL);
-  }
-
-  // ═══════════════════════════════════════════════════════
-  //  FEEDBACK
+  //  Feedback System
   // ═══════════════════════════════════════════════════════
 
   updateFeedback(userId, action, success = true) {
-    const data = this.feedbackMemory.get(userId) || { success: 0, fail: 0, lastActions: [] };
+    const data = this.feedbackMemory.get(userId) || {
+      success: 0,
+      fail: 0,
+      lastActions: []
+    };
+
     if (success) data.success++;
     else data.fail++;
+
     data.lastActions.push(action);
     if (data.lastActions.length > 10) data.lastActions.shift();
+
     this.feedbackMemory.set(userId, data);
   }
 
   getFeedbackBias(userId) {
     const data = this.feedbackMemory.get(userId);
     if (!data) return 0;
+
     const total = data.success + data.fail;
     if (total === 0) return 0;
+
     const ratio = data.success / total;
     if (ratio > 0.7) return 0.1;
     if (ratio < 0.3) return -0.1;
     return 0;
   }
+
+  // ═══════════════════════════════════════════════════════
+  //  Helpers
+  // ═══════════════════════════════════════════════════════
 
   sanitize(text) {
     if (!text) return "";
@@ -170,39 +178,38 @@ class AIHandler {
     return memory.slice(-this.maxConversationMessages);
   }
 
-  buildCacheKey(userId, message, context, knowledge) {
-    return `${userId}:${message}:${context}:${knowledge}`.slice(0, 500);
-  }
-
   // ═══════════════════════════════════════════════════════
-  //  اختيار الموديل حسب النمط (مع creativeModel من ai_settings)
+  //  اختيار النموذج — جودة عالية بالافتراضي
   // ═══════════════════════════════════════════════════════
 
   chooseModel(mode, opts = {}) {
-    // لو الإعدادات سمحت بالنموذج الإبداعي والمستخدم في mention/reply — رفّع لـ gpt-4o
+    // creative model من الداش → gpt-4o للمناشن والـ smart
     if (opts.creativeModel === true && (mode === "mention" || mode === "smart")) {
       return "gpt-4o";
     }
 
+    // الخريطة الافتراضية
     const map = {
-      fast: "gpt-4o-mini",
-      smart: "gpt-4o-mini",
-      creative: "gpt-4o",
-      mention: "gpt-4o-mini"
+      fast: "gpt-4o-mini",      // سرعة لما المستخدم يطلب fast
+      smart: "gpt-4o",          // 🌟 الافتراضي gpt-4o الكامل (مو mini)
+      creative: "gpt-4o",       // إبداعي
+      mention: "gpt-4o"         // ✨ المناشن دائماً جودة عالية
     };
-    return map[mode] || "gpt-4o-mini";
+
+    return map[mode] || "gpt-4o";
   }
 
   chooseTemperature(mode, opts = {}) {
-    // الشخصية المرحة/المخصصة تستحق حرارة أعلى شوي
     const baseMap = {
       fast: 0.7,
       smart: 0.85,
       creative: 1.0,
       mention: 0.85
     };
+
     let t = baseMap[mode] ?? 0.85;
 
+    // تعديل حسب الشخصية
     if (opts.persona === "fun") t = Math.min(1.0, t + 0.1);
     if (opts.persona === "serious" || opts.persona === "professional") {
       t = Math.max(0.5, t - 0.15);
@@ -212,13 +219,12 @@ class AIHandler {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  generateAIResponse
+  //  Generate AI Response — المحرك الفعلي
   // ═══════════════════════════════════════════════════════
 
   async generateAIResponse(messages, options = {}) {
     try {
       const {
-        cacheKey = null,
         mode = "smart",
         guild = null,
         maxToolRounds = 3,
@@ -226,22 +232,18 @@ class AIHandler {
         persona = null
       } = options;
 
-      if (cacheKey) {
-        const cached = this.getCached(cacheKey);
-        if (cached) return cached;
-      }
-
       const model = this.chooseModel(mode, { creativeModel });
       const temperature = this.chooseTemperature(mode, { persona });
 
+      // ─── Tool definitions (لو في سيرفر) ───
       const tools = guild
         ? aiServerAwarenessSystem.getToolDefinitions(guild)
         : null;
 
       let conversationMessages = [...messages];
       let finalContent = null;
-      let usedTools = false;
 
+      // ─── حلقة Tool Calling ───
       for (let round = 0; round < maxToolRounds; round++) {
         const requestBody = {
           model,
@@ -266,9 +268,8 @@ class AIHandler {
 
         const toolCalls = msg.tool_calls;
 
+        // ─── لو فيه tool calls ───
         if (toolCalls && toolCalls.length > 0 && guild) {
-          usedTools = true;
-
           conversationMessages.push({
             role: "assistant",
             content: msg.content || null,
@@ -302,15 +303,12 @@ class AIHandler {
             });
           }
 
-          continue;
+          continue; // كمل الحلقة
         }
 
+        // ─── الرد النهائي ───
         finalContent = msg.content || null;
         break;
-      }
-
-      if (cacheKey && finalContent && !usedTools) {
-        this.setCached(cacheKey, finalContent);
       }
 
       return finalContent;
@@ -322,7 +320,7 @@ class AIHandler {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  buildSystemPrompt
+  //  Build System Prompt — متعدد الطبقات
   // ═══════════════════════════════════════════════════════
 
   async buildSystemPrompt(userId, message, context = {}) {
@@ -332,7 +330,9 @@ class AIHandler {
       const channel = context.channel || {};
       const messageObj = context.messageObj || null;
 
+      // ───────────────────────────────────────────
       // 1) تحليل المشاعر
+      // ───────────────────────────────────────────
       let emotion = null;
       try {
         emotion = await aiEmotionSystem.analyze(message, { userId });
@@ -340,10 +340,13 @@ class AIHandler {
         logger.error("EMOTION_ANALYSIS_FAILED", { error: err.message });
       }
 
+      // ───────────────────────────────────────────
       // 2) تحليل القرار والسلوك
+      // ───────────────────────────────────────────
       let decision = null;
       let trustLevel = "neutral";
       let intent = "normal";
+
       try {
         if (aiDecisionSystem.analyzeMessage) {
           decision = aiDecisionSystem.analyzeMessage(message);
@@ -352,25 +355,34 @@ class AIHandler {
           intent = aiDecisionSystem.detectIntent(message) || "normal";
         }
         if (aiDecisionSystem.getTrustLevel) {
-          const behavior = aiDecisionSystem.updateBehavior?.(userId, aiDecisionSystem.detectAggression?.(message));
+          const behavior = aiDecisionSystem.updateBehavior?.(
+            userId,
+            aiDecisionSystem.detectAggression?.(message)
+          );
           trustLevel = aiDecisionSystem.getTrustLevel(behavior?.score || 0);
         }
       } catch (err) {
         logger.error("DECISION_ANALYSIS_FAILED", { error: err.message });
       }
 
-      // 3) الهوية
+      // ───────────────────────────────────────────
+      // 3) الهوية (لين + علي)
+      // ───────────────────────────────────────────
       let identityPrompt = "";
       try {
         identityPrompt = aiIdentitySystem.buildIdentityPrompt?.({
           userId,
           trustLevel,
+          emotion,
+          username: user?.username || null
         }) || "";
       } catch (err) {
         logger.error("IDENTITY_BUILD_FAILED", { error: err.message });
       }
 
-      // 4) الشخصية الأساسية (ديناميكية)
+      // ───────────────────────────────────────────
+      // 4) الشخصية الديناميكية
+      // ───────────────────────────────────────────
       let personalityPrompt = "";
       try {
         personalityPrompt = aiPersonalitySystem.getSystemPrompt?.({
@@ -379,31 +391,50 @@ class AIHandler {
           emotion,
           action: decision?.needsResponse ? "answer" : "normal",
           messageType: emotion?.primary || "normal",
+          messageLength: message?.length || 0
         }) || "";
       } catch (err) {
         logger.error("PERSONALITY_BUILD_FAILED", { error: err.message });
       }
 
-      // 4.5) ✅ شخصية الداش (persona/custom_prompt)
+      // ───────────────────────────────────────────
+      // 5) شخصية الداش (persona/custom)
+      // ───────────────────────────────────────────
       const personaBlock = buildPersonaBlock(context.persona, context.customPrompt);
 
-      // 5) الذاكرة طويلة المدى
+      // ───────────────────────────────────────────
+      // 6) الذكريات الطويلة المدى (بحث ذكي)
+      // ───────────────────────────────────────────
       let memories = [];
       try {
-        const rawMemories = await aiMemorySystem.searchRelevantMemories?.(userId, message);
-        if (Array.isArray(rawMemories)) memories = rawMemories;
+        // 🌟 استخدم البحث الذكي من memoryManager
+        const smartMemories = await memoryManager.searchRelevantMemories?.(userId, message, 5);
+        if (Array.isArray(smartMemories) && smartMemories.length > 0) {
+          memories = smartMemories;
+        } else {
+          // fallback لـ aiMemorySystem
+          const rawMemories = await aiMemorySystem.searchRelevantMemories?.(userId, message);
+          if (Array.isArray(rawMemories)) memories = rawMemories;
+        }
       } catch (err) {
         logger.error("MEMORY_FETCH_FAILED", { error: err.message });
       }
 
-      // 6) العلاقات الاجتماعية
+      // ───────────────────────────────────────────
+      // 7) العلاقات الاجتماعية
+      // ───────────────────────────────────────────
       let socialScore = 0;
       try {
-        const relation = await aiSocialAwarenessSystem.getOrLoadRelationship?.(userId, context.user?.id);
+        const relation = await aiSocialAwarenessSystem.getOrLoadRelationship?.(
+          userId,
+          context.user?.id
+        );
         if (relation && relation.score) socialScore = relation.score;
       } catch (err) {}
 
-      // 7) السياق الموحد
+      // ───────────────────────────────────────────
+      // 8) السياق الموحد (Discord context)
+      // ───────────────────────────────────────────
       let contextBlock = "";
       try {
         contextBlock = aiContextSystem.buildContext({
@@ -422,15 +453,22 @@ class AIHandler {
         logger.error("CONTEXT_BUILD_FAILED", { error: err.message });
       }
 
-      // 8) توجيهات الأدوات
-      const toolsGuide = guild.id ? `
-[⚠️ قواعد صارمة — قراءة إلزامية]
+      // ───────────────────────────────────────────
+      // 9) توجيهات الأدوات (لما يكون في سيرفر)
+      // ───────────────────────────────────────────
+      const toolsGuide = guild?.id ? `
+[🔧 الأدوات المتاحة]
 
-لديك أدوات حقيقية للوصول إلى معلومات هذا السيرفر. **لا تخمن أبداً**.
-استخدم الأدوات لما تحتاج معلومة عن قناة، رتبة، أو إحصائية في السيرفر.
+عندك أدوات حقيقية للوصول إلى معلومات السيرفر:
+- لا تخمني أبداً معلومات السيرفر
+- استخدمي الأدوات لما تحتاجي معرفة قناة، رتبة، عضو
+- لو سُئلتي عن إحصائية، استخدمي الأدوات
+- الأدوات للقراءة فقط — ما عندك صلاحيات إدارية
 ` : "";
 
-      // 9) دمج كل شيء
+      // ───────────────────────────────────────────
+      // 10) دمج كل الطبقات
+      // ───────────────────────────────────────────
       const fullPrompt = [
         identityPrompt,
         personalityPrompt,
@@ -442,55 +480,57 @@ class AIHandler {
         .join("\n")
         .trim();
 
-      return fullPrompt || "أنت Lyn — بوت Discord ذكي وودود. تتكلم عربي. تتصرف كشخص حقيقي داخل سيرفر Discord. لا تقول أنك AI.";
+      // Fallback لو فشل كل شي
+      return fullPrompt || `أنتي لين — شخصية ذكية حيوية تعيشين داخل Discord. صانعك علي. تتكلمي عربي بطلاقة. ما تقولي أنك AI.`;
 
     } catch (err) {
       logger.error("BUILD_SYSTEM_PROMPT_FAILED", { error: err.message });
-      return "أنت Lyn — بوت Discord ذكي وودود. تتكلم عربي. تتصرف كشخص حقيقي داخل سيرفر Discord. لا تقول أنك AI.";
+      return `أنتي لين — شخصية ذكية حيوية تعيشين داخل Discord. صانعك علي. تتكلمي عربي بطلاقة. ما تقولي أنك AI.`;
     }
   }
 
   // ═══════════════════════════════════════════════════════
-  //  askAI
+  //  askAI — الواجهة الرئيسية
   // ═══════════════════════════════════════════════════════
 
   async askAI(userId, message, context = {}) {
     let requestKey;
 
     try {
+      // ─── تنظيف الرسالة ───
       const cleanMessage = this.sanitize(message);
-      if (!cleanMessage) return "رسالتك غير واضحة.";
+      if (!cleanMessage) return "رسالتك غير واضحة، عيدها لي.";
 
       const guildId = context.guild?.id || "dm";
       const channelId = context.channel?.id || "dm";
 
+      // ─── منع التكرار ───
       requestKey = `${userId}:${cleanMessage}`;
-
       if (!this.lockRequest(requestKey)) {
-        return "⏳ انتظر لحظة...";
+        return "⏳ ثانية، أحاول أرد على الرسالة السابقة.";
       }
 
+      // ─── بناء الـ system prompt ───
       const systemPrompt = await this.buildSystemPrompt(userId, cleanMessage, context);
 
+      // ─── الذاكرة قصيرة المدى (الرسائل السابقة) ───
       let memory = await memoryManager.getMemory(userId, guildId, channelId) || [];
       memory = this.trimConversation(memory);
 
+      // ─── بناء المسار الكامل للـ AI ───
       const messages = [
         { role: "system", content: systemPrompt },
         ...memory,
         { role: "user", content: cleanMessage }
       ];
 
-      // ❌ لا تستخدم cache للردود — كل رد يجب أن يكون فريد ويعتمد على السياق
-      const cacheKey = null;
-
-      // ✅ تحديد المود — triggerType (mention/reply/always) يأخذ الأولوية لو موجود
+      // ─── تحديد المود (mention/smart/fast/creative) ───
       const mode = context.triggerType
         ? (context.triggerType === "mention" ? "mention" : "smart")
         : (context.model || "smart");
 
+      // ─── استدعاء OpenAI ───
       let reply = await this.generateAIResponse(messages, {
-        cacheKey,
         mode,
         guild: context.guild || null,
         user: context.user || null,
@@ -498,31 +538,43 @@ class AIHandler {
         persona: context.persona || null
       });
 
+      // ─── حرر الـ lock ───
       this.releaseRequest(requestKey);
 
-      if (!reply) return "❌ حصل خطأ في الرد";
+      // ─── معالجة الرد ───
+      if (!reply) return "❌ صار خطأ، عيد المحاولة.";
 
       reply = this.sanitize(reply);
-      reply = aiResponseFormatterSystem.formatResponse(reply);
 
-      // ✅ احترام max_response_length من الداش
+      try {
+        reply = aiResponseFormatterSystem.formatResponse(reply);
+      } catch (err) {
+        logger.error("FORMAT_FAILED", { error: err.message });
+      }
+
+      // ─── احترام max_response_length من الداش ───
       if (typeof context.maxResponseLength === "number" && context.maxResponseLength > 0) {
         if (reply.length > context.maxResponseLength) {
           reply = reply.slice(0, context.maxResponseLength).trim();
         }
       }
 
+      // ─── احفظ الرسالة + الرد في الذاكرة ───
       await memoryManager.addMessage(userId, "user", cleanMessage, guildId, channelId);
       await memoryManager.addMessage(userId, "assistant", reply, guildId, channelId);
 
+      // ─── خزّن في الذاكرة العميقة (لما تكون رسالة مهمة) ───
       try {
-        await aiMemorySystem.storeMemory?.({
-          userId,
-          type: "conversation",
-          memory: cleanMessage.slice(0, 200)
-        });
+        if (cleanMessage.length > 20) {
+          await aiMemorySystem.storeMemory?.({
+            userId,
+            type: "conversation",
+            memory: cleanMessage.slice(0, 200)
+          });
+        }
       } catch (err) {}
 
+      // ─── حدّث الـ feedback ───
       this.updateFeedback(userId, "answer", true);
 
       return reply;
@@ -530,7 +582,7 @@ class AIHandler {
     } catch (error) {
       logger.error("AI_HANDLER_ERROR", { error: error.message });
       if (requestKey) this.releaseRequest(requestKey);
-      return "❌ حصل خطأ في الذكاء الاصطناعي";
+      return "❌ صار خطأ في الذكاء الاصطناعي. عيد المحاولة بعد شوي.";
     }
   }
 }
