@@ -143,6 +143,17 @@ module.exports = {
         return
       }
 
+      // ✅ إشعار "يكتب..." يحسّن التجربة
+      try {
+        await interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x8b5cf6)
+              .setDescription("💭 جاري التفكير...")
+          ]
+        })
+      } catch {}
+
       // ✅ قياس وقت الاستجابة
       const startTime = Date.now()
 

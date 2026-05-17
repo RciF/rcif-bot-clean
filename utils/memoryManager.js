@@ -8,7 +8,7 @@ const conversationCache = cacheSystem.ns("conversations")
 // ══════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════
-const MAX_MESSAGES = 12
+const MAX_MESSAGES = 20
 const CACHE_TTL = 5 * 60 * 1000 // 5 دقائق
 const MAX_CACHE_SIZE = 500
 const CLEANUP_DAYS = 7
@@ -89,17 +89,39 @@ async function addMessage(userId, role, content, guildId = "dm", channelId = "dm
     const key = buildKey(userId, guildId, channelId)
     invalidateCache(key)
 
-    // تقليم الرسائل القديمة (نحتفظ بآخر MAX_MESSAGES فقط لكل محادثة)
-    await databaseSystem.query(
-      `DELETE FROM ai_conversations
-       WHERE id IN (
-         SELECT id FROM ai_conversations
-         WHERE user_id = $1 AND guild_id = $2 AND channel_id = $3
-         ORDER BY created_at DESC
-         OFFSET $4
-       )`,
+    // ✅ تلخيص ذكي بدل الحذف الأعمى
+    const overflow = await databaseSystem.query(
+      `SELECT id, role, content FROM ai_conversations
+       WHERE user_id = $1 AND guild_id = $2 AND channel_id = $3
+       ORDER BY created_at DESC
+       OFFSET $4`,
       [String(userId), String(guildId), String(channelId), MAX_MESSAGES]
     )
+
+    if (overflow.rows && overflow.rows.length >= 4) {
+      // لخّص الرسائل القديمة وخزّنها كذكرى دائمة
+      try {
+        const memoryRepository = require("../repositories/memoryRepository")
+        const summary = overflow.rows
+          .reverse()
+          .map(r => `${r.role === "user" ? "هو" : "أنا"}: ${r.content}`)
+          .join(" | ")
+          .slice(0, 800)
+
+        await memoryRepository.createMemory({
+          userId: String(userId),
+          type: "conversation_summary",
+          memory: summary
+        })
+      } catch {}
+
+      // الحين احذف الرسائل اللي لخصناها
+      await databaseSystem.query(
+        `DELETE FROM ai_conversations
+         WHERE id = ANY($1::int[])`,
+        [overflow.rows.map(r => r.id)]
+      )
+    }
 
   } catch (err) {
     logger.error("CONVERSATION_ADD_FAILED", { error: err.message })
