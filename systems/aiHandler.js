@@ -563,16 +563,13 @@ class AIHandler {
       await memoryManager.addMessage(userId, "user", cleanMessage, guildId, channelId);
       await memoryManager.addMessage(userId, "assistant", reply, guildId, channelId);
 
-      // ─── خزّن في الذاكرة العميقة (لما تكون رسالة مهمة) ───
+      // ─── 🌟 استخراج ذكي للمعلومات المهمة (للأبد) ───
       try {
-        if (cleanMessage.length > 20) {
-          await aiMemorySystem.storeMemory?.({
-            userId,
-            type: "conversation",
-            memory: cleanMessage.slice(0, 200)
-          });
-        }
-      } catch (err) {}
+        const aiMemoryExtractor = require("./aiMemoryExtractor");
+        await aiMemoryExtractor.extractAndStore(userId, cleanMessage);
+      } catch (err) {
+        logger.error("MEMORY_EXTRACT_FAILED", { error: err.message });
+      }
 
       // ─── حدّث الـ feedback ───
       this.updateFeedback(userId, "answer", true);
