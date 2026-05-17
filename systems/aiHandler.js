@@ -366,7 +366,7 @@ class AIHandler {
       }
 
       // ───────────────────────────────────────────
-      // 3) الهوية (لين + علي)
+      // 3) الهوية (لين + علي) — مع سياق السيرفر
       // ───────────────────────────────────────────
       let identityPrompt = "";
       try {
@@ -374,7 +374,8 @@ class AIHandler {
           userId,
           trustLevel,
           emotion,
-          username: user?.username || null
+          username: user?.username || null,
+          guildContext: guild?.id ? { id: guild.id, name: guild.name } : null
         }) || "";
       } catch (err) {
         logger.error("IDENTITY_BUILD_FAILED", { error: err.message });
