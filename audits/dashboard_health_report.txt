@@ -1,0 +1,164 @@
+
+══════════════════════════════════════════════════════════════════════
+  🔍 Lyn Dashboard — Full Health Audit
+══════════════════════════════════════════════════════════════════════
+API:      https://lyn-api.onrender.com
+Frontend: https://rcif-dashboard.onrender.com
+Guild:    1490775708291694684
+Time:     ١٧‏/٥‏/٢٠٢٦، ١٠:٣٧:٤٠ ص
+
+──────────────────────────────────────────────────────────────────────
+  Layer 1: Public Health Checks
+──────────────────────────────────────────────────────────────────────
+✅ API Root                  200  435ms
+✅ API Health Check          200  327ms
+✅ Frontend Root             200  287ms
+
+──────────────────────────────────────────────────────────────────────
+  Layer 2 + 3: GET Endpoints (32) + Response Validation
+──────────────────────────────────────────────────────────────────────
+
+📁 Guild
+✅ /info                        200  480ms  581B
+✅ /channels                    200  339ms  10.0KB
+✅ /roles                       200  292ms  5.5KB
+✅ /members                     200  367ms  2.3KB
+✅ /emojis                      200  304ms  143B
+✅ /plan                        200  120ms  21B
+
+📁 Settings
+✅ /overview                    200  588ms  418B
+✅ /welcome                     200  121ms  241B
+✅ /protection                  200  126ms  819B
+✅ /logs                        200  119ms  951B
+✅ /xp                          200  119ms  311B
+✅ /economy                     200  119ms  332B
+✅ /tickets                     200  119ms  394B
+✅ /tickets/active              200  126ms  2B
+✅ /audit                       200  120ms  19.0KB
+
+📁 Roles
+✅ /role-panels                 200  118ms  2B
+
+📁 Moderation
+✅ /moderation/warnings         200  119ms  2B
+✅ /moderation/bans             200  121ms  2B
+✅ /moderation/mutes            200  120ms  2B
+
+📁 Events
+✅ /events                      200  120ms  2B
+✅ /scheduler                   200  123ms  2B
+
+📁 Embed
+✅ /embeds/templates            200  127ms  2B
+
+📁 AI
+✅ /ai                          200  116ms  371B
+✅ /ai/usage                    200  119ms  24B
+
+📁 AutoRole
+✅ /auto-role                   200  128ms  173B
+
+📁 Automod
+✅ /automod                     200  126ms  98B
+
+📁 Giveaway
+✅ /giveaway                    200  115ms  444B
+
+📁 XP
+✅ /xp/leaderboard              200  116ms  52B
+
+📁 Economy
+✅ /economy/shop                200  113ms  2B
+✅ /economy/leaderboard         200  126ms  46B
+
+📁 Commands
+✅ /commands                    200  117ms  10.8KB
+✅ /prefix                      200  117ms  14B
+
+──────────────────────────────────────────────────────────────────────
+  Layer 4: Write Tests (Read → Modify → Restore)
+──────────────────────────────────────────────────────────────────────
+✅ Welcome — save same data                 PUT 200  132ms
+✅ Protection — save same data              PUT 200  123ms
+✅ Logs — save same data                    PUT 200  130ms
+✅ AI — save same data                      PUT 200  132ms
+✅ XP — save same data                      PUT 200  122ms
+✅ Economy — save same data                 PUT 200  125ms
+
+──────────────────────────────────────────────────────────────────────
+  Layer 5: Database Check (Local)
+──────────────────────────────────────────────────────────────────────
+✅ متصل بقاعدة البيانات
+📊 عدد الجداول: 56
+⚠️  2 جدول مفقود:
+   - users
+   - inventory
+
+📈 إحصائيات الجداول الرئيسية:
+   guilds                    2 صف
+   subscriptions             1 صف
+   guild_subscriptions       1 صف
+
+──────────────────────────────────────────────────────────────────────
+  Layer 6: Frontend Pages (26)
+──────────────────────────────────────────────────────────────────────
+✅ /                                   200  255ms
+✅ /login                              200  257ms
+✅ /dashboard                          200  87ms
+✅ /dashboard/servers                  200  86ms
+✅ /dashboard/stats                    200  89ms
+✅ /dashboard/members                  200  88ms
+✅ /dashboard/audit                    200  88ms
+✅ /dashboard/templates                200  87ms
+✅ /dashboard/commands                 200  87ms
+✅ /dashboard/subscription             200  84ms
+✅ /dashboard/events                   200  86ms
+✅ /dashboard/scheduler                200  83ms
+✅ /dashboard/ai                       200  86ms
+✅ /dashboard/protection               200  85ms
+✅ /dashboard/levels                   200  87ms
+✅ /dashboard/economy                  200  87ms
+✅ /dashboard/tickets                  200  89ms
+✅ /dashboard/welcome                  200  87ms
+✅ /dashboard/auto-role                200  86ms
+✅ /dashboard/logs                     200  84ms
+✅ /dashboard/moderation               200  92ms
+✅ /dashboard/reaction-roles           200  87ms
+✅ /dashboard/embed                    200  87ms
+✅ /dashboard/settings                 200  84ms
+✅ /dashboard/giveaway                 200  88ms
+✅ /dashboard/automod                  200  89ms
+
+══════════════════════════════════════════════════════════════════════
+  📋 التقرير النهائي
+══════════════════════════════════════════════════════════════════════
+
+📊 Endpoints  (32 إجمالي):
+   ✅ شغّالة:        32/32
+   🐌 بطيئة:         0
+   ❌ فاشلة:         0
+   🔐 مشاكل auth:    0
+
+⚡ الأداء:
+   متوسط:    172ms
+   أسرع:     113ms
+   أبطأ:     588ms
+
+💾 اختبارات الكتابة: 6/6
+
+💾 قاعدة البيانات:  56 جدول
+   ⚠️  2 جدول مفقود
+
+🎨 الفرونت إند: 26/26 صفحة
+
+⚠️  تحذيرات (2):
+   - Missing DB table: users
+   - Missing DB table: inventory
+
+══════════════════════════════════════════════════════════════════════
+  🎉 الداش بورد سليم — كل شيء يشتغل!
+══════════════════════════════════════════════════════════════════════
+
+📄 التقرير الكامل: C:\Users\alisa\OneDrive\Desktop\discord-bot\audits\dashboard_health_report.txt
+📄 التقرير JSON:   C:\Users\alisa\OneDrive\Desktop\discord-bot\audits\dashboard_health_report.json

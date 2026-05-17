@@ -1,14 +1,18 @@
 // ══════════════════════════════════════════════════════════════════
-//  Database Audit Script — Lyn Bot
-//  المسار: db_audit.js
+//  Database Audit Script — Lyn Bot (UPDATED)
+//  المسار: audits/db_audit.js
 //
 //  الاستخدام:
-//    node db_audit.js
+//    node audits/db_audit.js
 //
 //  الإخراج:
-//    db_audit_report.txt — تقرير شامل قابل للمشاركة
+//    audits/db_audit_report.txt — تقرير شامل قابل للمشاركة
 //
 //  ⚠️ READ-ONLY — السكريبت يقرأ فقط، ما يعدّل أي شي
+//
+//  ✅ FIXED:
+//   - EXPECTED_TABLES كاملة (تشمل كل الجداول من 001 إلى 034)
+//   - يفحص المسار الصحيح للـ migrations: systems/migrations/migrations/
 // ══════════════════════════════════════════════════════════════════
 
 require("dotenv").config()
@@ -21,92 +25,120 @@ const path = require("path")
 // ──────────────────────────────────────────────────────────────────
 
 const REPORT_FILE = path.join(__dirname, "db_audit_report.txt")
+const MIGRATIONS_DIR = path.join(__dirname, "..", "systems", "migrations", "migrations")
 
-// الجداول المتوقعة (من الكود)
+// الجداول المتوقعة (مطابقة لكل الـ migrations الفعلية)
 const EXPECTED_TABLES = [
-  // من 001_initial
-  "users",
+  // ── من 001_initial ──
   "guilds",
   "xp",
   "xp_settings",
   "analytics",
-  "inventory",
 
-  // من 002_log_settings
+  // ── من 002_log_settings ──
   "log_settings",
 
-  // من 003_tickets
+  // ── من 003_tickets ──
   "tickets",
   "ticket_settings",
 
-  // من 004_welcome
+  // ── من 004_welcome ──
   "welcome_settings",
 
-  // من 005_protection
+  // ── من 005_protection ──
   "protection_settings",
 
-  // من 006_button_roles
+  // ── من 006_button_roles ──
   "button_role_panels",
   "button_roles",
 
-  // من 007_events
+  // ── من 007_events ──
   "guild_events",
   "event_attendees",
 
-  // من 008_economy_extras
-  "card_customization",
-  "user_premium",
+  // ── من 008_economy_extras (DEPRECATED — no-op) ──
+  // (محتواه انتقل لـ 014)
 
-  // من 009_auto_role
+  // ── من 009_auto_role ──
   "auto_role_settings",
   "auto_role_assignments",
   "auto_role_history",
 
-  // من 010_giveaway
+  // ── من 010_giveaway ──
   "giveaways",
   "giveaway_entries",
 
-  // من 011_automod
+  // ── من 011_automod ──
   "automod_settings",
   "automod_words",
   "automod_violations",
 
-  // من 012_bulk_actions
+  // ── من 012_bulk_actions ──
   "bulk_actions",
 
-  // System tables
-  "schema_migrations",
+  // ── من 013_ai_core ──
+  "ai_settings",
+  "ai_conversations",
+  "ai_usage_log",
+  "memories",
+  "relationships",
 
-  // مستخدمة في الكود لكن مو في migrations (هذي المشكلة!)
+  // ── من 014_economy_profile ──
   "economy_users",
   "economy_settings",
   "economy_shop",
-  "ai_conversations",
-  "ai_settings",
-  "ai_usage_log",
-  "ai_memories",
-  "ai_token_usage",
+  "card_customization",
+  "user_premium",
+  "event_settings",
+
+  // ── من 015_backend_tables ──
+  "subscriptions",
+  "payment_requests",
+  "guild_subscriptions",
+  "user_sessions",
+  "dashboard_audit_log",
+
+  // ── من 016_cleanup_duplicates ──
+  // (يحذف فقط — لا ينشئ)
+
+  // ── من 017_scheduled_tasks ──
+  "scheduled_tasks",
+
+  // ── من 018_lazy_tables ──
   "warnings",
   "moderation_bans",
   "moderation_mutes",
-  "scheduled_tasks",
   "embed_templates",
-  "stats_config",
   "stats_channels",
-  "stats_snapshots",
-  "stats_hourly",
-  "guild_analytics",
   "guild_command_settings",
   "guild_prefix_settings",
+  "help_hidden_categories",
+
+  // ── من 030_stats_counters ──
+  "stats_counters",
+
+  // ── من 031_log_settings_jsonb ──
+  // (يضيف أعمدة فقط — لا ينشئ جدول)
+
+  // ── من 032_xp_settings_columns ──
+  // (يضيف أعمدة فقط — لا ينشئ جدول)
+
+  // ── من 033_welcome_settings_columns ──
+  // (يضيف أعمدة فقط — لا ينشئ جدول)
+
+  // ── من 034_stats_tables ──
+  "stats_config",
+  "stats_snapshots",
+  "stats_hourly",
+
+  // ── جداول من dashboard-backend (modular commands) ──
   "guild_command_aliases",
   "guild_command_restrictions",
   "guild_command_defaults",
   "command_usage_stats",
-  "subscriptions",
-  "payment_requests",
-  "guild_subscriptions",
-  "dashboard_audit_log",
-  "help_hidden_categories",
+
+  // ── System tables ──
+  "schema_migrations",
 ]
 
 // ──────────────────────────────────────────────────────────────────
@@ -148,70 +180,47 @@ async function getAllTables(client) {
   return result.rows.map((r) => r.table_name)
 }
 
-async function getTableColumns(client, tableName) {
-  const result = await client.query(
-    `
-    SELECT
-      column_name,
-      data_type,
-      is_nullable,
-      column_default,
-      character_maximum_length
-    FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = $1
-    ORDER BY ordinal_position
-  `,
-    [tableName],
-  )
-  return result.rows
-}
-
 async function getTableRowCount(client, tableName) {
   try {
-    const result = await client.query(
-      `SELECT COUNT(*) as count FROM "${tableName}"`,
-    )
-    return parseInt(result.rows[0].count, 10)
-  } catch (err) {
+    const result = await client.query(`SELECT COUNT(*)::int AS c FROM "${tableName}"`)
+    return result.rows[0]?.c ?? -1
+  } catch {
     return -1
   }
 }
 
-async function getTableIndexes(client, tableName) {
-  const result = await client.query(
-    `
-    SELECT
-      indexname,
-      indexdef
-    FROM pg_indexes
-    WHERE schemaname = 'public' AND tablename = $1
-    ORDER BY indexname
-  `,
-    [tableName],
-  )
+async function getPrimaryKey(client, tableName) {
+  const result = await client.query(`
+    SELECT a.attname
+    FROM   pg_index i
+    JOIN   pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+    WHERE  i.indrelid = $1::regclass AND i.indisprimary
+  `, [`"${tableName}"`]).catch(() => ({ rows: [] }))
+  return result.rows.map(r => r.attname)
+}
+
+async function getTableColumns(client, tableName) {
+  const result = await client.query(`
+    SELECT column_name, data_type, is_nullable, column_default, character_maximum_length
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = $1
+    ORDER BY ordinal_position
+  `, [tableName])
   return result.rows
 }
 
-async function getPrimaryKey(client, tableName) {
-  const result = await client.query(
-    `
-    SELECT
-      a.attname AS column_name
-    FROM pg_index i
-    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-    WHERE i.indrelid = $1::regclass AND i.indisprimary
-    ORDER BY array_position(i.indkey, a.attnum)
-  `,
-    [tableName],
-  )
-  return result.rows.map((r) => r.column_name)
+async function getTableIndexes(client, tableName) {
+  const result = await client.query(`
+    SELECT indexname FROM pg_indexes
+    WHERE schemaname = 'public' AND tablename = $1
+    ORDER BY indexname
+  `, [tableName])
+  return result.rows
 }
 
 async function getForeignKeys(client, tableName) {
-  const result = await client.query(
-    `
+  const result = await client.query(`
     SELECT
-      tc.constraint_name,
       kcu.column_name,
       ccu.table_name AS foreign_table,
       ccu.column_name AS foreign_column
@@ -221,33 +230,28 @@ async function getForeignKeys(client, tableName) {
     JOIN information_schema.constraint_column_usage ccu
       ON ccu.constraint_name = tc.constraint_name
     WHERE tc.constraint_type = 'FOREIGN KEY'
+      AND tc.table_schema = 'public'
       AND tc.table_name = $1
-  `,
-    [tableName],
-  )
+  `, [tableName])
   return result.rows
 }
 
-async function getAppliedMigrations(client) {
+async function getMigrations(client) {
   try {
-    const result = await client.query(
-      `SELECT id, applied_at FROM schema_migrations ORDER BY id`,
-    )
+    const result = await client.query(`
+      SELECT id, applied_at FROM schema_migrations ORDER BY id
+    `)
     return result.rows
-  } catch (err) {
+  } catch {
     return null
   }
 }
 
-async function getDatabaseSize(client) {
-  const result = await client.query(`
-    SELECT
-      pg_database.datname AS db_name,
-      pg_size_pretty(pg_database_size(pg_database.datname)) AS size
-    FROM pg_database
-    WHERE datname = current_database()
-  `)
-  return result.rows[0]
+function getMigrationFiles() {
+  if (!fs.existsSync(MIGRATIONS_DIR)) return []
+  return fs.readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".js") && !f.startsWith("_"))
+    .sort()
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -256,20 +260,14 @@ async function getDatabaseSize(client) {
 
 async function run() {
   const dbUrl = process.env.DATABASE_URL
-
   if (!dbUrl) {
     console.error("❌ DATABASE_URL غير موجود في .env")
-    console.error("   تأكد إن الملف .env في نفس مجلد السكريبت")
     process.exit(1)
   }
 
-  console.log("🔌 جاري الاتصال بقاعدة البيانات...")
-
   const client = new Client({
     connectionString: dbUrl,
-    ssl: dbUrl.includes("render.com")
-      ? { rejectUnauthorized: false }
-      : false,
+    ssl: dbUrl.includes("render.com") ? { rejectUnauthorized: false } : false,
   })
 
   try {
@@ -279,30 +277,30 @@ async function run() {
     process.exit(1)
   }
 
-  console.log("✅ الاتصال ناجح\n")
-
-  // ─────────────────────────────────────────
-  //  HEADER
-  // ─────────────────────────────────────────
-
-  header("DATABASE AUDIT REPORT — Lyn Bot")
+  header("LYN BOT — DATABASE AUDIT REPORT")
   log("Generated: " + new Date().toISOString())
-
-  // ─── Database info ───
-  const dbInfo = await getDatabaseSize(client)
-  log("Database:   " + dbInfo.db_name)
-  log("Size:       " + dbInfo.size)
+  log("Database:  " + dbUrl.replace(/:[^:@]+@/, ":****@"))
 
   // ─────────────────────────────────────────
-  //  MIGRATIONS
+  //  MIGRATION FILES vs APPLIED
   // ─────────────────────────────────────────
 
-  header("APPLIED MIGRATIONS")
+  header("MIGRATION FILES (في الكود)")
 
-  const migrations = await getAppliedMigrations(client)
+  const migFiles = getMigrationFiles()
+  log("المسار: " + MIGRATIONS_DIR)
+  log("Total: " + migFiles.length + " file(s)")
+  log("")
 
+  for (const f of migFiles) {
+    log("  📄 " + f)
+  }
+
+  header("APPLIED MIGRATIONS (في القاعدة)")
+
+  const migrations = await getMigrations(client)
   if (migrations === null) {
-    log("⚠️  جدول schema_migrations غير موجود!")
+    log("⚠️  جدول schema_migrations مش موجود — تشغيل أول مرة؟")
   } else if (migrations.length === 0) {
     log("⚠️  ما فيه أي migration مطبقة!")
   } else {
@@ -310,6 +308,22 @@ async function run() {
     log("")
     for (const m of migrations) {
       log("  ✓ " + m.id.padEnd(35) + " " + m.applied_at.toISOString())
+    }
+  }
+
+  // فحص: ملفات موجودة لكن مش مطبقة
+  if (migrations) {
+    const appliedSet = new Set(migrations.map(m => m.id))
+    const pending = migFiles
+      .map(f => f.replace(/\.js$/, ""))
+      .filter(id => !appliedSet.has(id))
+
+    if (pending.length > 0) {
+      log("")
+      log("⚠️  Pending migrations (موجودة لكن غير مطبقة):")
+      for (const id of pending) {
+        log("  • " + id)
+      }
     }
   }
 
@@ -442,8 +456,9 @@ async function run() {
 
   header("SUMMARY")
 
-  log("Total tables:        " + allTables.length)
+  log("Migration files:     " + migFiles.length)
   log("Applied migrations:  " + (migrations?.length || 0))
+  log("Total tables:        " + allTables.length)
   log("Missing tables:      " + missing.length)
   log("Unexpected tables:   " + unexpected.length)
   log("")

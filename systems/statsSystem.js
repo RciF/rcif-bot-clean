@@ -2,6 +2,10 @@
 //  STATS SYSTEM v2 — لوحة إحصائيات ذكية
 //  الفكرة: embed واحد في قناة نصية يتحدث كل 10 دقائق
 //  + ذاكرة يومية (snapshots) + أوقات ذروة + milestones + هوية السيرفر
+//
+//  ⚠️ ملاحظة: الجداول (stats_config, stats_snapshots, stats_hourly)
+//     الآن تُنشأ من migration 034_stats_tables.js
+//     ensureTables() محتفظ بيها للتوافق الخلفي فقط ولا تعمل شي
 // ═══════════════════════════════════════════════════════════════════════
 
 const { EmbedBuilder, ChannelType, PermissionFlagsBits } = require("discord.js")
@@ -45,56 +49,14 @@ function getServerTitle(guild, onlineCount, weeklyGrowth, boostLevel) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  قاعدة البيانات — إنشاء الجداول
+//  قاعدة البيانات — الجداول تتولاها migration 034
+//  ensureTables() محتفظ بيها للتوافق الخلفي فقط
 // ═══════════════════════════════════════════════════════════════════════
 
 async function ensureTables() {
-  // إعدادات اللوحة لكل سيرفر
-  await databaseSystem.query(`
-    CREATE TABLE IF NOT EXISTS stats_config (
-      guild_id            TEXT PRIMARY KEY,
-      panel_channel_id    TEXT,
-      panel_message_id    TEXT,
-      milestone_channel_id TEXT,
-      next_milestone      INTEGER DEFAULT 100,
-      enabled             BOOLEAN DEFAULT true,
-      created_at          TIMESTAMP DEFAULT NOW(),
-      updated_at          TIMESTAMP DEFAULT NOW()
-    )
-  `)
-
-  // لقطات يومية (قلب نظام الذاكرة)
-  await databaseSystem.query(`
-    CREATE TABLE IF NOT EXISTS stats_snapshots (
-      id              SERIAL PRIMARY KEY,
-      guild_id        TEXT NOT NULL,
-      date            DATE NOT NULL DEFAULT CURRENT_DATE,
-      member_count    INTEGER DEFAULT 0,
-      online_peak     INTEGER DEFAULT 0,
-      online_peak_hour INTEGER DEFAULT 0,
-      joined_today    INTEGER DEFAULT 0,
-      left_today      INTEGER DEFAULT 0,
-      UNIQUE (guild_id, date)
-    )
-  `)
-
-  // معدل الأعضاء كل ساعة (لحساب أوقات الذروة)
-  await databaseSystem.query(`
-    CREATE TABLE IF NOT EXISTS stats_hourly (
-      id          SERIAL PRIMARY KEY,
-      guild_id    TEXT NOT NULL,
-      hour        INTEGER NOT NULL,
-      avg_online  NUMERIC(10,2) DEFAULT 0,
-      samples     INTEGER DEFAULT 0,
-      UNIQUE (guild_id, hour)
-    )
-  `)
-
-  // إندكسات للأداء
-  await databaseSystem.query(`
-    CREATE INDEX IF NOT EXISTS idx_stats_snapshots_guild_date
-    ON stats_snapshots (guild_id, date DESC)
-  `)
+  // ✅ الجداول تُنشأ الآن من systems/migrations/migrations/034_stats_tables.js
+  //    لا حاجة لإنشائها هنا — كل schema في مكان واحد
+  return
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -169,11 +131,29 @@ async function updateOnlinePeak(guildId, onlineCount) {
         END
     `, [guildId, onlineCount, hour])
   } catch (err) {
-    logger.error("STATS_PEAK_UPDATE_FAILED", { error: err.message })
+    logger.error("STATS_ONLINE_PEAK_FAILED", { error: err.message, guildId })
   }
 }
 
-async function updateHourlyStats(guildId, onlineCount) {
+async function getRecentSnapshots(guildId, days = 7) {
+  const result = await databaseSystem.query(`
+    SELECT * FROM stats_snapshots
+    WHERE guild_id = $1
+      AND date >= CURRENT_DATE - INTERVAL '${days} days'
+    ORDER BY date DESC
+  `, [guildId])
+  return result.rows || []
+}
+
+async function getYesterdaySnapshot(guildId) {
+  const result = await databaseSystem.queryOne(`
+    SELECT * FROM stats_snapshots
+    WHERE guild_id = $1 AND date = CURRENT_DATE - INTERVAL '1 day'
+  `, [guildId])
+  return result || null
+}
+
+async function recordHourlyAverage(guildId, onlineCount) {
   try {
     const hour = new Date().getHours()
     await databaseSystem.query(`
@@ -184,246 +164,172 @@ async function updateHourlyStats(guildId, onlineCount) {
         samples    = stats_hourly.samples + 1
     `, [guildId, hour, onlineCount])
   } catch (err) {
-    logger.error("STATS_HOURLY_UPDATE_FAILED", { error: err.message })
-  }
-}
-
-// ─── جلب البيانات التاريخية ───
-
-async function getWeeklyData(guildId) {
-  try {
-    const rows = await databaseSystem.queryMany(`
-      SELECT date, member_count, joined_today, left_today, online_peak, online_peak_hour
-      FROM stats_snapshots
-      WHERE guild_id = $1 AND date >= CURRENT_DATE - INTERVAL '7 days'
-      ORDER BY date DESC
-    `, [guildId])
-    return rows
-  } catch {
-    return []
+    logger.error("STATS_HOURLY_FAILED", { error: err.message, guildId })
   }
 }
 
 async function getPeakHour(guildId) {
-  try {
-    const row = await databaseSystem.queryOne(`
-      SELECT hour, avg_online
-      FROM stats_hourly
-      WHERE guild_id = $1
-      ORDER BY avg_online DESC
-      LIMIT 1
-    `, [guildId])
-    return row
-  } catch {
-    return null
+  const result = await databaseSystem.queryOne(`
+    SELECT hour, avg_online FROM stats_hourly
+    WHERE guild_id = $1
+    ORDER BY avg_online DESC
+    LIMIT 1
+  `, [guildId])
+  return result || null
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  حساب القيم
+// ═══════════════════════════════════════════════════════════════════════
+
+function countOnlineMembers(guild) {
+  if (!guild.members?.cache) return 0
+  let count = 0
+  for (const member of guild.members.cache.values()) {
+    if (member.user.bot) continue
+    const status = member.presence?.status
+    if (status && status !== "offline") count++
   }
+  return count
 }
 
-async function getTodaySnapshot(guildId) {
-  return await databaseSystem.queryOne(
-    "SELECT * FROM stats_snapshots WHERE guild_id = $1 AND date = CURRENT_DATE",
-    [guildId]
-  )
-}
-
-async function getYesterdaySnapshot(guildId) {
-  return await databaseSystem.queryOne(
-    "SELECT * FROM stats_snapshots WHERE guild_id = $1 AND date = CURRENT_DATE - INTERVAL '1 day'",
-    [guildId]
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  جلب إحصائيات السيرفر الحية
-// ═══════════════════════════════════════════════════════════════════════
-
-async function fetchLiveStats(guild) {
-  try {
-    await guild.members.fetch()
-  } catch {}
-
-  const totalMembers  = guild.memberCount
-  const humanMembers  = guild.members.cache.filter(m => !m.user.bot).size
-  const botMembers    = guild.members.cache.filter(m => m.user.bot).size
-  const onlineMembers = guild.members.cache.filter(m =>
-    m.presence?.status && m.presence.status !== "offline"
-  ).size
-
-  const textChannels  = guild.channels.cache.filter(c => c.type === ChannelType.GuildText).size
-  const voiceChannels = guild.channels.cache.filter(c => c.type === ChannelType.GuildVoice).size
-  const totalChannels = textChannels + voiceChannels
-
-  const rolesCount    = guild.roles.cache.filter(r => r.id !== guild.id).size
-  const boostCount    = guild.premiumSubscriptionCount || 0
-  const boostLevel    = guild.premiumTier || 0
-  const emojiCount    = guild.emojis.cache.size
-
-  const onlinePercent = totalMembers > 0
-    ? Math.round((onlineMembers / totalMembers) * 100)
-    : 0
-
-  const humanPercent  = totalMembers > 0
-    ? Math.round((humanMembers / totalMembers) * 100)
-    : 0
-
-  return {
-    totalMembers, humanMembers, botMembers,
-    onlineMembers, onlinePercent, humanPercent,
-    textChannels, voiceChannels, totalChannels,
-    rolesCount, boostCount, boostLevel, emojiCount
+function countBots(guild) {
+  if (!guild.members?.cache) return 0
+  let count = 0
+  for (const member of guild.members.cache.values()) {
+    if (member.user.bot) count++
   }
+  return count
+}
+
+function countByStatus(guild, status) {
+  if (!guild.members?.cache) return 0
+  let count = 0
+  for (const member of guild.members.cache.values()) {
+    if (member.user.bot) continue
+    if (member.presence?.status === status) count++
+  }
+  return count
+}
+
+function getNextMilestone(currentCount) {
+  for (const m of MILESTONES) {
+    if (m > currentCount) return m
+  }
+  return null
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  بناء الـ Embed الرئيسي
+//  بناء Embed اللوحة
 // ═══════════════════════════════════════════════════════════════════════
 
 async function buildPanelEmbed(guild) {
-  const stats     = await fetchLiveStats(guild)
-  const today     = await getTodaySnapshot(guild.id)
+  const memberCount = guild.memberCount || 0
+  const onlineCount = countOnlineMembers(guild)
+  const botCount    = countBots(guild)
+  const humanCount  = memberCount - botCount
+
+  const onlinePercent = memberCount > 0 ? Math.round((onlineCount / memberCount) * 100) : 0
+  const onlineBar     = buildBar(onlineCount, memberCount, 12)
+
+  // ─── snapshots لحساب التغيير ───
   const yesterday = await getYesterdaySnapshot(guild.id)
-  const weekData  = await getWeeklyData(guild.id)
-  const peakHour  = await getPeakHour(guild.id)
+  const yesterdayMembers = yesterday?.member_count || memberCount
 
-  // حساب التغيير اليومي
-  const memberDiff = yesterday
-    ? stats.totalMembers - yesterday.member_count
-    : 0
+  const dailyDiff = memberCount - yesterdayMembers
+  const snapshots = await getRecentSnapshots(guild.id, 7)
 
-  // حساب النمو الأسبوعي
-  const oldestWeek = weekData.length > 0 ? weekData[weekData.length - 1] : null
-  const weeklyGrowth = oldestWeek
-    ? stats.totalMembers - oldestWeek.member_count
-    : 0
+  const weeklyStart = snapshots[snapshots.length - 1]?.member_count || memberCount
+  const weeklyGrowth = memberCount - weeklyStart
 
-  // أكثر يوم نمواً هذا الأسبوع
-  let bestDay = null
-  let bestDayGrowth = 0
-  for (const day of weekData) {
-    const net = (day.joined_today || 0) - (day.left_today || 0)
-    if (net > bestDayGrowth) {
-      bestDayGrowth = net
-      bestDay = day
-    }
-  }
+  const totalJoined = snapshots.reduce((s, x) => s + (x.joined_today || 0), 0)
+  const totalLeft   = snapshots.reduce((s, x) => s + (x.left_today || 0), 0)
 
-  const serverTitle = getServerTitle(guild, stats.onlineMembers, weeklyGrowth, stats.boostLevel)
+  // ─── ذروة المتصلين ───
+  const peakHour = await getPeakHour(guild.id)
+  const peakText = peakHour
+    ? `🕐 ذروة المتصلين: **${peakHour.hour}:00** (~${Math.round(peakHour.avg_online)} متصل)`
+    : "🕐 ذروة المتصلين: جاري التحليل..."
 
-  // الـ Milestone التالي
-  const nextMilestone = MILESTONES.find(m => m > stats.totalMembers) || null
-  const prevMilestone = MILESTONES.filter(m => m <= stats.totalMembers).pop() || 0
-  const milestonePercent = nextMilestone
-    ? Math.round(((stats.totalMembers - prevMilestone) / (nextMilestone - prevMilestone)) * 100)
-    : 100
+  // ─── milestone ───
+  const nextMile = getNextMilestone(memberCount)
+  const mileBar  = nextMile ? buildBar(memberCount, nextMile, 12) : "█".repeat(12)
+  const mileText = nextMile
+    ? `🎯 المعلم القادم: **${nextMile}** عضو\n${mileBar} (${Math.round((memberCount / nextMile) * 100)}%)`
+    : `🎯 لقد تجاوزت كل المعالم المعروفة! 👑`
 
-  // ساعة الذروة
-  const peakHourText = peakHour
-    ? `${peakHour.hour}:00 - ${peakHour.hour + 1}:00`
-    : "—"
+  // ─── لقب السيرفر ───
+  const boostLevel = guild.premiumTier || 0
+  const serverTitle = getServerTitle(guild, onlineCount, weeklyGrowth, boostLevel)
 
-  const todayPeakText = today?.online_peak
-    ? `${today.online_peak} (${today.online_peak_hour}:00)`
-    : `${stats.onlineMembers}`
+  const channels = guild.channels.cache
+  const textChannels  = channels.filter(c => c.type === ChannelType.GuildText).size
+  const voiceChannels = channels.filter(c => c.type === ChannelType.GuildVoice).size
+  const categories    = channels.filter(c => c.type === ChannelType.GuildCategory).size
 
-  // بناء الـ embed
-  const now = new Date()
-  const timeStr = now.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit", hour12: true })
+  const roles = guild.roles.cache.size - 1 // -1 لـ @everyone
+  const emojis = guild.emojis.cache.size
+  const boostCount = guild.premiumSubscriptionCount || 0
 
+  // ─── الإيمبد ───
   const embed = new EmbedBuilder()
-    .setColor(getColorByActivity(stats.onlinePercent, weeklyGrowth))
-    .setTitle(`🏠 ${guild.name}`)
-    .setDescription(`### ${serverTitle}`)
-    .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
-
-  // ── قسم الأعضاء ──
-  embed.addFields({
-    name: "👥 الأعضاء",
-    value: [
-      `**${stats.totalMembers.toLocaleString("ar-SA")}** عضو  ${arrow(memberDiff)}`,
-      `\`${buildBar(stats.humanMembers, stats.totalMembers)}\` ${stats.humanPercent}% بشر`,
-      `🟢 متصل الآن: **${stats.onlineMembers}** (${stats.onlinePercent}%)`,
-      `👤 بشر: **${stats.humanMembers}** | 🤖 بوتات: **${stats.botMembers}**`,
-    ].join("\n"),
-    inline: false
-  })
-
-  // ── قسم النشاط ──
-  embed.addFields({
-    name: "⏰ النشاط",
-    value: [
-      `ذروة اليوم: **${todayPeakText}**`,
-      `أوقات الذروة العادية: **${peakHourText}**`,
-      weeklyGrowth !== 0
-        ? `نمو هذا الأسبوع: ${arrow(weeklyGrowth)}`
-        : `هذا الأسبوع: لا تغيير`,
-      bestDay && bestDayGrowth > 0
-        ? `أفضل يوم: **${formatDate(bestDay.date)}** (+${bestDayGrowth} عضو)`
-        : ""
-    ].filter(Boolean).join("\n"),
-    inline: false
-  })
-
-  // ── السيرفر ──
-  embed.addFields(
-    {
-      name: "📡 القنوات",
-      value: `💬 نصية: **${stats.textChannels}**\n🔊 صوتية: **${stats.voiceChannels}**\n📊 المجموع: **${stats.totalChannels}**`,
-      inline: true
-    },
-    {
-      name: "🏷️ الرتب والإيموجي",
-      value: `🏷️ رتب: **${stats.rolesCount}**\n😄 إيموجي: **${stats.emojiCount}**`,
-      inline: true
-    },
-    {
-      name: "🚀 البوست",
-      value: [
-        `المستوى: **${stats.boostLevel}**`,
-        `البوستات: **${stats.boostCount}**`,
-        getBoostBar(stats.boostLevel)
-      ].join("\n"),
-      inline: true
-    }
-  )
-
-  // ── Milestone ──
-  if (nextMilestone) {
-    const remaining = nextMilestone - stats.totalMembers
-    embed.addFields({
-      name: "🎯 الـ Milestone القادم",
-      value: [
-        `**${nextMilestone.toLocaleString("ar-SA")}** عضو — متبقي **${remaining.toLocaleString("ar-SA")}**`,
-        `\`${buildBar(stats.totalMembers - prevMilestone, nextMilestone - prevMilestone, 14)}\` ${milestonePercent}%`
-      ].join("\n"),
-      inline: false
+    .setColor(0x5865f2)
+    .setAuthor({
+      name: guild.name,
+      iconURL: guild.iconURL({ dynamic: true, size: 128 }) || undefined
     })
-  }
-
-  embed.setFooter({ text: `آخر تحديث: ${timeStr}` })
-  embed.setTimestamp()
+    .setTitle(`📊 ${serverTitle}`)
+    .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }) || null)
+    .addFields(
+      {
+        name: "👥 الأعضاء",
+        value: [
+          `**${memberCount.toLocaleString("ar-SA")}** عضو`,
+          `🤖 بوتات: **${botCount}** | 👤 بشر: **${humanCount}**`,
+          `📅 اليوم: ${arrow(dailyDiff)}`,
+          `📊 الأسبوع: ${arrow(weeklyGrowth)}`
+        ].join("\n"),
+        inline: false
+      },
+      {
+        name: "🟢 المتصلون الآن",
+        value: [
+          `**${onlineCount}** / ${memberCount} (${onlinePercent}%)`,
+          onlineBar,
+          peakText
+        ].join("\n"),
+        inline: false
+      },
+      {
+        name: "📈 آخر 7 أيام",
+        value: [
+          `📥 انضموا: **${totalJoined}**`,
+          `📤 غادروا: **${totalLeft}**`,
+          `📊 صافي النمو: ${arrow(totalJoined - totalLeft)}`
+        ].join("\n"),
+        inline: true
+      },
+      {
+        name: "🎯 معلم النمو",
+        value: mileText,
+        inline: true
+      },
+      {
+        name: "🏠 السيرفر",
+        value: [
+          `📝 قنوات نصية: **${textChannels}**`,
+          `🔊 قنوات صوتية: **${voiceChannels}**`,
+          `📂 كاتيقوريات: **${categories}**`,
+          `🏷️ رتب: **${roles}** | 😀 إيموجي: **${emojis}**`,
+          `🚀 بوست: **${boostCount}** (المستوى ${boostLevel})`
+        ].join("\n"),
+        inline: false
+      }
+    )
+    .setFooter({ text: `آخر تحديث` })
+    .setTimestamp()
 
   return embed
-}
-
-// ─── لون الـ embed حسب النشاط ───
-function getColorByActivity(onlinePercent, weeklyGrowth) {
-  if (weeklyGrowth >= 50)      return 0x00ff88  // أخضر ساطع - نمو قوي
-  if (onlinePercent >= 30)     return 0x00c8ff  // أزرق - نشيط
-  if (onlinePercent >= 15)     return 0x5865f2  // بنفسجي - متوسط
-  if (onlinePercent >= 5)      return 0xf59e0b  // برتقالي - هادئ
-  return 0x64748b                               // رمادي - نائم
-}
-
-// ─── شريط البوست ───
-function getBoostBar(level) {
-  const bars = ["░░░", "█░░", "██░", "███"]
-  return bars[Math.min(level, 3)] || "░░░"
-}
-
-// ─── تنسيق التاريخ ───
-function formatDate(date) {
-  const d = new Date(date)
-  return d.toLocaleDateString("ar-SA", { weekday: "long" })
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -433,186 +339,179 @@ function formatDate(date) {
 async function updatePanel(guild, client) {
   try {
     const config = await getConfig(guild.id)
-    if (!config || !config.enabled) return
-    if (!config.panel_channel_id || !config.panel_message_id) return
+    if (!config || !config.enabled) return false
+    if (!config.panel_channel_id || !config.panel_message_id) return false
 
     const channel = guild.channels.cache.get(config.panel_channel_id)
-    if (!channel) return
+    if (!channel) return false
 
-    const perms = channel.permissionsFor(guild.members.me)
-    if (!perms?.has([PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks])) return
-
-    let msg = null
+    let message
     try {
-      msg = await channel.messages.fetch(config.panel_message_id)
+      message = await channel.messages.fetch(config.panel_message_id)
     } catch {
-      // الرسالة محذوفة — نعيد إنشاؤها
-      const newMsg = await channel.send({ embeds: [await buildPanelEmbed(guild)] })
-      await saveConfig(guild.id, { panel_message_id: newMsg.id })
-      return
+      return false
     }
 
     const embed = await buildPanelEmbed(guild)
-    await msg.edit({ embeds: [embed] })
+    await message.edit({ embeds: [embed] })
 
-    // تحديث الـ snapshots والـ hourly
-    const stats = await fetchLiveStats(guild)
-    await updateOnlinePeak(guild.id, stats.onlineMembers)
-    await updateHourlyStats(guild.id, stats.onlineMembers)
-    await recordSnapshot(guild.id, stats.totalMembers)
+    // record stats
+    await recordSnapshot(guild.id, guild.memberCount || 0)
+    const onlineCount = countOnlineMembers(guild)
+    await updateOnlinePeak(guild.id, onlineCount)
+    await recordHourlyAverage(guild.id, onlineCount)
 
-    // تحقق من الـ Milestones
-    await checkMilestone(guild, stats.totalMembers, config, client)
+    // milestone check
+    await checkMilestone(guild, client, config)
 
+    return true
   } catch (err) {
-    logger.error("STATS_PANEL_UPDATE_FAILED", { error: err.message, guildId: guild.id })
+    logger.error("STATS_UPDATE_PANEL_FAILED", { error: err.message, guildId: guild.id })
+    return false
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  Milestones
+//  Milestone check
 // ═══════════════════════════════════════════════════════════════════════
 
-async function checkMilestone(guild, memberCount, config, client) {
+async function checkMilestone(guild, client, config) {
   try {
-    if (!config.next_milestone) return
-    if (memberCount < config.next_milestone) return
+    const memberCount = guild.memberCount || 0
+    const nextMile = config.next_milestone || getNextMilestone(memberCount)
 
-    // تم تجاوز الـ milestone!
-    const milestone = config.next_milestone
-    const nextOne = MILESTONES.find(m => m > memberCount) || null
+    if (!nextMile || memberCount < nextMile) return
 
-    // تحديث قاعدة البيانات
-    await saveConfig(guild.id, { next_milestone: nextOne })
+    // وصل للـ milestone
+    const channelId = config.milestone_channel_id || config.panel_channel_id
+    const channel = guild.channels.cache.get(channelId)
 
-    // إرسال الاحتفال
-    const celebChannel = config.milestone_channel_id
-      ? guild.channels.cache.get(config.milestone_channel_id)
-      : null
+    if (channel) {
+      const newNext = getNextMilestone(memberCount)
 
-    if (!celebChannel) return
+      const embed = new EmbedBuilder()
+        .setColor(0xffd700)
+        .setTitle(`🎉 وصلنا لـ ${memberCount.toLocaleString("ar-SA")} عضو!`)
+        .setDescription([
+          `**شكراً لكل عضو في ${guild.name}!**`,
+          ``,
+          `🎯 المعلم التالي: **${newNext ? newNext.toLocaleString("ar-SA") : "غير محدود"}**`
+        ].join("\n"))
+        .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }) || null)
+        .setTimestamp()
 
-    const embed = new EmbedBuilder()
-      .setColor(0xffd700)
-      .setTitle("🎉 Milestone جديد!")
-      .setDescription([
-        `## 🏆 ${guild.name} وصل لـ **${milestone.toLocaleString("ar-SA")}** عضو!`,
-        "",
-        "شكراً لكل عضو ساهم في هذا الإنجاز 💙",
-        nextOne ? `\n🎯 الهدف القادم: **${nextOne.toLocaleString("ar-SA")}** عضو` : "🌟 وصلتوا لأعلى مستوى!"
-      ].join("\n"))
-      .setThumbnail(guild.iconURL({ dynamic: true, size: 512 }))
-      .setTimestamp()
+      await channel.send({ embeds: [embed] }).catch(() => {})
 
-    await celebChannel.send({ embeds: [embed] })
-
+      // حدّث الـ next milestone
+      await saveConfig(guild.id, { next_milestone: newNext })
+    }
   } catch (err) {
     logger.error("STATS_MILESTONE_FAILED", { error: err.message })
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  تحديث كل السيرفرات (يُستدعى من الـ Scheduler)
-// ═══════════════════════════════════════════════════════════════════════
-
-async function updateAllGuilds(client) {
-  for (const [, guild] of client.guilds.cache) {
-    try {
-      await updatePanel(guild, client)
-      await new Promise(r => setTimeout(r, 2000))
-    } catch (err) {
-      logger.error("STATS_UPDATE_ALL_FAILED", { error: err.message, guildId: guild.id })
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  إنشاء اللوحة (للأمر /إحصائيات إعداد)
-// ═══════════════════════════════════════════════════════════════════════
-
-async function setupPanel(guild, channel, milestoneChannel = null) {
-  await ensureTables()
-
-  const embed = await buildPanelEmbed(guild)
-  const msg = await channel.send({ embeds: [embed] })
-
-  const stats = await fetchLiveStats(guild)
-  const nextMilestone = MILESTONES.find(m => m > stats.totalMembers) || null
-
-  await saveConfig(guild.id, {
-    panel_channel_id:     channel.id,
-    panel_message_id:     msg.id,
-    milestone_channel_id: milestoneChannel?.id || null,
-    next_milestone:       nextMilestone,
-    enabled:              true
-  })
-
-  await recordSnapshot(guild.id, stats.totalMembers)
-
-  return { msg, embed }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  التقرير الأسبوعي
+//  Weekly Report
 // ═══════════════════════════════════════════════════════════════════════
 
 async function buildWeeklyReport(guild) {
-  const weekData = await getWeeklyData(guild.id)
-  const stats    = await fetchLiveStats(guild)
-  const peakHour = await getPeakHour(guild.id)
+  const snapshots = await getRecentSnapshots(guild.id, 7)
 
-  if (weekData.length === 0) {
-    return new EmbedBuilder()
-      .setColor(0x64748b)
-      .setTitle("📊 لا توجد بيانات كافية")
-      .setDescription("اللوحة تحتاج على الأقل يوم واحد لتوليد تقرير.")
-  }
+  const totalJoined = snapshots.reduce((s, x) => s + (x.joined_today || 0), 0)
+  const totalLeft   = snapshots.reduce((s, x) => s + (x.left_today || 0), 0)
 
-  const oldest = weekData[weekData.length - 1]
-  const weeklyGrowth = stats.totalMembers - (oldest?.member_count || stats.totalMembers)
-  const totalJoined  = weekData.reduce((s, d) => s + (d.joined_today || 0), 0)
-  const totalLeft    = weekData.reduce((s, d) => s + (d.left_today   || 0), 0)
-  const avgOnline    = weekData.length > 0
-    ? Math.round(weekData.reduce((s, d) => s + (d.online_peak || 0), 0) / weekData.length)
-    : 0
+  const startMembers = snapshots[snapshots.length - 1]?.member_count || guild.memberCount
+  const endMembers   = guild.memberCount || 0
+  const growth = endMembers - startMembers
+  const growthPercent = startMembers > 0
+    ? ((growth / startMembers) * 100).toFixed(1)
+    : "0.0"
 
-  // أفضل يوم
-  let bestDay = null, bestNet = -Infinity
-  for (const d of weekData) {
-    const net = (d.joined_today || 0) - (d.left_today || 0)
-    if (net > bestNet) { bestNet = net; bestDay = d }
-  }
+  const peakOnline = snapshots.reduce((max, s) => Math.max(max, s.online_peak || 0), 0)
 
-  const embed = new EmbedBuilder()
-    .setColor(weeklyGrowth >= 0 ? 0x22c55e : 0xef4444)
-    .setTitle(`📊 التقرير الأسبوعي — ${guild.name}`)
-    .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
+  return new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setAuthor({ name: guild.name, iconURL: guild.iconURL({ dynamic: true }) || undefined })
+    .setTitle("📊 التقرير الأسبوعي")
+    .setDescription("ملخص نشاط السيرفر آخر **7 أيام**")
     .addFields(
       {
         name: "👥 الأعضاء",
         value: [
-          `الإجمالي الحالي: **${stats.totalMembers.toLocaleString("ar-SA")}**`,
-          `النمو هذا الأسبوع: ${arrow(weeklyGrowth)}`,
-          `انضم: **${totalJoined}** | غادر: **${totalLeft}**`
+          `بداية الأسبوع: **${startMembers.toLocaleString("ar-SA")}**`,
+          `نهاية الأسبوع: **${endMembers.toLocaleString("ar-SA")}**`,
+          `📈 النمو: ${arrow(growth)} (${growthPercent}%)`
         ].join("\n"),
         inline: false
       },
       {
-        name: "📈 النشاط",
-        value: [
-          `متوسط الذروة اليومية: **${avgOnline}** متصل`,
-          peakHour ? `أوقات الذروة: **${peakHour.hour}:00 - ${peakHour.hour + 1}:00**` : "",
-          bestDay && bestNet > 0
-            ? `أفضل يوم: **${formatDate(bestDay.date)}** (+${bestNet} عضو)`
-            : "لا يوجد نمو ملحوظ"
-        ].filter(Boolean).join("\n"),
-        inline: false
+        name: "📥 الانضمامات",
+        value: `**${totalJoined}** عضو جديد`,
+        inline: true
+      },
+      {
+        name: "📤 المغادرات",
+        value: `**${totalLeft}** عضو`,
+        inline: true
+      },
+      {
+        name: "🟢 ذروة المتصلين",
+        value: `**${peakOnline}** متصل`,
+        inline: true
       }
     )
-    .setFooter({ text: `بيانات آخر ${weekData.length} أيام` })
+    .setFooter({ text: "التقرير الأسبوعي — تم توليده تلقائياً" })
     .setTimestamp()
+}
 
-  return embed
+// ═══════════════════════════════════════════════════════════════════════
+//  Setup / Initial Panel
+// ═══════════════════════════════════════════════════════════════════════
+
+async function setupPanel(guild, channel, milestoneChannel) {
+  // ابني الإيمبد الأول
+  const embed = await buildPanelEmbed(guild)
+
+  // ابعث الرسالة
+  const message = await channel.send({ embeds: [embed] })
+
+  // احفظ الـ config
+  const memberCount = guild.memberCount || 0
+  await saveConfig(guild.id, {
+    panel_channel_id:     channel.id,
+    panel_message_id:     message.id,
+    milestone_channel_id: milestoneChannel?.id || channel.id,
+    next_milestone:       getNextMilestone(memberCount),
+    enabled:              true
+  })
+
+  // أول snapshot
+  await recordSnapshot(guild.id, memberCount)
+
+  return message
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Get all enabled guilds (للـ scheduler)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function getEnabledGuilds() {
+  const result = await databaseSystem.query(
+    "SELECT * FROM stats_config WHERE enabled = true"
+  )
+  return result.rows || []
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Increment join/leave counters (يُستدعى من events)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function incrementJoin(guildId, memberCount) {
+  await recordSnapshot(guildId, memberCount, 1, 0)
+}
+
+async function incrementLeave(guildId, memberCount) {
+  await recordSnapshot(guildId, memberCount, 0, 1)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -621,15 +520,25 @@ async function buildWeeklyReport(guild) {
 
 module.exports = {
   ensureTables,
-  setupPanel,
-  updatePanel,
-  updateAllGuilds,
   getConfig,
   saveConfig,
   disableStats,
   recordSnapshot,
+  updateOnlinePeak,
+  recordHourlyAverage,
+  getRecentSnapshots,
+  getYesterdaySnapshot,
+  getPeakHour,
   buildPanelEmbed,
+  updatePanel,
   buildWeeklyReport,
-  fetchLiveStats,
+  setupPanel,
+  getEnabledGuilds,
+  incrementJoin,
+  incrementLeave,
+  countOnlineMembers,
+  countBots,
+  countByStatus,
+  getNextMilestone,
   MILESTONES
 }

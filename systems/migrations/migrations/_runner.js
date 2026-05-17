@@ -1,19 +1,20 @@
 // ══════════════════════════════════════════════════════════════════
 //  Migrations Runner
-//  المسار: systems/migrations/_runner.js
+//  المسار: systems/migrations/migrations/_runner.js
 //
 //  - يقرأ كل ملفات migrations/*.js (ما عدا اللي تبدأ بـ _)
 //  - يتجاهل اللي طُبّقت (مسجّلة في schema_migrations)
 //  - يشغّل الباقي بترتيب الاسم
 //
-//  ⚠️ تم حذف autoMarkLegacy() لأنه كان يتجاوز migrations مهمة
-//  ⚠️ كل الجداول الآن لها migrations فعلية (001-016)
+//  ⚠️ هذا هو المسار الوحيد الذي يشتغل
+//  ⚠️ أي migration يجب أن تكون هنا (systems/migrations/migrations/)
+//  ⚠️ ملفات في systems/migrations/*.js المباشرة لا تشتغل!
 // ══════════════════════════════════════════════════════════════════
 
 const fs = require("fs")
 const path = require("path")
-const databaseSystem = require("../databaseSystem")
-const logger = require("../loggerSystem")
+const databaseSystem = require("../../databaseSystem")
+const logger = require("../../loggerSystem")
 
 async function ensureMigrationsTable() {
   await databaseSystem.query(`

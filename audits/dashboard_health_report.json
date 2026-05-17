@@ -1,0 +1,800 @@
+{
+  "startTime": "2026-05-17T07:37:40.060Z",
+  "config": {
+    "API_URL": "https://lyn-api.onrender.com",
+    "FRONTEND_URL": "https://rcif-dashboard.onrender.com",
+    "GUILD_ID": "1490775708291694684"
+  },
+  "publicChecks": [
+    {
+      "url": "https://lyn-api.onrender.com/",
+      "name": "API Root",
+      "status": 200,
+      "ms": 435,
+      "ok": true
+    },
+    {
+      "url": "https://lyn-api.onrender.com/api/health",
+      "name": "API Health Check",
+      "status": 200,
+      "ms": 327,
+      "ok": true
+    },
+    {
+      "url": "https://rcif-dashboard.onrender.com/",
+      "name": "Frontend Root",
+      "status": 200,
+      "ms": 287,
+      "ok": true
+    }
+  ],
+  "endpoints": {
+    "ok": [
+      {
+        "path": "/info",
+        "category": "Guild",
+        "critical": true,
+        "status": 200,
+        "ms": 480,
+        "sizeBytes": 581,
+        "jsonValid": true,
+        "body": [
+          "id",
+          "name",
+          "icon",
+          "banner",
+          "description",
+          "ownerId",
+          "memberCount",
+          "onlineCount",
+          "preferredLocale",
+          "verificationLevel"
+        ]
+      },
+      {
+        "path": "/channels",
+        "category": "Guild",
+        "critical": true,
+        "status": 200,
+        "ms": 339,
+        "sizeBytes": 10244,
+        "jsonValid": true,
+        "body": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      {
+        "path": "/roles",
+        "category": "Guild",
+        "critical": true,
+        "status": 200,
+        "ms": 292,
+        "sizeBytes": 5634,
+        "jsonValid": true,
+        "body": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      {
+        "path": "/members",
+        "category": "Guild",
+        "critical": false,
+        "status": 200,
+        "ms": 367,
+        "sizeBytes": 2346,
+        "jsonValid": true,
+        "body": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      },
+      {
+        "path": "/emojis",
+        "category": "Guild",
+        "critical": false,
+        "status": 200,
+        "ms": 304,
+        "sizeBytes": 143,
+        "jsonValid": true,
+        "body": [
+          "0"
+        ]
+      },
+      {
+        "path": "/plan",
+        "category": "Guild",
+        "critical": true,
+        "status": 200,
+        "ms": 120,
+        "sizeBytes": 21,
+        "jsonValid": true,
+        "body": [
+          "plan_id"
+        ]
+      },
+      {
+        "path": "/overview",
+        "category": "Settings",
+        "critical": true,
+        "status": 200,
+        "ms": 588,
+        "sizeBytes": 418,
+        "jsonValid": true,
+        "body": [
+          "healthScore",
+          "stats"
+        ]
+      },
+      {
+        "path": "/welcome",
+        "category": "Settings",
+        "critical": true,
+        "status": 200,
+        "ms": 121,
+        "sizeBytes": 241,
+        "jsonValid": true,
+        "body": [
+          "guild_id",
+          "welcome_channel_id",
+          "goodbye_channel_id",
+          "welcome_message",
+          "goodbye_message",
+          "enabled",
+          "mention_user",
+          "leave_enabled",
+          "leave_message",
+          "type"
+        ]
+      },
+      {
+        "path": "/protection",
+        "category": "Settings",
+        "critical": true,
+        "status": 200,
+        "ms": 126,
+        "sizeBytes": 819,
+        "jsonValid": true,
+        "body": [
+          "antispam_enabled",
+          "antispam_max_messages",
+          "antispam_interval_ms",
+          "antispam_action",
+          "antispam_mute_duration",
+          "antiraid_enabled",
+          "antiraid_join_threshold",
+          "antiraid_join_interval_ms",
+          "antiraid_action",
+          "antinuke_enabled"
+        ]
+      },
+      {
+        "path": "/logs",
+        "category": "Settings",
+        "critical": true,
+        "status": 200,
+        "ms": 119,
+        "sizeBytes": 951,
+        "jsonValid": true,
+        "body": [
+          "guild_id",
+          "enabled",
+          "message_delete_channel",
+          "message_update_channel",
+          "member_join_channel",
+          "member_leave_channel",
+          "member_ban_channel",
+          "member_unban_channel",
+          "member_update_channel",
+          "channel_create_channel"
+        ]
+      },
+      {
+        "path": "/xp",
+        "category": "Settings",
+        "critical": true,
+        "status": 200,
+        "ms": 119,
+        "sizeBytes": 311,
+        "jsonValid": true,
+        "body": [
+          "guild_id",
+          "levelup_channel_id",
+          "xp_multiplier",
+          "disabled_channels",
+          "created_at",
+          "enabled",
+          "min_xp_per_message",
+          "max_xp_per_message",
+          "cooldown",
+          "disabled_roles"
+        ]
+      },
+      {
+        "path": "/economy",
+        "category": "Settings",
+        "critical": true,
+        "status": 200,
+        "ms": 119,
+        "sizeBytes": 332,
+        "jsonValid": true,
+        "body": [
+          "guild_id",
+          "enabled",
+          "currency_symbol",
+          "currency_name",
+          "daily_reward",
+          "weekly_reward",
+          "message_reward",
+          "starting_balance",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      {
+        "path": "/tickets",
+        "category": "Settings",
+        "critical": true,
+        "status": 200,
+        "ms": 119,
+        "sizeBytes": 394,
+        "jsonValid": true,
+        "body": [
+          "enabled",
+          "category_id",
+          "log_channel_id",
+          "support_role_id",
+          "welcome_message",
+          "max_open_tickets",
+          "auto_close_hours",
+          "transcript_enabled",
+          "panel_channel",
+          "panel"
+        ]
+      },
+      {
+        "path": "/tickets/active",
+        "category": "Settings",
+        "critical": false,
+        "status": 200,
+        "ms": 126,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/audit",
+        "category": "Settings",
+        "critical": false,
+        "status": 200,
+        "ms": 120,
+        "sizeBytes": 19476,
+        "jsonValid": true,
+        "body": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      {
+        "path": "/role-panels",
+        "category": "Roles",
+        "critical": true,
+        "status": 200,
+        "ms": 118,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/moderation/warnings",
+        "category": "Moderation",
+        "critical": false,
+        "status": 200,
+        "ms": 119,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/moderation/bans",
+        "category": "Moderation",
+        "critical": false,
+        "status": 200,
+        "ms": 121,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/moderation/mutes",
+        "category": "Moderation",
+        "critical": false,
+        "status": 200,
+        "ms": 120,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/events",
+        "category": "Events",
+        "critical": false,
+        "status": 200,
+        "ms": 120,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/scheduler",
+        "category": "Events",
+        "critical": false,
+        "status": 200,
+        "ms": 123,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/embeds/templates",
+        "category": "Embed",
+        "critical": false,
+        "status": 200,
+        "ms": 127,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/ai",
+        "category": "AI",
+        "critical": true,
+        "status": 200,
+        "ms": 116,
+        "sizeBytes": 371,
+        "jsonValid": true,
+        "body": [
+          "guild_id",
+          "enabled",
+          "respond_to_mentions",
+          "respond_to_replies",
+          "always_respond_channels",
+          "persona",
+          "custom_prompt",
+          "blocked_words",
+          "max_response_length",
+          "messages_per_day"
+        ]
+      },
+      {
+        "path": "/ai/usage",
+        "category": "AI",
+        "critical": false,
+        "status": 200,
+        "ms": 119,
+        "sizeBytes": 24,
+        "jsonValid": true,
+        "body": [
+          "today",
+          "limit"
+        ]
+      },
+      {
+        "path": "/auto-role",
+        "category": "AutoRole",
+        "critical": true,
+        "status": 200,
+        "ms": 128,
+        "sizeBytes": 173,
+        "jsonValid": true,
+        "body": [
+          "enabled",
+          "delay_seconds",
+          "require_verified",
+          "assignments"
+        ]
+      },
+      {
+        "path": "/automod",
+        "category": "Automod",
+        "critical": true,
+        "status": 200,
+        "ms": 126,
+        "sizeBytes": 98,
+        "jsonValid": true,
+        "body": [
+          "enabled",
+          "filters",
+          "whitelist",
+          "log_channel"
+        ]
+      },
+      {
+        "path": "/giveaway",
+        "category": "Giveaway",
+        "critical": false,
+        "status": 200,
+        "ms": 115,
+        "sizeBytes": 444,
+        "jsonValid": true,
+        "body": [
+          "giveaways"
+        ]
+      },
+      {
+        "path": "/xp/leaderboard",
+        "category": "XP",
+        "critical": false,
+        "status": 200,
+        "ms": 116,
+        "sizeBytes": 52,
+        "jsonValid": true,
+        "body": [
+          "0"
+        ]
+      },
+      {
+        "path": "/economy/shop",
+        "category": "Economy",
+        "critical": false,
+        "status": 200,
+        "ms": 113,
+        "sizeBytes": 2,
+        "jsonValid": true,
+        "body": []
+      },
+      {
+        "path": "/economy/leaderboard",
+        "category": "Economy",
+        "critical": false,
+        "status": 200,
+        "ms": 126,
+        "sizeBytes": 46,
+        "jsonValid": true,
+        "body": [
+          "0"
+        ]
+      },
+      {
+        "path": "/commands",
+        "category": "Commands",
+        "critical": true,
+        "status": 200,
+        "ms": 117,
+        "sizeBytes": 11100,
+        "jsonValid": true,
+        "body": [
+          "guild_plan",
+          "commands",
+          "categories",
+          "custom_settings"
+        ]
+      },
+      {
+        "path": "/prefix",
+        "category": "Commands",
+        "critical": false,
+        "status": 200,
+        "ms": 117,
+        "sizeBytes": 14,
+        "jsonValid": true,
+        "body": [
+          "prefix"
+        ]
+      }
+    ],
+    "slow": [],
+    "failed": [],
+    "auth_issues": []
+  },
+  "writeTests": [
+    {
+      "name": "Welcome — save same data",
+      "method": "PUT",
+      "path": "/welcome",
+      "status": 200,
+      "ms": 132,
+      "ok": true,
+      "response": {
+        "success": true
+      }
+    },
+    {
+      "name": "Protection — save same data",
+      "method": "PUT",
+      "path": "/protection",
+      "status": 200,
+      "ms": 123,
+      "ok": true,
+      "response": {
+        "success": true
+      }
+    },
+    {
+      "name": "Logs — save same data",
+      "method": "PUT",
+      "path": "/logs",
+      "status": 200,
+      "ms": 130,
+      "ok": true,
+      "response": {
+        "success": true
+      }
+    },
+    {
+      "name": "AI — save same data",
+      "method": "PUT",
+      "path": "/ai",
+      "status": 200,
+      "ms": 132,
+      "ok": true,
+      "response": {
+        "success": true
+      }
+    },
+    {
+      "name": "XP — save same data",
+      "method": "PUT",
+      "path": "/xp",
+      "status": 200,
+      "ms": 122,
+      "ok": true,
+      "response": {
+        "success": true
+      }
+    },
+    {
+      "name": "Economy — save same data",
+      "method": "PUT",
+      "path": "/economy",
+      "status": 200,
+      "ms": 125,
+      "ok": true,
+      "response": {
+        "success": true
+      }
+    }
+  ],
+  "database": {
+    "tables": [
+      "ai_conversations",
+      "ai_settings",
+      "ai_usage_log",
+      "analytics",
+      "auto_role_assignments",
+      "auto_role_history",
+      "auto_role_settings",
+      "automod_settings",
+      "automod_violations",
+      "automod_words",
+      "bulk_actions",
+      "button_role_panels",
+      "button_roles",
+      "card_customization",
+      "command_usage_stats",
+      "dashboard_audit_log",
+      "economy_settings",
+      "economy_shop",
+      "economy_users",
+      "embed_templates",
+      "event_attendees",
+      "event_settings",
+      "giveaway_entries",
+      "giveaways",
+      "guild_command_aliases",
+      "guild_command_defaults",
+      "guild_command_restrictions",
+      "guild_command_settings",
+      "guild_events",
+      "guild_prefix_settings",
+      "guild_subscriptions",
+      "guilds",
+      "help_hidden_categories",
+      "log_settings",
+      "memories",
+      "moderation_bans",
+      "moderation_mutes",
+      "payment_requests",
+      "protection_settings",
+      "relationships",
+      "scheduled_tasks",
+      "schema_migrations",
+      "stats_channels",
+      "stats_config",
+      "stats_counters",
+      "stats_hourly",
+      "stats_snapshots",
+      "subscriptions",
+      "ticket_settings",
+      "tickets",
+      "user_premium",
+      "user_sessions",
+      "warnings",
+      "welcome_settings",
+      "xp",
+      "xp_settings"
+    ],
+    "missing": [
+      "users",
+      "inventory"
+    ],
+    "error": null
+  },
+  "frontend": {
+    "ok": [
+      {
+        "page": "/",
+        "status": 200,
+        "ms": 255
+      },
+      {
+        "page": "/login",
+        "status": 200,
+        "ms": 257
+      },
+      {
+        "page": "/dashboard",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/servers",
+        "status": 200,
+        "ms": 86
+      },
+      {
+        "page": "/dashboard/stats",
+        "status": 200,
+        "ms": 89
+      },
+      {
+        "page": "/dashboard/members",
+        "status": 200,
+        "ms": 88
+      },
+      {
+        "page": "/dashboard/audit",
+        "status": 200,
+        "ms": 88
+      },
+      {
+        "page": "/dashboard/templates",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/commands",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/subscription",
+        "status": 200,
+        "ms": 84
+      },
+      {
+        "page": "/dashboard/events",
+        "status": 200,
+        "ms": 86
+      },
+      {
+        "page": "/dashboard/scheduler",
+        "status": 200,
+        "ms": 83
+      },
+      {
+        "page": "/dashboard/ai",
+        "status": 200,
+        "ms": 86
+      },
+      {
+        "page": "/dashboard/protection",
+        "status": 200,
+        "ms": 85
+      },
+      {
+        "page": "/dashboard/levels",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/economy",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/tickets",
+        "status": 200,
+        "ms": 89
+      },
+      {
+        "page": "/dashboard/welcome",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/auto-role",
+        "status": 200,
+        "ms": 86
+      },
+      {
+        "page": "/dashboard/logs",
+        "status": 200,
+        "ms": 84
+      },
+      {
+        "page": "/dashboard/moderation",
+        "status": 200,
+        "ms": 92
+      },
+      {
+        "page": "/dashboard/reaction-roles",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/embed",
+        "status": 200,
+        "ms": 87
+      },
+      {
+        "page": "/dashboard/settings",
+        "status": 200,
+        "ms": 84
+      },
+      {
+        "page": "/dashboard/giveaway",
+        "status": 200,
+        "ms": 88
+      },
+      {
+        "page": "/dashboard/automod",
+        "status": 200,
+        "ms": 89
+      }
+    ],
+    "failed": []
+  },
+  "performance": {
+    "total": 32,
+    "average": 172,
+    "fastest": 113,
+    "slowest": 588
+  },
+  "warnings": [
+    "Missing DB table: users",
+    "Missing DB table: inventory"
+  ],
+  "critical": [],
+  "endTime": "2026-05-17T07:37:52.314Z"
+}
