@@ -126,6 +126,23 @@ const FILTER_DEFS = [
       { key: 'max', type: 'number', label: 'الحد الأقصى', min: 3, max: 50, defaultValue: 5 },
     ],
   },
+  {
+    key: 'ai_toxicity',
+    label: '🤖 ذكاء اصطناعي (Premium)',
+    description: 'AI يفهم سياق الإساءة — يفرّق بين "حبيت كلبي" و"يا كلب"',
+    icon: Sparkles,
+    color: 'violet',
+    fields: [
+      {
+        key: 'threshold',
+        type: 'number',
+        label: 'مستوى الثقة %',
+        min: 50,
+        max: 100,
+        defaultValue: 75,
+      },
+    ],
+  },
 ];
 
 // ────────────────────────────────────────────────────────────
