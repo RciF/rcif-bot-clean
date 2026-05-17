@@ -2,11 +2,33 @@ import { Link } from 'react-router-dom';
 import { Bot, Shield, Zap, Heart, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 
+// ✅ الأيقونات الآن تستخدم متغيرات الثيم (--color-lyn-500 و --color-lyn-pink-500)
+//    اللي تتغير كل يوم — بدل ألوان violet/pink الثابتة
 const features = [
-  { icon: Bot,    title: 'بوت ذكي',       description: 'AI متطور يفهم ويتفاعل بطبيعية',           gradient: 'from-violet-500 to-pink-500' },
-  { icon: Shield, title: 'حماية شاملة',   description: 'حماية من الـ Raid والـ Spam والـ Nuke',    gradient: 'from-pink-500 to-violet-500' },
-  { icon: Zap,    title: 'سرعة فائقة',    description: 'استجابة فورية في أقل من ثانيتين',          gradient: 'from-violet-400 to-pink-400' },
-  { icon: Heart,  title: 'شخصية حقيقية', description: 'يعبر عن المشاعر ويتذكر تفاعلاته',          gradient: 'from-pink-400 to-violet-400' },
+  {
+    icon: Bot,
+    title: 'بوت ذكي',
+    description: 'AI متطور يفهم ويتفاعل بطبيعية',
+    gradientStyle: { background: 'linear-gradient(135deg, var(--color-lyn-500), var(--color-lyn-pink-500))' },
+  },
+  {
+    icon: Shield,
+    title: 'حماية شاملة',
+    description: 'حماية من الـ Raid والـ Spam والـ Nuke',
+    gradientStyle: { background: 'linear-gradient(135deg, var(--color-lyn-pink-500), var(--color-lyn-500))' },
+  },
+  {
+    icon: Zap,
+    title: 'سرعة فائقة',
+    description: 'استجابة فورية في أقل من ثانيتين',
+    gradientStyle: { background: 'linear-gradient(135deg, var(--color-lyn-400), var(--color-lyn-pink-400))' },
+  },
+  {
+    icon: Heart,
+    title: 'شخصية حقيقية',
+    description: 'يعبر عن المشاعر ويتذكر تفاعلاته',
+    gradientStyle: { background: 'linear-gradient(135deg, var(--color-lyn-pink-400), var(--color-lyn-400))' },
+  },
 ];
 
 export default function HomePage() {
@@ -58,7 +80,10 @@ export default function HomePage() {
             const Icon = f.icon;
             return (
               <div key={f.title} className="group p-6 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-lg transition-all">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"
+                  style={f.gradientStyle}
+                >
                   <Icon className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-lg font-bold mb-2">{f.title}</h3>
