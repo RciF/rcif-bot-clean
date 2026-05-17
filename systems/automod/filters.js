@@ -7,7 +7,11 @@
 //   - { reason, severity } : فيها مخالفة
 //
 //  severity: 'low' | 'medium' | 'high'
+//
+//  ✅ NEW: يدعم AI Toxicity Filter (async)
 // ══════════════════════════════════════════════════════════════════
+
+const aiToxicityFilter = require("./aiToxicityFilter")
 
 // ──────────────────────────────────────────────────────────────────
 //  Default bad words (قائمة عربية + إنجليزية مهذبة)
@@ -34,17 +38,17 @@ function normalize(text) {
   if (!text) return ""
   return text
     .toLowerCase()
-    // أحرف عربية متشابهة
     .replace(/[إأآا]/g, "ا")
     .replace(/[ىي]/g, "ي")
     .replace(/ة/g, "ه")
-    // إزالة التشكيل
     .replace(/[\u064B-\u065F\u0670]/g, "")
-    // إزالة الأرقام الزائدة (الـ leet speak: f4ck → fck)
     .replace(/[\d]/g, "")
-    // مسافات متعددة
     .replace(/\s+/g, " ")
     .trim()
+}
+
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -70,7 +74,6 @@ function checkBadWords(content, settings, ctx = {}) {
     const normalizedWord = normalize(word)
     if (!normalizedWord) continue
 
-    // exact match: كلمة مستقلة
     const regex = new RegExp(`(^|\\s)${escapeRegex(normalizedWord)}(\\s|$|[^\\w])`, "i")
     if (regex.test(normalized)) {
       return {
@@ -90,30 +93,32 @@ function checkBadWords(content, settings, ctx = {}) {
 
 const URL_REGEX = /https?:\/\/([^\s/$.?#].[^\s]*)/gi
 
-function checkLinks(content, settings) {
+function checkLinks(content, settings, ctx = {}) {
   if (!content) return null
 
   const config = settings.filters?.links
   if (!config?.enabled) return null
 
-  const matches = [...content.matchAll(URL_REGEX)]
-  if (matches.length === 0) return null
+  const matches = content.match(URL_REGEX)
+  if (!matches || matches.length === 0) return null
 
-  const whitelist = (config.whitelist || []).map(d => d.toLowerCase().replace(/^www\./, ""))
+  const whitelist = (config.whitelist || []).map(d => d.toLowerCase())
 
-  for (const match of matches) {
-    const fullDomain = match[1].toLowerCase().replace(/^www\./, "").split("/")[0]
-
-    // فحص الـ whitelist (أو subdomain منها)
-    const isWhitelisted = whitelist.some(allowed =>
-      fullDomain === allowed || fullDomain.endsWith("." + allowed)
-    )
-
-    if (!isWhitelisted) {
+  for (const url of matches) {
+    try {
+      const domain = new URL(url).hostname.toLowerCase().replace(/^www\./, "")
+      const allowed = whitelist.some(w => domain === w || domain.endsWith("." + w))
+      if (!allowed) {
+        return {
+          reason: `رابط غير مسموح: ${domain}`,
+          severity: "medium",
+          matched: url
+        }
+      }
+    } catch {
       return {
-        reason: `رابط غير مسموح: ${fullDomain}`,
-        severity: "medium",
-        matched: fullDomain
+        reason: "رابط غير صالح",
+        severity: "low"
       }
     }
   }
@@ -125,7 +130,7 @@ function checkLinks(content, settings) {
 //  Filter 3: Discord Invites
 // ──────────────────────────────────────────────────────────────────
 
-const INVITE_REGEX = /(discord\.(gg|com\/invite|me)|discordapp\.com\/invite)\/[\w-]+/gi
+const INVITE_REGEX = /(?:discord\.(?:gg|com\/invite)|discordapp\.com\/invite)\/[a-zA-Z0-9-]+/gi
 
 function checkInvites(content, settings) {
   if (!content) return null
@@ -135,7 +140,7 @@ function checkInvites(content, settings) {
 
   if (INVITE_REGEX.test(content)) {
     return {
-      reason: "دعوة Discord ممنوعة",
+      reason: "دعوة سيرفر آخر ممنوعة",
       severity: "medium"
     }
   }
@@ -144,26 +149,26 @@ function checkInvites(content, settings) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  Filter 4: Excessive Caps
+//  Filter 4: CAPS (excessive uppercase)
 // ──────────────────────────────────────────────────────────────────
 
 function checkCaps(content, settings) {
-  if (!content) return null
+  if (!content || content.length < 10) return null
 
   const config = settings.filters?.caps
   if (!config?.enabled) return null
 
-  // فقط للنصوص الإنجليزية (الأحرف الأبجدية)
-  const letters = content.match(/[a-zA-Z]/g) || []
-  if (letters.length < (config.min_length || 10)) return null
+  const threshold = config.threshold || 70  // %
 
-  const upperCount = (content.match(/[A-Z]/g) || []).length
-  const percentage = (upperCount / letters.length) * 100
-  const threshold = config.threshold || 70
+  const letters = content.match(/[a-zA-Z\u0600-\u06FF]/g) || []
+  if (letters.length < 10) return null
 
-  if (percentage >= threshold) {
+  const uppercase = content.match(/[A-Z]/g) || []
+  const percent = (uppercase.length / letters.length) * 100
+
+  if (percent >= threshold) {
     return {
-      reason: `نص بالكابيتال (${Math.floor(percentage)}%)`,
+      reason: `كابيتال زيادة (${Math.round(percent)}%)`,
       severity: "low"
     }
   }
@@ -176,30 +181,23 @@ function checkCaps(content, settings) {
 // ──────────────────────────────────────────────────────────────────
 
 function checkMassMentions(content, settings, ctx = {}) {
-  if (!ctx.message) return null
+  if (!content) return null
 
   const config = settings.filters?.mass_mentions
   if (!config?.enabled) return null
 
+  const threshold = config.threshold || 5
   const message = ctx.message
-  const userMentions = message.mentions?.users?.size || 0
-  const roleMentions = message.mentions?.roles?.size || 0
-  const hasEveryone = message.mentions?.everyone === true
 
-  const threshold = config.max || 5
+  if (!message) return null
 
-  if (hasEveryone) {
+  const mentions = (message.mentions?.users?.size || 0) +
+                   (message.mentions?.roles?.size || 0)
+
+  if (mentions >= threshold) {
     return {
-      reason: "منشن @everyone",
+      reason: `منشن جماعي (${mentions})`,
       severity: "high"
-    }
-  }
-
-  const total = userMentions + roleMentions
-  if (total > threshold) {
-    return {
-      reason: `منشن جماعي (${total} منشن)`,
-      severity: "medium"
     }
   }
 
@@ -210,21 +208,20 @@ function checkMassMentions(content, settings, ctx = {}) {
 //  Filter 6: Excessive Emojis
 // ──────────────────────────────────────────────────────────────────
 
-// regex للـ unicode emojis + custom Discord emojis
-const EMOJI_REGEX = /(\p{Extended_Pictographic}|<a?:\w+:\d+>)/gu
+const EMOJI_REGEX = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]|<a?:[^:]+:\d+>/gu
 
 function checkEmojis(content, settings) {
-  if (!content) return null
+  if (!content || content.length < 5) return null
 
   const config = settings.filters?.emojis
   if (!config?.enabled) return null
 
-  const emojiMatches = content.match(EMOJI_REGEX) || []
-  const threshold = config.max || 10
+  const threshold = config.threshold || 10
+  const matches = content.match(EMOJI_REGEX) || []
 
-  if (emojiMatches.length > threshold) {
+  if (matches.length >= threshold) {
     return {
-      reason: `إيموجي زيادة (${emojiMatches.length} إيموجي)`,
+      reason: `إيموجي زيادة (${matches.length})`,
       severity: "low"
     }
   }
@@ -237,35 +234,33 @@ function checkEmojis(content, settings) {
 // ──────────────────────────────────────────────────────────────────
 
 const duplicateTracker = new Map()
-const DUPLICATE_TTL = 60 * 1000 // 1 دقيقة
+const DUPLICATE_TTL = 30 * 1000  // 30 ثانية
 
 function checkDuplicate(content, settings, ctx = {}) {
-  if (!content || !ctx.userId || !ctx.guildId) return null
+  if (!content || content.length < 5) return null
 
   const config = settings.filters?.duplicate
   if (!config?.enabled) return null
 
-  const minLength = config.min_length || 5
-  if (content.length < minLength) return null
+  const threshold = config.threshold || 3
+  const userId = ctx.userId
+  const guildId = ctx.guildId
+  if (!userId || !guildId) return null
 
-  const key = `${ctx.guildId}:${ctx.userId}`
+  const key = `${guildId}:${userId}`
+  const normalized = content.trim().toLowerCase()
   const now = Date.now()
-  const tracker = duplicateTracker.get(key) || []
 
-  // filter old entries
-  const recent = tracker.filter(t => now - t.time < DUPLICATE_TTL)
+  let entries = duplicateTracker.get(key) || []
+  entries = entries.filter(e => now - e.time < DUPLICATE_TTL)
+  entries.push({ text: normalized, time: now })
 
-  const normalized = normalize(content)
-  const duplicates = recent.filter(t => t.content === normalized)
+  duplicateTracker.set(key, entries)
 
-  // أضف الرسالة الحالية
-  recent.push({ content: normalized, time: now })
-  duplicateTracker.set(key, recent.slice(-10)) // آخر 10 رسائل بس
-
-  const threshold = config.max || 3
-  if (duplicates.length + 1 >= threshold) {
+  const duplicates = entries.filter(e => e.text === normalized).length
+  if (duplicates >= threshold) {
     return {
-      reason: `رسائل متكررة (${duplicates.length + 1} مرات)`,
+      reason: `رسالة مكررة (${duplicates}x)`,
       severity: "medium"
     }
   }
@@ -274,36 +269,28 @@ function checkDuplicate(content, settings, ctx = {}) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-//  Filter 8: Zalgo (نصوص مشوهة)
+//  Filter 8: Zalgo Text
 // ──────────────────────────────────────────────────────────────────
 
-const ZALGO_REGEX = /[\u0300-\u036F\u0483-\u0489\u0591-\u05BD\u05BF\u05C1-\u05C2\u05C4-\u05C5\u05C7\u0610-\u061A]/g
+const ZALGO_REGEX = /[\u0300-\u036F\u0489\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/g
 
 function checkZalgo(content, settings) {
-  if (!content) return null
+  if (!content || content.length < 5) return null
 
   const config = settings.filters?.zalgo
   if (!config?.enabled) return null
 
-  const zalgoChars = (content.match(ZALGO_REGEX) || []).length
-  const threshold = config.max || 5
+  const zalgoChars = content.match(ZALGO_REGEX) || []
+  const ratio = zalgoChars.length / content.length
 
-  if (zalgoChars > threshold) {
+  if (ratio > 0.3 || zalgoChars.length > 20) {
     return {
-      reason: `نص مشوه (zalgo)`,
-      severity: "low"
+      reason: "نص مشوّه (Zalgo)",
+      severity: "medium"
     }
   }
 
   return null
-}
-
-// ──────────────────────────────────────────────────────────────────
-//  Helpers
-// ──────────────────────────────────────────────────────────────────
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -320,30 +307,50 @@ function cleanupDuplicateTracker() {
       duplicateTracker.set(key, recent)
     }
   }
+
+  // Cleanup AI toxicity cache too
+  try {
+    aiToxicityFilter.cleanupCache()
+  } catch {}
 }
 
 // ──────────────────────────────────────────────────────────────────
 //  Main: run all filters on a message
+//
+//  ✅ NEW: الـ AI filter async — runAllFilters صار async
 // ──────────────────────────────────────────────────────────────────
 
 async function runAllFilters(content, settings, ctx = {}) {
   const violations = []
 
-  const check = (fn) => {
+  // ─── الفلاتر الـ sync (سريعة) ───
+  const syncCheck = (fn) => {
     try {
       const result = fn(content, settings, ctx)
       if (result) violations.push(result)
     } catch {}
   }
 
-  check(checkBadWords)
-  check(checkLinks)
-  check(checkInvites)
-  check(checkCaps)
-  check(checkMassMentions)
-  check(checkEmojis)
-  check(checkDuplicate)
-  check(checkZalgo)
+  syncCheck(checkBadWords)
+  syncCheck(checkLinks)
+  syncCheck(checkInvites)
+  syncCheck(checkCaps)
+  syncCheck(checkMassMentions)
+  syncCheck(checkEmojis)
+  syncCheck(checkDuplicate)
+  syncCheck(checkZalgo)
+
+  // ─── إذا في كلمة محظورة، نتخطى AI (وفّر التكلفة) ───
+  const hasBadWord = violations.some(v => v.reason?.includes("محظورة"))
+  if (hasBadWord) {
+    return violations
+  }
+
+  // ─── AI Toxicity (async) — يتنفذ بس لو محتاجين ───
+  try {
+    const aiResult = await aiToxicityFilter.checkAIToxicity(content, settings, ctx)
+    if (aiResult) violations.push(aiResult)
+  } catch {}
 
   return violations
 }
