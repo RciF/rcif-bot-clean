@@ -28,7 +28,7 @@ module.exports = {
       subscriptionTier: "silver"
     },
     cooldown: 0,
-    relatedCommands: ["متصدرين_xp", "تخصيص_بطاقة"],
+    relatedCommands: ["متصدرين_xp", "بطاقتي"],
     examples: [
       "/مستوى",
       "/مستوى العضو:@أحمد"
@@ -36,7 +36,8 @@ module.exports = {
     notes: [
       "يولد بطاقة صورة جميلة بالـ Canvas",
       "يعرض: المستوى، XP الحالي، XP المطلوب، التقدم %",
-      "المشتركون يحصلون على بطاقة مخصصة بألوانهم وخلفيتهم"
+      "المشتركون يحصلون على بطاقة مخصصة بألوانهم وخلفيتهم",
+      "للتحكم في بطاقتك استخدم /بطاقتي"
     ]
   },
 
@@ -62,14 +63,18 @@ module.exports = {
             new EmbedBuilder()
               .setColor(0x64748b)
               .setTitle("⭐ لا توجد بيانات")
-              .setDescription(`${targetUser} ما بدأ يكسب XP بعد. لازم يكتب في السيرفر أول!`)
+              .setDescription(`${targetUser} ما بدأ يكسب XP بعد.\nلازم يكتب في السيرفر أول!`)
               .setTimestamp()
           ]
         })
       }
 
-      // ✅ جلب التخصيص (لو موجود)
-      const customization = await cardCustomizationSystem.getCustomization(targetUser.id)
+      // ✅ جلب الإعدادات + الفئة (للنظام الجديد)
+      const settings = await cardCustomizationSystem.getSettings(targetUser.id)
+      const subscription = await cardCustomizationSystem.getSubscription(targetUser.id)
+      const tier = subscription?.status === "active" && !subscription.is_expired
+        ? subscription.tier
+        : "free"
 
       // ✅ توليد الصورة
       try {
@@ -83,22 +88,14 @@ module.exports = {
           requiredXP: xpData.requiredXP,
           totalXP: xpData.totalXP,
           progressPercent: xpData.progressPercent,
-          customization
+          customization: settings,
+          tier: tier
         })
 
         const attachment = new AttachmentBuilder(imageBuffer, { name: "rank.png" })
 
-        // ✅ لو العضو المستهدف غير المستخدم الحالي — ما نضيف زر التخصيص
-        const isOwnCard = targetUser.id === interaction.user.id
-        const isPremium = isOwnCard
-          ? await cardCustomizationSystem.isPremium(interaction.user.id)
-          : false
-
-        const content = (isOwnCard && !isPremium)
-          ? "💡 خصص بطاقتك بـ `/تخصيص_بطاقة` — **$2.99/شهر** أو **$18/سنة**"
-          : null
-
-        return interaction.editReply({ content, files: [attachment] })
+        // ✅ بدون رسالة الإعلان المزعجة — اللي يبي يخصص يستخدم /بطاقتي
+        return interaction.editReply({ files: [attachment] })
 
       } catch (canvasError) {
         console.error("[RANK CARD ERROR]", canvasError.message)

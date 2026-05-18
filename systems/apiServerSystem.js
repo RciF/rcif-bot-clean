@@ -20,6 +20,7 @@ const { checkDatabaseHealth } = require("./databaseHealthSystem")
 const { getDatabaseStats } = require("./databaseStatsSystem")
 const { checkRepositories } = require("./repositoryHealthSystem")
 const subscriptionRoleSystem = require("./subscriptionRoleSystem")
+const cardNotificationSystem = require("./cardNotificationSystem")
 
 // ✅ NEW (Batch 2): معالج aliases
 const commandAliases = require("./commandAliases")
@@ -120,7 +121,50 @@ function startApiServer(client) {
       return res.status(500).json({ error: err.message })
     }
   })
+// ════════════════════════════════════════════════════════
+  //  ✅ POST /api/card/notify
+  //  يستدعيه dashboard-backend بعد أحداث اشتراك البطاقة
+  //  لإرسال DM للمستخدم بحدث الاشتراك (موافقة/تمديد/هدية/...)
+  // ════════════════════════════════════════════════════════
 
+  app.post("/api/card/notify", requireBotSecret, async (req, res) => {
+    try {
+      const { userId, eventType, payload } = req.body || {}
+
+      if (!userId || typeof userId !== "string") {
+        return res.status(400).json({ error: "userId required" })
+      }
+
+      if (!eventType || typeof eventType !== "string") {
+        return res.status(400).json({ error: "eventType required" })
+      }
+
+      const result = await cardNotificationSystem.sendNotification(
+        client,
+        userId,
+        eventType,
+        payload || {}
+      )
+
+      logger.info("CARD_NOTIFICATION_VIA_API", {
+        userId,
+        eventType,
+        success: result.ok,
+        error: result.error || null
+      })
+
+      return res.json({
+        success: result.ok,
+        error: result.error || null
+      })
+    } catch (err) {
+      logger.error("CARD_NOTIFICATION_API_FAILED", {
+        error: err.message,
+        stack: err.stack
+      })
+      return res.status(500).json({ error: err.message })
+    }
+  })
   // ════════════════════════════════════════════════════════
   //  ✅ POST /api/moderation/unban
   //  يستدعيه dashboard-backend عند DELETE /moderation/bans/:userId

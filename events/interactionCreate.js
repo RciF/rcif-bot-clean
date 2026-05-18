@@ -206,6 +206,11 @@ module.exports = {
         const handled = await helpInteractionHandler.handle(interaction)
         if (handled) return
       }
+      // ✅ My Card Buttons
+  if (customId?.startsWith("mycard:")) {
+    const handled = await handleCardButton(interaction)
+    if (handled) return
+  }
       if (interaction.customId?.startsWith("giveaway_join_")) {
       return handleGiveawayButton(interaction)
       }
@@ -243,32 +248,38 @@ module.exports = {
       return
     }
 
-    // ══════════════════════════════════════
-    //  SELECT MENUS
-    // ══════════════════════════════════════
-    if (interaction.isStringSelectMenu()) {
-      const customId = interaction.customId
+    //══════════════════════════════════════
+//  SELECT MENUS
+//══════════════════════════════════════
+if (interaction.isStringSelectMenu()) {
+  const customId = interaction.customId
 
-      // ✅ Help System Select Menus
-      if (customId.startsWith("help:")) {
-        const handled = await helpInteractionHandler.handle(interaction)
-        if (handled) return
-      }
+  // ✅ Help System Select Menus
+  if (customId.startsWith("help:")) {
+    const handled = await helpInteractionHandler.handle(interaction)
+    if (handled) return
+  }
 
-      try {
-        if (customId === "ticket_category_select") return await ticketSystem.handleCategorySelect(interaction)
-        if (customId === "ticket_priority_select") return await ticketSystem.handlePrioritySelect(interaction)
-      } catch (error) {
-        logger.error("SELECT_MENU_FAILED", {
-          customId,
-          userId: interaction.user?.id,
-          guildId: interaction.guildId,
-          error: error.message
-        })
-        await safeErrorReply(interaction, "❌ حدث خطأ أثناء معالجة القائمة.")
-      }
-      return
-    }
+  // ✅ My Card Select Menus
+  if (customId.startsWith("mycard:")) {
+    const handled = await handleCardSelectMenu(interaction)
+    if (handled) return
+  }
+
+  try {
+    if (customId === "ticket_category_select") return await ticketSystem.handleCategorySelect(interaction)
+    if (customId === "ticket_priority_select") return await ticketSystem.handlePrioritySelect(interaction)
+  } catch (error) {
+    logger.error("SELECT_MENU_FAILED", {
+      customId,
+      userId: interaction.user?.id,
+      guildId: interaction.guildId,
+      error: error.message
+    })
+    await safeErrorReply(interaction, "❌ حدث خطأ أثناء معالجة القائمة.")
+  }
+  return
+}
 
     // ══════════════════════════════════════
     //  MODAL SUBMIT
