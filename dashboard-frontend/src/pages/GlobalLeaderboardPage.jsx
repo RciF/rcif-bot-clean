@@ -31,7 +31,7 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
 import { Badge } from '@/components/ui/Badge'
-import { apiClient } from '@/api/apiClient'
+import { apiClient } from '@/api/client'
 import { formatCompact, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
