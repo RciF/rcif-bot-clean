@@ -5,7 +5,7 @@ import {
   Ticket, Bell, LogOut, Menu, X, Moon, Sun, PartyPopper, ScrollText,
   Gavel, ToggleRight, Sparkles, BarChart3, Users, History, Layers,
   CreditCard, Terminal, CalendarDays, Clock, ChevronDown, Crown,
-  Search, UserPlus, ShieldAlert, Gift,
+  Search, UserPlus, ShieldAlert, Gift, Trophy, 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
@@ -62,6 +62,7 @@ const BASE_NAV_SECTIONS = [
       { to: '/dashboard/economy',  label: 'الاقتصاد',  icon: Coins },
       { to: '/dashboard/events',   label: 'الفعاليات', icon: CalendarDays },
       { to: '/dashboard/giveaway', label: 'السحوبات',  icon: Gift },
+      { to: '/dashboard/leaderboard', label: 'المتصدرين العالميين', icon: Trophy },
     ],
   },
   {

@@ -25,6 +25,7 @@ import TemplatesPage from '@/pages/TemplatesPage';
 import SubscriptionPage from '@/pages/SubscriptionPage';
 import CommandsPage from '@/pages/CommandsPage';
 import SchedulerPage from '@/pages/SchedulerPage';
+import GlobalLeaderboardPage from '@/pages/GlobalLeaderboardPage';
 import OwnerAdminPage from '@/pages/OwnerAdminPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
@@ -81,6 +82,7 @@ const router = createBrowserRouter([
           { path: 'settings', element: <SettingsPage /> },
           { path: 'giveaway', element: <GiveawayPage /> },
           { path: 'automod', element: <AutoModPage /> },
+          { path: 'leaderboard', element: <GlobalLeaderboardPage /> },
           // ✅ NEW: Owner Admin (محمي بـ Owner guard داخل الصفحة نفسها)
           { path: 'owner-admin', element: <OwnerAdminPage /> },
         ],
