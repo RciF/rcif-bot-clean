@@ -10,6 +10,7 @@ const { eventAttendees, eventRemind } = require("../commands/events/eventAttend"
 const { handleVerifyPanelButton }     = require("../commands/admin/verify-panel")
 const helpInteractionHandler = require("../systems/helpInteractionHandler")
 const { handleGiveawayButton } = require("./handlers/giveawayButtonHandler")
+const { handleCardButton, handleCardSelectMenu } = require("./handlers/cardButtonHandler")
 
 // ══════════════════════════════════════
 //  DASHBOARD SETTINGS CACHE
