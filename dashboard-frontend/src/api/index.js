@@ -188,22 +188,6 @@ export const adminApi = {
 
   // ✅ NEW: Owner Stats
   getOwnerStats: () => apiClient.get(`/api/admin/stats`),
-  // ══════════════════════════════════════════════════════════════════
-//  ✅ ADD THIS TO: dashboard-frontend/src/api/index.js
-//
-//  Trial API functions
-//
-//  ⚠️ ضيف هذي الـ functions داخل `adminApi` object الموجود
-//     في ملف dashboard-frontend/src/api/index.js
-// ══════════════════════════════════════════════════════════════════
-
-// ابحث في الملف عن:
-//   export const adminApi = {
-//     ...
-//     getOwnerStats: () => apiClient.get(`/api/admin/stats`),
-//   }
-
-// أضف قبل القوس المُغلق `}`:
 
   // ✅ NEW: Free Trial Management
   grantTrial: (userId, planId, days, notes) =>
