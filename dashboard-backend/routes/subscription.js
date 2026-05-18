@@ -403,5 +403,154 @@ router.delete(
     res.json({ success: true })
   }),
 )
+// ══════════════════════════════════════════════════════════════════
+//  ✅ ADD THIS TO: dashboard-backend/routes/subscription.js
+//
+//  Free Trial System — منح تجربة مجانية للأونر فقط
+//  المسار: POST /api/admin/subscriptions/grant-trial
+//
+//  ⚠️ مهم: ضيف هذا الكود قبل `module.exports = router` في
+//     ملف dashboard-backend/routes/subscription.js
+//
+//  هذا الـ endpoint:
+//   • يمنح اشتراك مؤقت لمستخدم بمدة محددة (1-30 يوم)
+//   • يمنع منح Trial مرتين لنفس المستخدم
+//   • يضيف عمود is_trial = true في DB للتفريق
+//   • يستدعي البوت لمزامنة الرتبة تلقائياً
+// ══════════════════════════════════════════════════════════════════
 
+// ────────────────────────────────────────────────────────────────────
+//  POST /api/admin/subscriptions/grant-trial
+//  Grant free trial subscription (Owner only)
+// ────────────────────────────────────────────────────────────────────
+
+router.post(
+  "/admin/subscriptions/grant-trial",
+  requireAuth,
+  requireOwner,
+  asyncHandler(async (req, res) => {
+    const { userId, planId, days, notes } = req.body
+
+    // ─── Validate inputs ───
+    if (!userId || !/^\d{15,22}$/.test(userId)) {
+      throw new ApiError("user ID غير صالح", 400, "INVALID_USER_ID")
+    }
+
+    if (!planId || !["silver", "gold", "diamond"].includes(planId)) {
+      throw new ApiError("الخطة غير صالحة", 400, "INVALID_PLAN")
+    }
+
+    const trialDays = parseInt(days, 10)
+    if (!trialDays || trialDays < 1 || trialDays > 30) {
+      throw new ApiError("المدة يجب تكون بين 1 و 30 يوم", 400, "INVALID_DAYS")
+    }
+
+    // ─── Check existing subscription ───
+    const existing = await query(
+      `SELECT plan_id, status, expires_at, is_trial FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+      [userId],
+    )
+
+    // منع منح Trial مرتين
+    if (existing.rows.length > 0 && existing.rows[0].is_trial === true) {
+      throw new ApiError(
+        "هذا المستخدم استلم تجربة مجانية من قبل",
+        400,
+        "TRIAL_ALREADY_GRANTED"
+      )
+    }
+
+    // منع منح Trial لمشترك مدفوع نشط
+    if (existing.rows.length > 0) {
+      const sub = existing.rows[0]
+      const isActiveAndPaid = sub.status === "active" &&
+                              sub.is_trial !== true &&
+                              (!sub.expires_at || new Date(sub.expires_at) > new Date())
+      if (isActiveAndPaid) {
+        throw new ApiError(
+          "هذا المستخدم عنده اشتراك مدفوع نشط — لا يحتاج Trial",
+          400,
+          "HAS_PAID_SUBSCRIPTION"
+        )
+      }
+    }
+
+    // ─── Calculate expiry ───
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + trialDays)
+
+    // ─── Upsert subscription with is_trial = true ───
+    await query(
+      `INSERT INTO subscriptions (user_id, plan_id, status, expires_at, is_trial, trial_notes)
+       VALUES ($1, $2, 'active', $3, true, $4)
+       ON CONFLICT (user_id) DO UPDATE SET
+         plan_id    = $2,
+         status     = 'active',
+         expires_at = $3,
+         is_trial   = true,
+         trial_notes = $4,
+         updated_at = NOW()`,
+      [userId, planId, expiresAt, notes || null],
+    )
+
+    // ─── Sync bot role (non-blocking) ───
+    syncBotRole(userId, planId, "active").catch(() => {})
+
+    res.json({
+      success: true,
+      userId,
+      planId,
+      days: trialDays,
+      expiresAt: expiresAt.toISOString(),
+      message: `✅ تم منح تجربة مجانية بنجاح: ${planId} لمدة ${trialDays} يوم`
+    })
+  }),
+)
+
+// ────────────────────────────────────────────────────────────────────
+//  GET /api/admin/subscriptions/trials
+//  List all active trial subscriptions
+// ────────────────────────────────────────────────────────────────────
+
+router.get(
+  "/admin/subscriptions/trials",
+  requireAuth,
+  requireOwner,
+  asyncHandler(async (req, res) => {
+    const r = await query(
+      `SELECT user_id, plan_id, status, expires_at, trial_notes, created_at, updated_at
+       FROM subscriptions
+       WHERE is_trial = true
+       ORDER BY expires_at DESC
+       LIMIT 100`,
+    )
+
+    // فلتر: نشط vs منتهي
+    const now = new Date()
+    const trials = (r.rows || []).map(row => {
+      const expired = row.expires_at && new Date(row.expires_at) < now
+      const daysLeft = row.expires_at
+        ? Math.max(0, Math.ceil((new Date(row.expires_at) - now) / 86_400_000))
+        : null
+
+      return {
+        user_id: row.user_id,
+        plan_id: row.plan_id,
+        status: expired ? "expired" : row.status,
+        expires_at: row.expires_at,
+        days_left: daysLeft,
+        notes: row.trial_notes,
+        created_at: row.created_at,
+        is_expired: expired
+      }
+    })
+
+    res.json({
+      total: trials.length,
+      active: trials.filter(t => !t.is_expired).length,
+      expired: trials.filter(t => t.is_expired).length,
+      trials
+    })
+  }),
+)
 module.exports = router

@@ -188,4 +188,60 @@ export const adminApi = {
 
   // ✅ NEW: Owner Stats
   getOwnerStats: () => apiClient.get(`/api/admin/stats`),
+  // ══════════════════════════════════════════════════════════════════
+//  ✅ ADD THIS TO: dashboard-frontend/src/api/index.js
+//
+//  Trial API functions
+//
+//  ⚠️ ضيف هذي الـ functions داخل `adminApi` object الموجود
+//     في ملف dashboard-frontend/src/api/index.js
+// ══════════════════════════════════════════════════════════════════
+
+// ابحث في الملف عن:
+//   export const adminApi = {
+//     ...
+//     getOwnerStats: () => apiClient.get(`/api/admin/stats`),
+//   }
+
+// أضف قبل القوس المُغلق `}`:
+
+  // ✅ NEW: Free Trial Management
+  grantTrial: (userId, planId, days, notes) =>
+    apiClient.post(`/api/admin/subscriptions/grant-trial`, {
+      userId,
+      planId,
+      days,
+      notes
+    }),
+
+  listTrials: () => apiClient.get(`/api/admin/subscriptions/trials`),
+
+// ── الـ adminApi النهائي يصير بالشكل التالي ──
+//
+// export const adminApi = {
+//   // Payment Requests
+//   getPaymentRequests: (status = "pending") =>
+//     apiClient.get(`/api/admin/payment-requests?status=${status}`),
+//   approvePayment: (id, months = 1) =>
+//     apiClient.post(`/api/admin/payment-requests/${id}/approve`, { months }),
+//   rejectPayment: (id, notes) =>
+//     apiClient.post(`/api/admin/payment-requests/${id}/reject`, { notes }),
+//
+//   // Subscriptions Management
+//   cancelSubscription: (userId) =>
+//     apiClient.post(`/api/admin/subscriptions/${userId}/cancel`),
+//
+//   // Owner Stats
+//   getOwnerStats: () => apiClient.get(`/api/admin/stats`),
+//
+//   // ✅ NEW: Free Trial Management
+//   grantTrial: (userId, planId, days, notes) =>
+//     apiClient.post(`/api/admin/subscriptions/grant-trial`, {
+//       userId,
+//       planId,
+//       days,
+//       notes
+//     }),
+//   listTrials: () => apiClient.get(`/api/admin/subscriptions/trials`),
+// }
 }

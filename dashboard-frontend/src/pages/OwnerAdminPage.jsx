@@ -17,7 +17,9 @@ import {
   Sparkles,
   TrendingUp,
   RefreshCw,
+  Gift,
 } from 'lucide-react';
+import TrialsTab from '@/pages/OwnerAdmin/TrialsTab';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -99,6 +101,10 @@ export default function OwnerAdminPage() {
             <Users className="w-4 h-4" />
             <span>الاشتراكات</span>
           </TabsTrigger>
+          <TabsTrigger value="trials" variant="pills">
+            <Gift className="w-4 h-4" />
+            <span>التجارب المجانية</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending">
@@ -112,6 +118,9 @@ export default function OwnerAdminPage() {
         </TabsContent>
         <TabsContent value="subscriptions">
           <SubscriptionsTab />
+        </TabsContent>
+        <TabsContent value="trials">
+          <TrialsTab />
         </TabsContent>
       </Tabs>
     </>
