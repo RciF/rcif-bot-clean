@@ -37,6 +37,7 @@ const giveawayRoutes = require("./routes/giveaway")
 const automodRoutes = require("./routes/automod")
 const bulkRoutes = require("./routes/bulk")
 const globalLeaderboardsRoutes = require("./routes/globalLeaderboards")
+const cardSubscriptionRoutes = require("./routes/cardSubscription")
 // ── Migrations ──
 const { runMigrations } = require("./scripts/migrate")
 const { runCommandsMigration } = require("./scripts/migrate-commands")
@@ -156,6 +157,7 @@ app.use("/api/auth", authRoutes)
 // ── Subscription / Payment / Linking ──
 app.use("/api", subscriptionRoutes)
 app.use("/api", globalLeaderboardsRoutes)
+app.use("/api", cardSubscriptionRoutes)
 // Bot Internal (للبوت — محمي بـ x-bot-secret)
    app.use("/api", commandsModularRoutes.botRoutes)
 
