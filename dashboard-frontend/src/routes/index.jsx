@@ -27,6 +27,9 @@ import CommandsPage from '@/pages/CommandsPage';
 import SchedulerPage from '@/pages/SchedulerPage';
 import GlobalLeaderboardPage from '@/pages/GlobalLeaderboardPage';
 import OwnerAdminPage from '@/pages/OwnerAdminPage';
+import CardCustomizationPage from '@/pages/CardCustomizationPage';
+import CardSubscriptionPage from '@/pages/CardSubscriptionPage';
+import CardAdminPage from '@/pages/CardAdminPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import { ProtectedRoute } from '@/components/ui/ProtectedRoute';
 import SettingsPage from '@/pages/SettingsPage';
@@ -65,7 +68,9 @@ const router = createBrowserRouter([
           { path: 'audit', element: <AuditLogPage /> },
           { path: 'templates', element: <TemplatesPage /> },
           { path: 'commands', element: <CommandsPage /> },
-          { path: 'subscription', element: <SubscriptionPage /> },
+          { path: 'card', element: <CardCustomizationPage /> },
+          { path: 'card/subscription', element: <CardSubscriptionPage /> },
+          { path: 'card-admin', element: <CardAdminPage /> },
           { path: 'events', element: <EventsPage /> },
           { path: 'scheduler', element: <SchedulerPage /> },
           { path: 'ai', element: <AISettingsPage /> },

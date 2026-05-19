@@ -5,6 +5,7 @@ const fridaySaleSystem = require("../../systems/fridaySaleSystem")
 const { ALL_ITEMS, CAR_CATEGORIES, checkRequirement, checkCarCapacity, checkWorldDomination, formatPriceExact, formatPrice, getProgressStage, WORLD_CONTINENTS_REQUIRED } = require("../../config/economyConfig")
 const economySettings = require("../../utils/economySettingsHelper")
 const economyShop = require("../../utils/economyShopHelper")
+const inventoryHelper = require("../../utils/inventoryHelper")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -123,7 +124,7 @@ module.exports = {
       }
 
       // ═════════════════════════════════════════
-      //  العناصر العالمية (الكود الأصلي)
+      //  العناصر العالمية
       // ═════════════════════════════════════════
       const item = ALL_ITEMS[itemId]
       if (!item) {
@@ -141,14 +142,16 @@ module.exports = {
       try {
         await client.query("BEGIN")
 
+        // ✅ تأكد إن المستخدم موجود
         await client.query(
           `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-           VALUES ($1, $2, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
+           VALUES ($1, $2, 0, 0, '[]'::jsonb) ON CONFLICT (user_id) DO NOTHING`,
           [userId, settings.starting_balance || 0]
         )
 
+        // ✅ FOR UPDATE: قفل الصف
         const userResult = await client.query(
-          "SELECT * FROM economy_users WHERE user_id = $1 FOR UPDATE",
+          "SELECT coins, inventory FROM economy_users WHERE user_id = $1 FOR UPDATE",
           [userId]
         )
         const user = userResult.rows[0]
@@ -177,12 +180,10 @@ module.exports = {
           })
         }
 
-        const assetsResult = await client.query(
-          "SELECT item_id, quantity FROM inventory WHERE user_id = $1",
-          [userId]
-        )
-        const playerAssets = assetsResult.rows || []
+        // ✅ Inventory الحالي من JSONB
+        const playerAssets = inventoryHelper.normalize(user.inventory)
 
+        // ✅ تحقق من الشروط (مثل: امتلاك سيارة معينة قبل شراء أخرى)
         const reqCheck = checkRequirement(item, playerAssets)
         if (!reqCheck.allowed) {
           await client.query("ROLLBACK")
@@ -200,15 +201,10 @@ module.exports = {
           })
         }
 
+        // ✅ تحقق من سعة السيارات (لو شراء سيارة)
         if (CAR_CATEGORIES.includes(item.category)) {
-          const simulatedAssets = playerAssets.map(a => ({ ...a }))
-          const existingCar = simulatedAssets.find(a => a.item_id === itemId)
-          if (existingCar) {
-            existingCar.quantity += quantity
-          } else {
-            simulatedAssets.push({ item_id: itemId, quantity })
-          }
-
+          const simulatedAssets = inventoryHelper.addItemToArray(playerAssets, itemId, quantity)
+          
           const capCheck = checkCarCapacity(simulatedAssets)
           if (!capCheck.allowed) {
             await client.query("ROLLBACK")
@@ -227,28 +223,18 @@ module.exports = {
           }
         }
 
+        // ✅ خصم الفلوس + إضافة العنصر للـ inventory
+        const newInventory = inventoryHelper.addItemToArray(playerAssets, itemId, quantity)
+        
         await client.query(
-          "UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2",
-          [totalCost, userId]
-        )
-
-        await client.query(
-          `INSERT INTO inventory (user_id, item_id, quantity)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (user_id, item_id)
-           DO UPDATE SET quantity = inventory.quantity + $3`,
-          [userId, itemId, quantity]
+          "UPDATE economy_users SET coins = coins - $1, inventory = $2::jsonb WHERE user_id = $3",
+          [totalCost, JSON.stringify(newInventory), userId]
         )
 
         await client.query("COMMIT")
 
         const newBalance = user.coins - totalCost
-
-        const updatedAssetsResult = await database.query(
-          "SELECT item_id, quantity FROM inventory WHERE user_id = $1",
-          [userId]
-        )
-        const updatedAssets = updatedAssetsResult.rows || []
+        const updatedAssets = newInventory
         const stage = getProgressStage(updatedAssets)
 
         const embed = new EmbedBuilder()
@@ -313,7 +299,7 @@ module.exports = {
 
 // ══════════════════════════════════════════════════════════
 //  Custom shop buy handler
-//  - يدعم type='item' (يضاف للـ inventory بـ key shop_<id>)
+//  - يدعم type='item' (يضاف للـ inventory JSONB بـ key shop_<id>)
 //  - يدعم type='role' (يعطي الـ role_id للعضو)
 //  - يدعم type='tool' (يعامله مثل item)
 //  - ينقص stock بعد الشراء
@@ -380,15 +366,16 @@ async function handleCustomShopBuy(interaction, ctx) {
 
     await client.query(
       `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-       VALUES ($1, $2, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
+       VALUES ($1, $2, 0, 0, '[]'::jsonb) ON CONFLICT (user_id) DO NOTHING`,
       [userId, settings.starting_balance || 0]
     )
 
     const userResult = await client.query(
-      "SELECT coins FROM economy_users WHERE user_id = $1 FOR UPDATE",
+      "SELECT coins, inventory FROM economy_users WHERE user_id = $1 FOR UPDATE",
       [userId]
     )
     const userCoins = userResult.rows[0]?.coins || 0
+    const currentInventory = inventoryHelper.normalize(userResult.rows[0]?.inventory)
 
     if (userCoins < totalCost) {
       await client.query("ROLLBACK")
@@ -422,12 +409,6 @@ async function handleCustomShopBuy(interaction, ctx) {
       }
     }
 
-    // ✅ خصم الفلوس
-    await client.query(
-      "UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2",
-      [totalCost, userId]
-    )
-
     // ✅ نقص الـ stock
     if (item.stock !== -1) {
       await client.query(
@@ -438,6 +419,12 @@ async function handleCustomShopBuy(interaction, ctx) {
 
     // ✅ معالجة حسب النوع
     if (item.type === "role") {
+      // خصم الفلوس فقط، الرتبة تُعطى بعدها
+      await client.query(
+        "UPDATE economy_users SET coins = coins - $1 WHERE user_id = $2",
+        [totalCost, userId]
+      )
+      
       try {
         await interaction.member.roles.add(item.role_id, "شراء رتبة من متجر السيرفر")
       } catch (err) {
@@ -447,13 +434,12 @@ async function handleCustomShopBuy(interaction, ctx) {
         })
       }
     } else {
-      // item أو tool → inventory
+      // item أو tool → inventory JSONB
+      const newInventory = inventoryHelper.addItemToArray(currentInventory, item.id, quantity)
+      
       await client.query(
-        `INSERT INTO inventory (user_id, item_id, quantity)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (user_id, item_id)
-         DO UPDATE SET quantity = inventory.quantity + $3`,
-        [userId, item.id, quantity]
+        "UPDATE economy_users SET coins = coins - $1, inventory = $2::jsonb WHERE user_id = $3",
+        [totalCost, JSON.stringify(newInventory), userId]
       )
     }
 

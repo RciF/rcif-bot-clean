@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 const database = require("../../systems/databaseSystem")
 const databaseManager = require("../../utils/databaseManager")
 const { ALL_ITEMS, formatPriceExact, formatPrice, getProgressStage } = require("../../config/economyConfig")
+const inventoryHelper = require("../../utils/inventoryHelper")
 
 const SELL_PERCENTAGE = 0.6
 
@@ -57,11 +58,8 @@ module.exports = {
       const focused = interaction.options.getFocused().toLowerCase()
       const userId = interaction.user.id
 
-      const assetsResult = await database.query(
-        "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
-        [userId]
-      )
-      const assets = assetsResult.rows || []
+      // ✅ جلب inventory من JSONB
+      const assets = await inventoryHelper.getInventory(userId)
 
       const filtered = assets
         .map(a => {
@@ -104,11 +102,9 @@ module.exports = {
         return interaction.reply({ content: "❌ عنصر غير موجود. استخدم القائمة المقترحة.", ephemeral: true })
       }
 
-      const assetResult = await database.query(
-        "SELECT quantity FROM inventory WHERE user_id = $1 AND item_id = $2 AND quantity > 0",
-        [userId, itemId]
-      )
-      const owned = assetResult.rows[0]?.quantity || 0
+      // ✅ جلب الـ inventory من JSONB
+      const currentInventory = await inventoryHelper.getInventory(userId)
+      const owned = inventoryHelper.getQuantityFromArray(currentInventory, itemId)
 
       if (owned === 0) {
         return interaction.reply({
@@ -182,11 +178,28 @@ module.exports = {
         try {
           await client.query("BEGIN")
 
-          const recheckResult = await client.query(
-            "SELECT quantity FROM inventory WHERE user_id = $1 AND item_id = $2 FOR UPDATE",
-            [userId, itemId]
+          // ✅ FOR UPDATE: قفل صف المستخدم لمنع race conditions
+          const userResult = await client.query(
+            "SELECT coins, inventory FROM economy_users WHERE user_id = $1 FOR UPDATE",
+            [userId]
           )
-          const currentQty = recheckResult.rows[0]?.quantity || 0
+
+          if (!userResult.rows.length) {
+            await client.query("ROLLBACK")
+            return btnInteraction.update({
+              embeds: [
+                new EmbedBuilder()
+                  .setColor(0xef4444)
+                  .setTitle("❌ فشل البيع")
+                  .setDescription("ما قدرت أجلب بيانات حسابك.")
+              ],
+              components: []
+            })
+          }
+
+          const userRow = userResult.rows[0]
+          const lockedInventory = inventoryHelper.normalize(userRow.inventory)
+          const currentQty = inventoryHelper.getQuantityFromArray(lockedInventory, itemId)
 
           if (currentQty < quantity) {
             await client.query("ROLLBACK")
@@ -201,43 +214,23 @@ module.exports = {
             })
           }
 
-          if (currentQty === quantity) {
-            await client.query(
-              "DELETE FROM inventory WHERE user_id = $1 AND item_id = $2",
-              [userId, itemId]
-            )
-          } else {
-            await client.query(
-              "UPDATE inventory SET quantity = quantity - $1 WHERE user_id = $2 AND item_id = $3",
-              [quantity, userId, itemId]
-            )
-          }
-
-          // ✅ FIX: نتأكد إن المستخدم موجود قبل ما نحاول نضيف الفلوس (مستحيل لكن نحتاط)
+          // ✅ إزالة العنصر من inventory + إضافة الفلوس
+          const newInventory = inventoryHelper.removeItemFromArray(lockedInventory, itemId, quantity)
+          
           await client.query(
-            `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-             VALUES ($1, 0, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
-            [userId]
-          )
-
-          await client.query(
-            "UPDATE economy_users SET coins = coins + $1 WHERE user_id = $2",
-            [totalSellPrice, userId]
+            "UPDATE economy_users SET inventory = $1::jsonb, coins = coins + $2 WHERE user_id = $3",
+            [JSON.stringify(newInventory), totalSellPrice, userId]
           )
 
           await client.query("COMMIT")
 
+          // ✅ جلب الرصيد الجديد
           const newBalanceResult = await database.query(
             "SELECT coins FROM economy_users WHERE user_id = $1",
             [userId]
           )
           const newBalance = newBalanceResult.rows[0]?.coins || 0
-
-          const assetsResult = await database.query(
-            "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
-            [userId]
-          )
-          const stage = getProgressStage(assetsResult.rows || [])
+          const stage = getProgressStage(newInventory)
 
           return btnInteraction.update({
             embeds: [
@@ -257,7 +250,6 @@ module.exports = {
           })
 
         } catch (err) {
-          // ✅ FIX: ROLLBACK آمن
           await client.query("ROLLBACK").catch(() => {})
           throw err
         } finally {

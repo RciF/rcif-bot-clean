@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
 const { ALL_ITEMS, CATEGORIES, CAR_CATEGORIES, HOUSE_TYPES, calculateNetWorth, getProgressStage, formatPriceExact, formatPrice, checkWorldDomination } = require("../../config/economyConfig")
+const inventoryHelper = require("../../utils/inventoryHelper")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -46,26 +47,22 @@ module.exports = {
 
       const targetUser = interaction.options.getUser("العضو") || interaction.user
       const userId = targetUser.id
-      
 
-      // ✅ جلب الممتلكات
-      const assetsResult = await database.query(
-        "SELECT item_id, quantity FROM inventory WHERE user_id = $1  AND quantity > 0",
-        [userId]
-      )
-      const playerAssets = assetsResult.rows || []
-
-      // ✅ جلب الرصيد
+      // ✅ تأكد إن المستخدم موجود
       await database.query(
         `INSERT INTO economy_users (user_id, coins, last_daily, last_work, inventory)
-         VALUES ($1, 0, 0, 0, '[]') ON CONFLICT (user_id) DO NOTHING`,
+         VALUES ($1, 0, 0, 0, '[]'::jsonb) ON CONFLICT (user_id) DO NOTHING`,
         [userId]
       )
+
+      // ✅ جلب الرصيد + الممتلكات بـ query واحد (JSONB)
       const userResult = await database.query(
-        "SELECT coins FROM economy_users WHERE user_id = $1",
+        "SELECT coins, inventory FROM economy_users WHERE user_id = $1",
         [userId]
       )
-      const coins = userResult.rows[0]?.coins || 0
+      const userRow = userResult.rows[0] || {}
+      const coins = userRow.coins || 0
+      const playerAssets = inventoryHelper.normalize(userRow.inventory)
 
       // ✅ لو ما عنده شيء
       if (playerAssets.length === 0) {

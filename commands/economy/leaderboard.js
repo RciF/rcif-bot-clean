@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
 const { ALL_ITEMS, calculateNetWorth, getProgressStage, formatPriceExact, formatPrice } = require("../../config/economyConfig")
+const inventoryHelper = require("../../utils/inventoryHelper")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -55,9 +56,12 @@ module.exports = {
 
       await interaction.deferReply()
 
-      // ✅ جلب كل المستخدمين اللي عندهم كوينز
+      // ═══════════════════════════════════════════════════════
+      //  ✅ جلب كل المستخدمين مع الـ inventory في query واحد
+      //  (بدل 2 queries منفصلة)
+      // ═══════════════════════════════════════════════════════
       const usersResult = await database.query(
-        "SELECT user_id, coins FROM economy_users WHERE coins > 0 ORDER BY coins DESC LIMIT 50"
+        "SELECT user_id, coins, inventory FROM economy_users WHERE coins > 0 ORDER BY coins DESC LIMIT 50"
       )
       const users = usersResult.rows || []
 
@@ -73,31 +77,6 @@ module.exports = {
       }
 
       // ═══════════════════════════════════════════════════════
-      //  ✅ FIX: N+1 query problem
-      //  بدل ما نسوي 50 query منفصلة لجلب inventory كل مستخدم،
-      //  نسوي query واحد بـ WHERE user_id = ANY($1)
-      // ═══════════════════════════════════════════════════════
-      const userIds = users.map(u => u.user_id)
-
-      const inventoryResult = await database.query(
-        "SELECT user_id, item_id, quantity FROM inventory WHERE user_id = ANY($1) AND quantity > 0",
-        [userIds]
-      )
-      const allInventoryRows = inventoryResult.rows || []
-
-      // تجميع inventory حسب user_id
-      const inventoryByUser = new Map()
-      for (const row of allInventoryRows) {
-        if (!inventoryByUser.has(row.user_id)) {
-          inventoryByUser.set(row.user_id, [])
-        }
-        inventoryByUser.get(row.user_id).push({
-          item_id: row.item_id,
-          quantity: row.quantity
-        })
-      }
-
-      // ═══════════════════════════════════════════════════════
       //  ✅ FIX: members.fetch بـ Promise.allSettled (parallel)
       //  بدل sequential await داخل for loop
       // ═══════════════════════════════════════════════════════
@@ -109,7 +88,8 @@ module.exports = {
 
       // بناء enrichedUsers
       const enrichedUsers = users.map((user, index) => {
-        const assets = inventoryByUser.get(user.user_id) || []
+        // ✅ Inventory من JSONB في نفس الـ row
+        const assets = inventoryHelper.normalize(user.inventory)
         const netWorth = calculateNetWorth(user.coins, assets)
         const totalItems = assets.reduce((sum, a) => sum + (a.quantity || 0), 0)
         const stage = getProgressStage(assets)

@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const database = require("../../systems/databaseSystem")
 const { ALL_ITEMS, calculateNetWorth, getProgressStage, formatPriceExact, formatPrice } = require("../../config/economyConfig")
 const economySettings = require("../../utils/economySettingsHelper")
+const inventoryHelper = require("../../utils/inventoryHelper")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -67,8 +68,9 @@ module.exports = {
       // ✅ جلب أو إنشاء المستخدم — يحترم starting_balance من الداش
       await economySettings.ensureUser(userId, startingBalance)
 
+      // ✅ جلب الرصيد + الممتلكات بـ query واحد (JSONB)
       const userResult = await database.query(
-        "SELECT * FROM economy_users WHERE user_id = $1",
+        "SELECT coins, inventory FROM economy_users WHERE user_id = $1",
         [userId]
       )
       const user = userResult.rows[0]
@@ -76,12 +78,8 @@ module.exports = {
         return interaction.reply({ content: "❌ ما قدرت أجلب بيانات المستخدم.", ephemeral: true })
       }
 
-      // ✅ جلب الممتلكات
-      const assetsResult = await database.query(
-        "SELECT item_id, quantity FROM inventory WHERE user_id = $1 ",
-        [userId]
-      )
-      const playerAssets = assetsResult.rows || []
+      // ✅ Normalize inventory من JSONB
+      const playerAssets = inventoryHelper.normalize(user.inventory)
 
       // ✅ حساب الثروة والمرحلة
       const netWorth = calculateNetWorth(user.coins, playerAssets)

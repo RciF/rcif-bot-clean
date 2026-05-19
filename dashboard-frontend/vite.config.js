@@ -5,6 +5,11 @@ import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig({
+  css: {
+    postcss: {
+      plugins: [],
+    },
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
