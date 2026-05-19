@@ -43,7 +43,7 @@ const ROUTES = {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("اعدادات_xp")
+    .setName("اعدادات_المستوى")
     .setDescription("إعدادات نظام XP والمستويات")
     .setDMPermission(false)
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)

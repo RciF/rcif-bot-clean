@@ -18,7 +18,7 @@ const PLAN_COLORS = {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("اعدادات")
+    .setName("الإعدادات")
     .setDescription("عرض إعدادات وحالة أنظمة السيرفر")
     .setDMPermission(false),
 
