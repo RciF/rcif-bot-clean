@@ -349,10 +349,9 @@ function startApiServer(client) {
           SELECT
             e.user_id,
             COALESCE(e.coins, 0)::bigint AS coins,
-            COALESCE(e.bank, 0)::bigint AS bank,
             COALESCE(e.inventory, '[]'::jsonb) AS items
           FROM economy_users e
-          WHERE COALESCE(e.coins, 0) + COALESCE(e.bank, 0) > 0
+          WHERE COALESCE(e.coins, 0) > 0
              OR jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
         `
         params = []
@@ -362,10 +361,9 @@ function startApiServer(client) {
           SELECT
             e.user_id,
             COALESCE(e.coins, 0)::bigint AS coins,
-            COALESCE(e.bank, 0)::bigint AS bank,
             COALESCE(e.inventory, '[]'::jsonb) AS items
           FROM economy_users e
-          WHERE (COALESCE(e.coins, 0) + COALESCE(e.bank, 0) > 0
+          WHERE (COALESCE(e.coins, 0) > 0
              OR jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0)
             AND (e.last_daily >= $1 OR e.last_work >= $1)
         `
@@ -376,8 +374,7 @@ function startApiServer(client) {
 
       const players = (result.rows || []).map(row => {
         const coins = Number(row.coins) || 0
-        const bank = Number(row.bank) || 0
-        const cashTotal = coins + bank
+        const cashTotal = coins
         const items = Array.isArray(row.items) ? row.items : []
 
         let itemsValue = 0
@@ -394,7 +391,7 @@ function startApiServer(client) {
         return {
           user_id: row.user_id,
           coins,
-          bank,
+          bank: 0,
           cash_total: cashTotal,
           items_value: itemsValue,
           total_items: totalItems,
@@ -430,7 +427,6 @@ function startApiServer(client) {
           SELECT
             e.user_id,
             COALESCE(e.coins, 0)::bigint AS coins,
-            COALESCE(e.bank, 0)::bigint AS bank,
             COALESCE(e.inventory, '[]'::jsonb) AS items,
             (
               SELECT COALESCE(SUM(COALESCE((item->>'quantity')::int, 0)), 0)
@@ -449,7 +445,6 @@ function startApiServer(client) {
           SELECT
             e.user_id,
             COALESCE(e.coins, 0)::bigint AS coins,
-            COALESCE(e.bank, 0)::bigint AS bank,
             COALESCE(e.inventory, '[]'::jsonb) AS items,
             (
               SELECT COALESCE(SUM(COALESCE((item->>'quantity')::int, 0)), 0)
@@ -482,7 +477,7 @@ function startApiServer(client) {
           total_items: Number(row.total_items) || 0,
           unique_items: Number(row.unique_items) || 0,
           coins: Number(row.coins) || 0,
-          bank: Number(row.bank) || 0,
+          bank: 0,
           items_value: itemsValue,
         }
       })
@@ -503,10 +498,10 @@ function startApiServer(client) {
       }
 
       const userResult = await databaseSystem.query(
-        "SELECT coins, bank FROM economy_users WHERE user_id = $1",
+        "SELECT coins FROM economy_users WHERE user_id = $1",
         [userId]
       )
-      const user = userResult.rows[0] || { coins: 0, bank: 0 }
+      const user = userResult.rows[0] || { coins: 0 }
 
       const invResult = await databaseSystem.query(
         "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
@@ -523,16 +518,15 @@ function startApiServer(client) {
       }
 
       const coins = Number(user.coins) || 0
-      const bank = Number(user.bank) || 0
 
       return res.json({
         user_id: userId,
         coins,
-        bank,
-        cash_total: coins + bank,
+        bank: 0,
+        cash_total: coins,
         items_value: itemsValue,
         total_items: totalItems,
-        net_worth: coins + bank + itemsValue,
+        net_worth: coins + itemsValue,
       })
     } catch (err) {
       logger.error("NETWORTH_USER_FAILED", { error: err.message })

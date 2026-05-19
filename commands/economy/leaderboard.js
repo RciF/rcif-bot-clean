@@ -172,12 +172,10 @@ async function fetchEconomy(period) {
   if (period === "all") {
     r = await database.query(
       `SELECT user_id,
-              COALESCE(coins, 0)::bigint AS coins,
-              COALESCE(bank, 0)::bigint AS bank,
-              (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total
+              COALESCE(coins, 0)::bigint AS coins
        FROM economy_users
-       WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
-       ORDER BY total DESC
+       WHERE COALESCE(coins, 0) > 0
+       ORDER BY coins DESC
        LIMIT $1`,
       [limit]
     )
@@ -185,13 +183,11 @@ async function fetchEconomy(period) {
     const startMs = periodStartMs(period)
     r = await database.query(
       `SELECT user_id,
-              COALESCE(coins, 0)::bigint AS coins,
-              COALESCE(bank, 0)::bigint AS bank,
-              (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total
+              COALESCE(coins, 0)::bigint AS coins
        FROM economy_users
-       WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
+       WHERE COALESCE(coins, 0) > 0
          AND (last_daily >= $1 OR last_work >= $1)
-       ORDER BY total DESC
+       ORDER BY coins DESC
        LIMIT $2`,
       [startMs, limit]
     )
@@ -201,8 +197,8 @@ async function fetchEconomy(period) {
     rank: i + 1,
     user_id: row.user_id,
     coins: Number(row.coins),
-    bank: Number(row.bank),
-    total: Number(row.total),
+    bank: 0,
+    total: Number(row.coins),
   }))
 }
 
@@ -214,20 +210,18 @@ async function fetchNetworth(period) {
   if (period === "all") {
     sql = `SELECT user_id,
                   COALESCE(coins, 0)::bigint AS coins,
-                  COALESCE(bank, 0)::bigint AS bank,
-                  COALESCE(inventory, '[]'::jsonb) AS items
+                  COALESCE(inventory, '[]'::jsonb) AS items,
            FROM economy_users
-           WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
+           WHERE COALESCE(coins, 0) > 0
               OR jsonb_array_length(COALESCE(inventory, '[]'::jsonb)) > 0`
     params = []
   } else {
     const startMs = periodStartMs(period)
     sql = `SELECT user_id,
                   COALESCE(coins, 0)::bigint AS coins,
-                  COALESCE(bank, 0)::bigint AS bank,
                   COALESCE(inventory, '[]'::jsonb) AS items
            FROM economy_users
-           WHERE (COALESCE(coins, 0) + COALESCE(bank, 0) > 0
+           WHERE (COALESCE(coins, 0) > 0
               OR jsonb_array_length(COALESCE(inventory, '[]'::jsonb)) > 0)
              AND (last_daily >= $1 OR last_work >= $1)`
     params = [startMs]
@@ -237,8 +231,8 @@ async function fetchNetworth(period) {
 
   const players = (r.rows || []).map((row) => {
     const coins = Number(row.coins) || 0
-    const bank = Number(row.bank) || 0
-    const cashTotal = coins + bank
+    const bank = 0
+    const cashTotal = coins
     const items = inventoryHelper.normalize(row.items)
 
     let itemsValue = 0
@@ -253,7 +247,7 @@ async function fetchNetworth(period) {
     return {
       user_id: row.user_id,
       coins,
-      bank,
+      bank: 0,
       cash_total: cashTotal,
       items_value: itemsValue,
       total_items: totalItems,

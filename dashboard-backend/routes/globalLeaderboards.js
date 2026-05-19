@@ -297,12 +297,10 @@ router.get(
     if (period === "all") {
       r = await query(
         `SELECT user_id,
-                COALESCE(coins, 0)::bigint AS coins,
-                COALESCE(bank, 0)::bigint AS bank,
-                (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total
+                COALESCE(coins, 0)::bigint AS coins
          FROM economy_users
-         WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
-         ORDER BY total DESC
+         WHERE COALESCE(coins, 0) > 0
+         ORDER BY coins DESC
          LIMIT $1`,
         [limit],
       ).catch(() => ({ rows: [] }))
@@ -310,13 +308,11 @@ router.get(
       const startMs = periodStartMs(period)
       r = await query(
         `SELECT user_id,
-                COALESCE(coins, 0)::bigint AS coins,
-                COALESCE(bank, 0)::bigint AS bank,
-                (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total
+                COALESCE(coins, 0)::bigint AS coins
          FROM economy_users
-         WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
+         WHERE COALESCE(coins, 0) > 0
            AND (last_daily >= $1 OR last_work >= $1)
-         ORDER BY total DESC
+         ORDER BY coins DESC
          LIMIT $2`,
         [startMs, limit],
       ).catch(() => ({ rows: [] }))
@@ -326,16 +322,17 @@ router.get(
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = r.rows.map((row, idx) => {
+      const coins = Number(row.coins) || 0
       const user = users[row.user_id] || { id: row.user_id, username: null }
       return {
         rank: idx + 1,
         user_id: row.user_id,
         username: user.global_name || user.username || `User ${row.user_id.slice(-6)}`,
         avatar_url: getAvatarUrl(user),
-        coins: Number(row.coins) || 0,
-        bank: Number(row.bank) || 0,
-        total: Number(row.total) || 0,
-        badges: computeBadges(row, "economy"),
+        coins,
+        bank: 0,
+        total: coins,
+        badges: computeBadges({ total: coins, coins, bank: 0 }, "economy"),
       }
     })
 
