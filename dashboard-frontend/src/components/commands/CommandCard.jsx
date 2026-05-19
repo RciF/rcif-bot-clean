@@ -88,6 +88,16 @@ export function CommandCard({
                 </Badge>
               )}
 
+              {command.isSubcommand && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] py-0 h-4 px-1.5 gap-1"
+                >
+                  <span>↳</span>
+                  <span>فرعي</span>
+                </Badge>
+              )}
+
               <Badge
                 variant="outline"
                 size="sm"
@@ -96,15 +106,6 @@ export function CommandCard({
                 {tier === 'diamond' && <Crown className="w-3 h-3" />}
                 <span>{tierMeta?.label}</span>
               </Badge>
-
-              {command.isSubcommand && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] py-0 h-4 px-1.5"
-                >
-                  فرعي
-                </Badge>
-              )}
 
               {!userHasAccess && (
                 <Badge
