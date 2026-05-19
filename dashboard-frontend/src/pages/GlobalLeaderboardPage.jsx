@@ -1,35 +1,42 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  GlobalLeaderboardPage v3 — Mega Legendary Edition
+ *  GlobalLeaderboardPage v4 — Ultra Legendary Edition
  *  المسار: dashboard-frontend/src/pages/GlobalLeaderboardPage.jsx
  *
- *  ✨ 5 تبويبات أسطورية:
- *   • 💰 الأغنى — رصيد + بنك
- *   • 💎 الثروة — رصيد + بنك + قيمة الممتلكات (Net Worth)
- *   • 📦 الممتلكات — أكثر عناصر في الـ Inventory
- *   • ⭐ الأعلى XP — إجمالي عبر كل السيرفرات
- *   • 🏆 أعلى مستوى — أعلى Level محقق
+ *  ✨ مميزات هذه النسخة:
+ *   • 5 تبويبات أسطورية:
+ *      - 💰 الأغنى (الرصيد + البنك)
+ *      - 💎 الثروة (Net Worth = نقدي + ممتلكات)
+ *      - 📦 الممتلكات (عدد العناصر)
+ *      - ⭐ الأعلى XP (مجموع كل السيرفرات)
+ *      - 🏆 أعلى مستوى (Level واحد record)
  *
- *  + Hall of Fame Card (الأول)
- *  + Podium للثاني والثالث (فضي + برونزي)
- *  + Search bar مع filters
- *  + Profile Modal كامل
- *  + Badges & Achievements
- *  + Animations سلسة
+ *   • Stat Cards قابلة للضغط — كل بطاقة تنقلك للتبويب المرتبط بها
+ *   • فلاتر زمنية (يومي / أسبوعي / شهري / كل الوقت)
+ *   • Pagination — صفحات (10 عناصر / صفحة)
+ *   • Hall of Fame Card للأول
+ *   • Podium للثاني والثالث
+ *   • Search bar + Profile Modal
+ *   • Badges & Achievements
+ *
+ *  ⚠️ ملاحظات:
+ *   - تبويبات الاقتصاد (الأغنى/الثروة/الممتلكات) تعتمد على البوت
+ *     عبر callBot من الـ Backend. لو البوت ما رد، نظهر رسالة واضحة.
+ *   - تبويبات XP و Level تعمل مباشرة من PostgreSQL.
  * ═══════════════════════════════════════════════════════════
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Trophy, Crown, Coins, Star, Award, Gem, Package,
-  Globe, Users, RefreshCw, Search, X, TrendingUp, Wallet, Building2,
+  Globe, Users, RefreshCw, Search, X, ChevronRight, ChevronLeft,
+  Sparkles, Calendar, Clock, AlertCircle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs'
-import { Badge } from '@/components/ui/Badge'
 import { apiClient } from '@/api/client'
 import { formatCompact, cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -37,6 +44,15 @@ import { toast } from 'sonner'
 // ════════════════════════════════════════════════════════════
 //  Constants
 // ════════════════════════════════════════════════════════════
+
+const PAGE_SIZE = 10
+
+const TIME_FILTERS = [
+  { id: 'all',     label: 'كل الوقت', icon: '∞' },
+  { id: 'monthly', label: 'شهري',     icon: '🗓️' },
+  { id: 'weekly',  label: 'أسبوعي',   icon: '📆' },
+  { id: 'daily',   label: 'يومي',     icon: '⚡' },
+]
 
 const RANK_STYLES = {
   1: {
@@ -73,27 +89,38 @@ const BADGE_COLORS = {
   rose:    'bg-rose-500/15 text-rose-300 border-rose-500/30',
 }
 
+// ربط بطاقة الإحصائية بالتبويب الذي تنقل إليه
+const STAT_TO_TAB = {
+  servers:    null,        // ما فيه تبويب — معلومة فقط
+  players:    'xp',        // اللاعبين النشطين → تبويب XP
+  money:      'economy',   // الفلوس → تبويب الأغنى
+  items:      'items',     // الممتلكات → تبويب الممتلكات
+  topLevel:   'level',     // أعلى مستوى → تبويب Level
+}
+
 // ════════════════════════════════════════════════════════════
-//  Main Page
+//  Main Page Component
 // ════════════════════════════════════════════════════════════
 
 export default function GlobalLeaderboardPage() {
   const [stats, setStats] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
+  const [activeTab, setActiveTab] = useState('economy')
+  const [timeFilter, setTimeFilter] = useState('all')
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const r = await apiClient.get('/api/global/stats')
       setStats(r?.data ?? r)
     } catch {
       setStats({})
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadStats()
-  }, [])
+  }, [loadStats])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -102,117 +129,98 @@ export default function GlobalLeaderboardPage() {
     toast.success('تم التحديث')
   }
 
+  // Stat card click handler → ينقل للتبويب المناسب
+  const handleStatClick = (statKey) => {
+    const targetTab = STAT_TO_TAB[statKey]
+    if (targetTab) {
+      setActiveTab(targetTab)
+      // smooth scroll للتبويبات
+      const tabsEl = document.getElementById('leaderboard-tabs')
+      if (tabsEl) {
+        tabsEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* ─── Header ─── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <div className="w-16 h-16 rounded-2xl lyn-gradient flex items-center justify-center lyn-glow">
-              <Trophy className="w-8 h-8 text-white" />
-            </div>
-            <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-sm">
-              👑
-            </div>
-          </div>
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold lyn-text-gradient">
-              قائمة المتصدرين العالمية
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              الأقوى في عالم Lyn — كل السيرفرات في مكان واحد ✨
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-          <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
-          <span>تحديث</span>
-        </Button>
-      </div>
+      <Header onRefresh={handleRefresh} refreshing={refreshing} />
 
-      {/* ─── Stats Bar ─── */}
-      {stats === null ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <StatCard
-            icon={<Globe />}
-            label="السيرفرات"
-            value={formatCompact(stats?.guilds?.total || 0)}
-            color="violet"
-          />
-          <StatCard
-            icon={<Users />}
-            label="اللاعبين"
-            value={formatCompact(stats?.xp?.active_users || 0)}
-            color="emerald"
-          />
-          <StatCard
-            icon={<Coins />}
-            label="إجمالي الفلوس"
-            value={formatCompact(stats?.economy?.total_money || 0)}
-            color="amber"
-          />
-          <StatCard
-            icon={<Package />}
-            label="الممتلكات"
-            value={formatCompact(stats?.items?.total_items || 0)}
-            color="rose"
-          />
-          <StatCard
-            icon={<Star />}
-            label="أعلى مستوى"
-            value={stats?.xp?.highest_level || 0}
-            color="sky"
-          />
-        </div>
-      )}
+      {/* ─── Stats Bar (clickable cards) ─── */}
+      <StatsBar stats={stats} onStatClick={handleStatClick} activeTab={activeTab} />
+
+      {/* ─── Time Filter ─── */}
+      <TimeFilterBar value={timeFilter} onChange={setTimeFilter} />
 
       {/* ─── Tabs ─── */}
-      <Tabs defaultValue="economy">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="economy" variant="pills">
-            <Coins className="w-4 h-4" />
-            <span>الأغنى</span>
-          </TabsTrigger>
-          <TabsTrigger value="networth" variant="pills">
-            <Gem className="w-4 h-4" />
-            <span>الثروة الكاملة</span>
-          </TabsTrigger>
-          <TabsTrigger value="items" variant="pills">
-            <Package className="w-4 h-4" />
-            <span>أكثر ممتلكات</span>
-          </TabsTrigger>
-          <TabsTrigger value="xp" variant="pills">
-            <Star className="w-4 h-4" />
-            <span>الأعلى XP</span>
-          </TabsTrigger>
-          <TabsTrigger value="level" variant="pills">
-            <Award className="w-4 h-4" />
-            <span>أعلى مستوى</span>
-          </TabsTrigger>
-        </TabsList>
+      <div id="leaderboard-tabs">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="economy" variant="pills">
+              <Coins className="w-4 h-4" />
+              <span>الأغنى</span>
+            </TabsTrigger>
+            <TabsTrigger value="networth" variant="pills">
+              <Gem className="w-4 h-4" />
+              <span>الثروة الكاملة</span>
+            </TabsTrigger>
+            <TabsTrigger value="items" variant="pills">
+              <Package className="w-4 h-4" />
+              <span>أكثر ممتلكات</span>
+            </TabsTrigger>
+            <TabsTrigger value="xp" variant="pills">
+              <Star className="w-4 h-4" />
+              <span>الأعلى XP</span>
+            </TabsTrigger>
+            <TabsTrigger value="level" variant="pills">
+              <Award className="w-4 h-4" />
+              <span>أعلى مستوى</span>
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="economy">
-          <LeaderboardTab endpoint="economy" type="economy" onUserClick={setSelectedUser} />
-        </TabsContent>
-        <TabsContent value="networth">
-          <LeaderboardTab endpoint="networth" type="networth" onUserClick={setSelectedUser} />
-        </TabsContent>
-        <TabsContent value="items">
-          <LeaderboardTab endpoint="items" type="items" onUserClick={setSelectedUser} />
-        </TabsContent>
-        <TabsContent value="xp">
-          <LeaderboardTab endpoint="xp" type="xp" onUserClick={setSelectedUser} />
-        </TabsContent>
-        <TabsContent value="level">
-          <LeaderboardTab endpoint="level" type="level" onUserClick={setSelectedUser} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="economy">
+            <LeaderboardTab
+              endpoint="economy"
+              type="economy"
+              timeFilter={timeFilter}
+              onUserClick={setSelectedUser}
+            />
+          </TabsContent>
+          <TabsContent value="networth">
+            <LeaderboardTab
+              endpoint="networth"
+              type="networth"
+              timeFilter={timeFilter}
+              onUserClick={setSelectedUser}
+            />
+          </TabsContent>
+          <TabsContent value="items">
+            <LeaderboardTab
+              endpoint="items"
+              type="items"
+              timeFilter={timeFilter}
+              onUserClick={setSelectedUser}
+            />
+          </TabsContent>
+          <TabsContent value="xp">
+            <LeaderboardTab
+              endpoint="xp"
+              type="xp"
+              timeFilter={timeFilter}
+              onUserClick={setSelectedUser}
+            />
+          </TabsContent>
+          <TabsContent value="level">
+            <LeaderboardTab
+              endpoint="level"
+              type="level"
+              timeFilter={timeFilter}
+              onUserClick={setSelectedUser}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
 
       {/* ─── Profile Modal ─── */}
       {selectedUser && (
@@ -223,10 +231,106 @@ export default function GlobalLeaderboardPage() {
 }
 
 // ════════════════════════════════════════════════════════════
-//  StatCard
+//  Header
 // ════════════════════════════════════════════════════════════
 
-function StatCard({ icon, label, value, color }) {
+function Header({ onRefresh, refreshing }) {
+  return (
+    <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl lyn-gradient flex items-center justify-center lyn-glow">
+            <Trophy className="w-8 h-8 text-white" />
+          </div>
+          <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-sm">
+            👑
+          </div>
+        </div>
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold lyn-text-gradient">
+            قائمة المتصدرين العالمية
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            الأقوى في عالم Lyn — كل السيرفرات في مكان واحد ✨
+          </p>
+        </div>
+      </div>
+      <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
+        <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
+        <span>تحديث</span>
+      </Button>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════
+//  Stats Bar — clickable cards
+// ════════════════════════════════════════════════════════════
+
+function StatsBar({ stats, onStatClick, activeTab }) {
+  if (stats === null) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-24 rounded-xl" />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <StatCard
+        statKey="topLevel"
+        icon={<Star />}
+        label="أعلى مستوى"
+        value={stats?.xp?.highest_level || 0}
+        color="sky"
+        onClick={onStatClick}
+        isActive={activeTab === STAT_TO_TAB.topLevel}
+      />
+      <StatCard
+        statKey="items"
+        icon={<Package />}
+        label="الممتلكات"
+        value={formatCompact(stats?.items?.total_items || 0)}
+        color="rose"
+        onClick={onStatClick}
+        isActive={activeTab === STAT_TO_TAB.items}
+      />
+      <StatCard
+        statKey="money"
+        icon={<Coins />}
+        label="إجمالي الفلوس"
+        value={formatCompact(stats?.economy?.total_money || 0)}
+        color="amber"
+        onClick={onStatClick}
+        isActive={activeTab === STAT_TO_TAB.money}
+      />
+      <StatCard
+        statKey="players"
+        icon={<Users />}
+        label="اللاعبين"
+        value={formatCompact(stats?.xp?.active_users || 0)}
+        color="emerald"
+        onClick={onStatClick}
+        isActive={activeTab === STAT_TO_TAB.players}
+      />
+      <StatCard
+        statKey="servers"
+        icon={<Globe />}
+        label="السيرفرات"
+        value={formatCompact(stats?.guilds?.total || 0)}
+        color="violet"
+        onClick={onStatClick}
+        isActive={false}
+        clickable={false}
+      />
+    </div>
+  )
+}
+
+function StatCard({ icon, label, value, color, statKey, onClick, isActive, clickable = true }) {
   const colors = {
     violet:  'from-violet-500/20 to-violet-500/5 border-violet-500/30 text-violet-400',
     emerald: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30 text-emerald-400',
@@ -234,15 +338,37 @@ function StatCard({ icon, label, value, color }) {
     sky:     'from-sky-500/20 to-sky-500/5 border-sky-500/30 text-sky-400',
     rose:    'from-rose-500/20 to-rose-500/5 border-rose-500/30 text-rose-400',
   }
+
+  const activeRing = {
+    violet:  'ring-2 ring-violet-400/60',
+    emerald: 'ring-2 ring-emerald-400/60',
+    amber:   'ring-2 ring-amber-400/60',
+    sky:     'ring-2 ring-sky-400/60',
+    rose:    'ring-2 ring-rose-400/60',
+  }
+
+  const handleClick = () => {
+    if (clickable && onClick) onClick(statKey)
+  }
+
   return (
-    <Card className={cn('p-4 bg-gradient-to-br border hover:scale-105 transition-transform', colors[color])}>
+    <Card
+      onClick={handleClick}
+      className={cn(
+        'p-4 bg-gradient-to-br border transition-all',
+        colors[color],
+        clickable && 'cursor-pointer hover:scale-105 active:scale-100',
+        !clickable && 'cursor-default opacity-90',
+        isActive && activeRing[color],
+      )}
+    >
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-card/50 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-card/50 flex items-center justify-center flex-shrink-0">
           {icon}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground truncate">{label}</p>
-          <p className="text-xl font-bold truncate">{value}</p>
+          <p className="text-xl font-bold truncate font-mono">{value}</p>
         </div>
       </div>
     </Card>
@@ -250,20 +376,59 @@ function StatCard({ icon, label, value, color }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Generic Leaderboard Tab
+//  Time Filter Bar
 // ════════════════════════════════════════════════════════════
 
-function LeaderboardTab({ endpoint, type, onUserClick }) {
+function TimeFilterBar({ value, onChange }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-2">
+        <Calendar className="w-3.5 h-3.5" />
+        <span>الفترة:</span>
+      </div>
+      <div className="flex items-center gap-1 bg-card/50 border border-border rounded-xl p-1">
+        {TIME_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => onChange(f.id)}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+              value === f.id
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+            )}
+          >
+            <span>{f.icon}</span>
+            <span>{f.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════
+//  Leaderboard Tab — الـ tab الموحد
+// ════════════════════════════════════════════════════════════
+
+function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
   const [data, setData] = useState(null)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     setData(null)
+    setPage(1)
+
+    const url = timeFilter === 'all'
+      ? `/api/global/leaderboard/${endpoint}?limit=100`
+      : `/api/global/leaderboard/${endpoint}?limit=100&period=${timeFilter}`
+
     apiClient
-      .get(`/api/global/leaderboard/${endpoint}?limit=100`)
+      .get(url)
       .then((r) => setData(r?.data ?? r))
       .catch(() => setData({ leaderboard: [], error: true }))
-  }, [endpoint])
+  }, [endpoint, timeFilter])
 
   const filtered = useMemo(() => {
     if (!data?.leaderboard) return []
@@ -276,16 +441,17 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
     )
   }, [data, search])
 
+  // ─── Loading ───
   if (data === null) {
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-32 rounded-xl" />
+      <div className="space-y-3 mt-6">
+        <Skeleton className="h-36 rounded-xl" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Skeleton className="h-32 rounded-xl" />
-          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
         </div>
         {[1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-20 rounded-xl" />
+          <Skeleton key={i} className="h-16 rounded-xl" />
         ))}
       </div>
     )
@@ -294,22 +460,45 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
   const fullList = data.leaderboard || []
   const emptyConfig = getEmptyConfig(type)
 
+  // ─── Empty State ───
   if (fullList.length === 0) {
     return (
-      <Card className="p-12 text-center">
-        <div className="text-muted-foreground/30 mb-4 flex justify-center">{emptyConfig.icon}</div>
+      <Card className="p-12 text-center mt-6">
+        <div className="text-muted-foreground/30 mb-4 flex justify-center">
+          {data.error ? <AlertCircle className="w-16 h-16" /> : emptyConfig.icon}
+        </div>
         <p className="text-muted-foreground">
-          {data.error ? 'فشل تحميل البيانات — البوت غير متاح حالياً' : emptyConfig.text}
+          {data.error
+            ? 'فشل تحميل البيانات — البوت غير متاح حالياً'
+            : emptyConfig.text}
         </p>
+        {data.error && (
+          <p className="text-xs text-muted-foreground/60 mt-2">
+            هذا النوع يحتاج البوت يكون شغّال. حاول لاحقاً.
+          </p>
+        )}
       </Card>
     )
   }
 
+  // ─── Pagination ───
+  // أول 3 محجوزين للـ Hall of Fame + Podium
+  // الباقي (من index 3 وفوق) يعرض بالصفحات
+  const restList = search ? filtered : filtered.slice(3)
+  const totalPages = Math.max(1, Math.ceil(restList.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const startIdx = (safePage - 1) * PAGE_SIZE
+  const pageItems = restList.slice(startIdx, startIdx + PAGE_SIZE)
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 mt-6">
       {/* Hall of Fame — رقم 1 */}
       {!search && fullList[0] && (
-        <HallOfFameCard row={fullList[0]} type={type} onClick={() => onUserClick(fullList[0].user_id)} />
+        <HallOfFameCard
+          row={fullList[0]}
+          type={type}
+          onClick={() => onUserClick(fullList[0].user_id)}
+        />
       )}
 
       {/* Top 2 & 3 */}
@@ -328,18 +517,21 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
 
       {/* Search */}
       <div className="relative">
-        <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value)
+            setPage(1)
+          }}
           placeholder="ابحث باسم أو ID..."
           className="pr-9"
         />
       </div>
 
-      {/* Rest */}
+      {/* Rows */}
       <div className="space-y-2">
-        {(search ? filtered : filtered.slice(3)).map((row) => (
+        {pageItems.map((row) => (
           <LeaderboardRow
             key={row.user_id + (row.guild_id || '')}
             row={row}
@@ -347,16 +539,112 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
             onClick={() => onUserClick(row.user_id)}
           />
         ))}
-        {search && filtered.length === 0 && (
+        {pageItems.length === 0 && (
           <Card className="p-6 text-center text-muted-foreground">
             <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
             ما لقينا نتائج
           </Card>
         )}
       </div>
+
+      {/* Pagination */}
+      {!search && totalPages > 1 && (
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          onChange={setPage}
+          totalItems={restList.length + 3}
+        />
+      )}
     </div>
   )
 }
+
+// ════════════════════════════════════════════════════════════
+//  Pagination Component
+// ════════════════════════════════════════════════════════════
+
+function Pagination({ page, totalPages, onChange, totalItems }) {
+  const canPrev = page > 1
+  const canNext = page < totalPages
+
+  // pages to show: dense around current page
+  const pages = useMemo(() => {
+    const arr = []
+    const showRange = 2
+    for (let i = 1; i <= totalPages; i++) {
+      if (
+        i === 1 ||
+        i === totalPages ||
+        (i >= page - showRange && i <= page + showRange)
+      ) {
+        arr.push(i)
+      } else if (arr[arr.length - 1] !== '...') {
+        arr.push('...')
+      }
+    }
+    return arr
+  }, [page, totalPages])
+
+  return (
+    <div className="flex items-center justify-between gap-4 flex-wrap pt-2">
+      <p className="text-xs text-muted-foreground">
+        إجمالي <span className="font-bold text-foreground font-mono">{totalItems}</span> لاعب —
+        صفحة <span className="font-bold text-foreground font-mono">{page}</span> من{' '}
+        <span className="font-bold text-foreground font-mono">{totalPages}</span>
+      </p>
+      <div className="flex items-center gap-1">
+        {/* السابق */}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canPrev}
+          onClick={() => onChange(page - 1)}
+        >
+          <ChevronRight className="w-4 h-4" />
+          <span className="sr-only">السابق</span>
+        </Button>
+
+        {/* Pages */}
+        {pages.map((p, i) =>
+          p === '...' ? (
+            <span key={`dots-${i}`} className="px-2 text-muted-foreground">
+              ···
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={cn(
+                'min-w-[2rem] h-8 px-2 rounded-lg text-xs font-mono font-bold transition-all',
+                p === page
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card border border-border hover:border-primary/50 text-foreground',
+              )}
+            >
+              {p}
+            </button>
+          ),
+        )}
+
+        {/* التالي */}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canNext}
+          onClick={() => onChange(page + 1)}
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span className="sr-only">التالي</span>
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════
+//  Helpers
+// ════════════════════════════════════════════════════════════
 
 function getEmptyConfig(type) {
   const map = {
@@ -367,6 +655,17 @@ function getEmptyConfig(type) {
     level:    { icon: <Award className="w-16 h-16" />,   text: 'ما فيه مستويات بعد' },
   }
   return map[type] || map.economy
+}
+
+function getTitleText(type) {
+  const titles = {
+    economy:  'الأسطورة المالية',
+    networth: 'الإمبراطور',
+    items:    'سيد المقتنيات',
+    xp:       'الأسطورة العليا',
+    level:    'البطل الأعلى',
+  }
+  return titles[type] || 'الأسطورة'
 }
 
 // ════════════════════════════════════════════════════════════
@@ -388,12 +687,14 @@ function HallOfFameCard({ row, type, onClick }) {
       onClick={onClick}
     >
       <div className="flex items-center gap-5 flex-wrap md:flex-nowrap">
-        <div className="text-6xl drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]">{style.icon}</div>
+        <div className="text-6xl drop-shadow-[0_0_15px_rgba(251,191,36,0.5)] hidden md:block">
+          {style.icon}
+        </div>
 
         <div className="relative flex-shrink-0">
           <img
             src={row.avatar_url}
-            alt={row.username}
+            alt=""
             className="w-20 h-20 rounded-full border-4 border-amber-400/50 shadow-lg"
             loading="lazy"
             onError={(e) => {
@@ -410,7 +711,7 @@ function HallOfFameCard({ row, type, onClick }) {
             👑 {titleText}
           </p>
           <h3 className="text-2xl font-bold mb-1 truncate">{row.username}</h3>
-          <p className="text-xs text-muted-foreground font-mono mb-2">{row.user_id}</p>
+          <p className="text-xs text-muted-foreground font-mono mb-2 truncate">{row.user_id}</p>
 
           {row.badges?.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2">
@@ -429,23 +730,14 @@ function HallOfFameCard({ row, type, onClick }) {
   )
 }
 
-function getTitleText(type) {
-  const titles = {
-    economy:  'الأسطورة المالية',
-    networth: 'الإمبراطور',
-    items:    'سيد المقتنيات',
-    xp:       'الأسطورة العليا',
-    level:    'البطل الأعلى',
-  }
-  return titles[type] || 'الأسطورة'
-}
-
 // ════════════════════════════════════════════════════════════
 //  Podium Card (2 & 3)
 // ════════════════════════════════════════════════════════════
 
 function PodiumCard({ row, type, onClick }) {
   const style = RANK_STYLES[row.rank]
+  if (!style) return null
+
   return (
     <Card
       className={cn(
@@ -461,8 +753,8 @@ function PodiumCard({ row, type, onClick }) {
 
         <img
           src={row.avatar_url}
-          alt={row.username}
-          className="w-12 h-12 rounded-full border-2 border-card"
+          alt=""
+          className="w-12 h-12 rounded-full border-2 border-card flex-shrink-0"
           loading="lazy"
           onError={(e) => {
             e.target.src = `https://cdn.discordapp.com/embed/avatars/0.png`
@@ -495,16 +787,19 @@ function PodiumCard({ row, type, onClick }) {
 
 function LeaderboardRow({ row, type, onClick }) {
   return (
-    <Card className="p-3 hover:bg-card/80 cursor-pointer transition-colors" onClick={onClick}>
+    <Card
+      className="p-3 hover:bg-card/80 cursor-pointer transition-colors hover:border-primary/30"
+      onClick={onClick}
+    >
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center font-bold text-muted-foreground flex-shrink-0">
+        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center font-bold text-muted-foreground flex-shrink-0 font-mono">
           #{row.rank}
         </div>
 
         <img
           src={row.avatar_url}
-          alt={row.username}
-          className="w-10 h-10 rounded-full"
+          alt=""
+          className="w-10 h-10 rounded-full flex-shrink-0"
           loading="lazy"
           onError={(e) => {
             e.target.src = `https://cdn.discordapp.com/embed/avatars/0.png`
@@ -599,6 +894,8 @@ function ValueDisplay({ row, type, large }) {
       </div>
     )
   }
+
+  return null
 }
 
 // ════════════════════════════════════════════════════════════
@@ -634,148 +931,137 @@ function UserProfileModal({ userId, onClose }) {
       .catch(() => setProfile({ error: true }))
   }, [userId])
 
+  // ESC to close
+  useEffect(() => {
+    const handler = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <Card
-        className="max-w-lg w-full p-0 max-h-[90vh] overflow-hidden flex flex-col"
+        className="max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          onClick={onClose}
+          className="absolute top-3 left-3 p-2 rounded-lg hover:bg-accent transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
         {profile === null ? (
-          <div className="p-6 space-y-3">
+          <div className="space-y-4">
             <Skeleton className="h-32 rounded-xl" />
             <Skeleton className="h-24 rounded-xl" />
             <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-24 rounded-xl" />
           </div>
-        ) : profile?.error ? (
-          <div className="p-12 text-center">
-            <X className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
+        ) : profile.error ? (
+          <div className="text-center py-8">
+            <AlertCircle className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
             <p className="text-muted-foreground">فشل تحميل البروفايل</p>
-            <Button variant="outline" onClick={onClose} className="mt-4">
-              إغلاق
-            </Button>
           </div>
         ) : (
-          <>
+          <div className="space-y-4">
             {/* Header */}
-            <div className="relative">
-              <div
-                className="h-24 lyn-gradient"
-                style={
-                  profile.accent_color
-                    ? { background: `#${profile.accent_color.toString(16).padStart(6, '0')}` }
-                    : undefined
-                }
+            <div className="flex items-center gap-4">
+              <img
+                src={profile.avatar_url}
+                alt=""
+                className="w-20 h-20 rounded-2xl border-2 border-primary/30"
               />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                className="absolute top-2 left-2 bg-black/30 hover:bg-black/50 text-white"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-              <div className="absolute -bottom-10 right-6">
-                <img
-                  src={profile.avatar_url}
-                  alt={profile.username}
-                  className="w-20 h-20 rounded-full border-4 border-card bg-card"
-                  onError={(e) => {
-                    e.target.src = `https://cdn.discordapp.com/embed/avatars/0.png`
-                  }}
-                />
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl font-bold truncate">{profile.username}</h2>
+                <p className="text-xs text-muted-foreground font-mono">{profile.user_id}</p>
+                {profile.subscription && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-xs">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span className="text-amber-300 font-medium">
+                      {profile.subscription.plan_id}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Body */}
-            <div className="p-6 pt-12 overflow-y-auto space-y-4">
-              {/* Name */}
-              <div>
-                <h2 className="text-xl font-bold">{profile.username}</h2>
-                <p className="text-xs text-muted-foreground font-mono">{profile.user_id}</p>
-                {profile.subscription && (
-                  <Badge variant="secondary" className="mt-2">
-                    ✨ {profile.subscription.plan_id}
-                  </Badge>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Economy */}
+              <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold mb-2">
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>الاقتصاد</span>
+                </div>
+                <p className="text-xl font-bold font-mono">
+                  {formatCompact(profile.economy?.total || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  🪙 {formatCompact(profile.economy?.coins || 0)} • 🏦{' '}
+                  {formatCompact(profile.economy?.bank || 0)}
+                </p>
+                {profile.economy?.rank && (
+                  <p className="text-xs text-amber-400/80 mt-2 font-mono">
+                    الترتيب: #{profile.economy.rank}
+                  </p>
                 )}
               </div>
 
-              {/* Economy */}
-              <StatBlock
-                icon={<Coins className="w-4 h-4" />}
-                title="الاقتصاد"
-                color="amber"
-                stats={[
-                  { label: 'الرصيد الكامل', value: formatCompact(profile.economy?.total || 0), highlight: true },
-                  { label: 'الترتيب العالمي', value: profile.economy?.rank ? `#${profile.economy.rank}` : '—' },
-                  { label: '🪙 Coins', value: formatCompact(profile.economy?.coins || 0) },
-                  { label: '🏦 Bank', value: formatCompact(profile.economy?.bank || 0) },
-                ]}
-              />
-
               {/* Net Worth */}
-              {profile.networth && (profile.networth.net_worth > 0 || profile.networth.total_items > 0) && (
-                <StatBlock
-                  icon={<Gem className="w-4 h-4" />}
-                  title="الثروة الكاملة"
-                  color="sky"
-                  stats={[
-                    { label: 'صافي الثروة', value: formatCompact(profile.networth.net_worth || 0), highlight: true },
-                    { label: '💰 السيولة', value: formatCompact(profile.networth.cash_total || 0) },
-                    { label: '💎 قيمة الممتلكات', value: formatCompact(profile.networth.items_value || 0) },
-                    { label: '📦 عدد العناصر', value: profile.networth.total_items || 0 },
-                  ]}
-                />
-              )}
+              <div className="p-4 rounded-xl bg-sky-500/5 border border-sky-500/20">
+                <div className="flex items-center gap-2 text-sky-400 text-xs font-semibold mb-2">
+                  <Gem className="w-3.5 h-3.5" />
+                  <span>الثروة الكاملة</span>
+                </div>
+                <p className="text-xl font-bold font-mono">
+                  {formatCompact(profile.networth?.net_worth || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  📦 {profile.networth?.total_items || 0} عنصر • 💎{' '}
+                  {formatCompact(profile.networth?.items_value || 0)}
+                </p>
+              </div>
 
               {/* XP */}
-              <StatBlock
-                icon={<Star className="w-4 h-4" />}
-                title="الخبرة والمستويات"
-                color="violet"
-                stats={[
-                  { label: 'إجمالي XP', value: formatCompact(profile.xp?.total_xp || 0), highlight: true },
-                  { label: 'الترتيب العالمي', value: profile.xp?.rank ? `#${profile.xp.rank}` : '—' },
-                  { label: '🎮 السيرفرات', value: profile.xp?.servers || 0 },
-                  { label: '📈 أعلى مستوى', value: `Lv.${profile.xp?.highest_level || 0}` },
-                ]}
-              />
+              <div className="p-4 rounded-xl bg-violet-500/5 border border-violet-500/20">
+                <div className="flex items-center gap-2 text-violet-400 text-xs font-semibold mb-2">
+                  <Star className="w-3.5 h-3.5" />
+                  <span>الـ XP</span>
+                </div>
+                <p className="text-xl font-bold font-mono">
+                  {formatCompact(profile.xp?.total_xp || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  🎮 {profile.xp?.servers || 0} سيرفر • 📈 إجمالي{' '}
+                  {profile.xp?.total_levels || 0} مستوى
+                </p>
+                {profile.xp?.rank && (
+                  <p className="text-xs text-violet-400/80 mt-2 font-mono">
+                    الترتيب: #{profile.xp.rank}
+                  </p>
+                )}
+              </div>
+
+              {/* Highest Level */}
+              <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold mb-2">
+                  <Award className="w-3.5 h-3.5" />
+                  <span>أعلى مستوى</span>
+                </div>
+                <p className="text-xl font-bold font-mono">
+                  Lv.{profile.xp?.highest_level || 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  في سيرفر واحد
+                </p>
+              </div>
             </div>
-          </>
+          </div>
         )}
       </Card>
-    </div>
-  )
-}
-
-// ────────────────────────────────────────────────────────────
-//  Profile Stat Block
-// ────────────────────────────────────────────────────────────
-
-function StatBlock({ icon, title, color, stats }) {
-  const colors = {
-    amber:  'bg-amber-500/5 border-amber-500/20 text-amber-400',
-    sky:    'bg-sky-500/5 border-sky-500/20 text-sky-400',
-    violet: 'bg-violet-500/5 border-violet-500/20 text-violet-400',
-  }
-
-  return (
-    <div className={cn('p-4 rounded-xl border', colors[color])}>
-      <h4 className="text-sm font-bold mb-3 flex items-center gap-2">
-        {icon}
-        {title}
-      </h4>
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        {stats.map((s, i) => (
-          <div key={i}>
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-            <p className={cn('font-bold', s.highlight && `text-${color}-400`)}>{s.value}</p>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

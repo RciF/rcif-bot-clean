@@ -28,7 +28,23 @@ const commandAliases = require("./commandAliases")
 const giveawayInternalRoutes = require("./giveawayRoutes")
 const bulkActionsInternalRoutes = require("./bulkActionsRoutes")
 
+// ════════════════════════════════════════════════════════════
+//  Helpers: Period filter
+// ════════════════════════════════════════════════════════════
 
+function periodStartMs(period) {
+  const now = Date.now()
+  switch (period) {
+    case "daily":   return now - 24 * 60 * 60 * 1000
+    case "weekly":  return now - 7 * 24 * 60 * 60 * 1000
+    case "monthly": return now - 30 * 24 * 60 * 60 * 1000
+    default:        return 0
+  }
+}
+
+function normalizePeriod(p) {
+  return ["all", "daily", "weekly", "monthly"].includes(p) ? p : "all"
+}
 function startApiServer(client) {
 
   const app = express()
@@ -323,17 +339,40 @@ function startApiServer(client) {
   app.post("/api/internal/leaderboard/networth", requireBotSecret, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.body?.limit) || 100, 100)
+      const period = normalizePeriod(req.body?.period)
 
-      const result = await databaseSystem.query(`
-        SELECT
-          e.user_id,
-          COALESCE(e.coins, 0)::bigint AS coins,
-          COALESCE(e.bank, 0)::bigint AS bank,
-          COALESCE(e.inventory, '[]'::jsonb) AS items
-        FROM economy_users e
-        WHERE COALESCE(e.coins, 0) + COALESCE(e.bank, 0) > 0
-           OR jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
-      `)
+      let sql
+      let params
+
+      if (period === "all") {
+        sql = `
+          SELECT
+            e.user_id,
+            COALESCE(e.coins, 0)::bigint AS coins,
+            COALESCE(e.bank, 0)::bigint AS bank,
+            COALESCE(e.inventory, '[]'::jsonb) AS items
+          FROM economy_users e
+          WHERE COALESCE(e.coins, 0) + COALESCE(e.bank, 0) > 0
+             OR jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
+        `
+        params = []
+      } else {
+        const startMs = periodStartMs(period)
+        sql = `
+          SELECT
+            e.user_id,
+            COALESCE(e.coins, 0)::bigint AS coins,
+            COALESCE(e.bank, 0)::bigint AS bank,
+            COALESCE(e.inventory, '[]'::jsonb) AS items
+          FROM economy_users e
+          WHERE (COALESCE(e.coins, 0) + COALESCE(e.bank, 0) > 0
+             OR jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0)
+            AND (e.last_daily >= $1 OR e.last_work >= $1)
+        `
+        params = [startMs]
+      }
+
+      const result = await databaseSystem.query(sql, params)
 
       const players = (result.rows || []).map(row => {
         const coins = Number(row.coins) || 0
@@ -369,6 +408,7 @@ function startApiServer(client) {
         leaderboard: players.slice(0, limit),
         count: Math.min(players.length, limit),
         total_players: players.length,
+        period,
       })
     } catch (err) {
       logger.error("NETWORTH_LEADERBOARD_FAILED", { error: err.message })
@@ -380,24 +420,52 @@ function startApiServer(client) {
   app.post("/api/internal/leaderboard/items", requireBotSecret, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.body?.limit) || 100, 100)
+      const period = normalizePeriod(req.body?.period)
 
-      // ✅ جلب كل المستخدمين اللي عندهم inventory (JSONB) في query واحد
-      const result = await databaseSystem.query(`
-        SELECT
-          e.user_id,
-          COALESCE(e.coins, 0)::bigint AS coins,
-          COALESCE(e.bank, 0)::bigint AS bank,
-          COALESCE(e.inventory, '[]'::jsonb) AS items,
-          (
-            SELECT COALESCE(SUM(COALESCE((item->>'quantity')::int, 0)), 0)
-            FROM jsonb_array_elements(COALESCE(e.inventory, '[]'::jsonb)) AS item
-          )::int AS total_items,
-          jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb))::int AS unique_items
-        FROM economy_users e
-        WHERE jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
-        ORDER BY total_items DESC
-        LIMIT $1
-      `, [limit])
+      let sql
+      let params
+
+      if (period === "all") {
+        sql = `
+          SELECT
+            e.user_id,
+            COALESCE(e.coins, 0)::bigint AS coins,
+            COALESCE(e.bank, 0)::bigint AS bank,
+            COALESCE(e.inventory, '[]'::jsonb) AS items,
+            (
+              SELECT COALESCE(SUM(COALESCE((item->>'quantity')::int, 0)), 0)
+              FROM jsonb_array_elements(COALESCE(e.inventory, '[]'::jsonb)) AS item
+            )::int AS total_items,
+            jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb))::int AS unique_items
+          FROM economy_users e
+          WHERE jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
+          ORDER BY total_items DESC
+          LIMIT $1
+        `
+        params = [limit]
+      } else {
+        const startMs = periodStartMs(period)
+        sql = `
+          SELECT
+            e.user_id,
+            COALESCE(e.coins, 0)::bigint AS coins,
+            COALESCE(e.bank, 0)::bigint AS bank,
+            COALESCE(e.inventory, '[]'::jsonb) AS items,
+            (
+              SELECT COALESCE(SUM(COALESCE((item->>'quantity')::int, 0)), 0)
+              FROM jsonb_array_elements(COALESCE(e.inventory, '[]'::jsonb)) AS item
+            )::int AS total_items,
+            jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb))::int AS unique_items
+          FROM economy_users e
+          WHERE jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
+            AND (e.last_daily >= $1 OR e.last_work >= $1)
+          ORDER BY total_items DESC
+          LIMIT $2
+        `
+        params = [startMs, limit]
+      }
+
+      const result = await databaseSystem.query(sql, params)
 
       const players = (result.rows || []).map((row) => {
         const items = Array.isArray(row.items) ? row.items : []
@@ -419,7 +487,7 @@ function startApiServer(client) {
         }
       })
 
-      return res.json({ leaderboard: players, count: players.length })
+      return res.json({ leaderboard: players, count: players.length, period })
     } catch (err) {
       logger.error("ITEMS_LEADERBOARD_FAILED", { error: err.message })
       return res.status(500).json({ error: "internal_error" })
@@ -475,7 +543,42 @@ function startApiServer(client) {
     logger.success(`API_SERVER_RUNNING ${PORT}`)
     console.log(`🚀 Server listening on 0.0.0.0:${PORT}`)
   })
+// ════════════════════════════════════════════════════════
+  //  POST /api/internal/bot-stats
+  //  يُرجع إحصائيات live من client الـ Discord
+  //  مفيد للداش عشان يعرف عدد السيرفرات الفعلي
+  // ════════════════════════════════════════════════════════
+  app.post("/api/internal/bot-stats", requireBotSecret, async (req, res) => {
+    try {
+      if (!client?.isReady?.()) {
+        return res.json({
+          ready: false,
+          guild_count: 0,
+          user_count: 0,
+        })
+      }
 
+      const guildCount = client.guilds.cache.size
+      let userCount = 0
+      let channelCount = 0
+
+      for (const guild of client.guilds.cache.values()) {
+        userCount += guild.memberCount || 0
+        channelCount += guild.channels?.cache?.size || 0
+      }
+
+      return res.json({
+        ready: true,
+        guild_count: guildCount,
+        user_count: userCount,
+        channel_count: channelCount,
+        uptime_ms: client.uptime || 0,
+      })
+    } catch (err) {
+      logger.error("BOT_STATS_FAILED", { error: err.message })
+      return res.status(500).json({ error: "internal_error" })
+    }
+  })
 }
 
 module.exports = {

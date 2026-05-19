@@ -23,10 +23,11 @@ const BASE_NAV_SECTIONS = [
   {
     label: 'الرئيسية',
     items: [
-      { to: '/dashboard',         label: 'نظرة عامة',     icon: LayoutDashboard, end: true },
-      { to: '/dashboard/stats',   label: 'الإحصائيات',    icon: BarChart3 },
-      { to: '/dashboard/audit',   label: 'سجل الأنشطة',   icon: History },
-      { to: '/dashboard/servers', label: 'تغيير السيرفر', icon: Server },
+      { to: '/dashboard',             label: 'نظرة عامة',           icon: LayoutDashboard, end: true },
+      { to: '/dashboard/leaderboard', label: 'المتصدرين العالميين', icon: Trophy },
+      { to: '/dashboard/stats',       label: 'الإحصائيات',          icon: BarChart3 },
+      { to: '/dashboard/audit',       label: 'سجل الأنشطة',         icon: History },
+      { to: '/dashboard/servers',     label: 'تغيير السيرفر',       icon: Server },
     ],
   },
   {
@@ -62,7 +63,6 @@ const BASE_NAV_SECTIONS = [
       { to: '/dashboard/economy',  label: 'الاقتصاد',  icon: Coins },
       { to: '/dashboard/events',   label: 'الفعاليات', icon: CalendarDays },
       { to: '/dashboard/giveaway', label: 'السحوبات',  icon: Gift },
-      { to: '/dashboard/leaderboard', label: 'المتصدرين العالميين', icon: Trophy },
     ],
   },
   {
