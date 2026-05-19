@@ -22,6 +22,7 @@ import { QuickTooltip } from '@/components/ui/Tooltip';
 import { AliasesInput } from './AliasesInput';
 import { hasAccess } from '@/lib/plans';
 import { formatNumber, cn } from '@/lib/utils';
+import { getAliasPlaceholder } from '@/lib/aliasSuggestions';
 
 const TIER_META = {
   free:    { label: 'مجاني',  color: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
@@ -199,6 +200,7 @@ export function CommandCard({
             onRemove={(alias) => onRemoveAlias(command.name, alias)}
             max={5}
             disabled={!isEnabled || !userHasAccess}
+            placeholder={getAliasPlaceholder(command.name)}
           />
         </div>
       </div>

@@ -31,6 +31,7 @@ export function AliasesInput({
   onRemove,
   max = 5,
   disabled = false,
+  placeholder,
 }) {
   const [inputValue, setInputValue] = useState('');
   const [busy, setBusy] = useState(false);
@@ -164,7 +165,7 @@ export function AliasesInput({
             disabled={disabled || busy}
             placeholder={
               aliases.length === 0
-                ? 'اكتب اختصار واضغط Enter — مثلاً: !d أو daily'
+                ? (placeholder || 'اكتب اختصار واضغط Enter')
                 : 'أضف اختصار جديد...'
             }
             className="flex-1 bg-transparent outline-none text-sm px-1 placeholder:text-muted-foreground/60"
