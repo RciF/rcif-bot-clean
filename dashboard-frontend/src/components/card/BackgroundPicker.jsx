@@ -1,18 +1,22 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Background Picker v2 — اختيار خلفية البطاقة بتصميم محسّن
+ *  Background Picker v3 — مع فلتر الفئات + 50+ خلفية
  *  المسار: dashboard-frontend/src/components/card/BackgroundPicker.jsx
  * ═══════════════════════════════════════════════════════════
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Check, Lock, Upload, X, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
-import { BACKGROUNDS, tierMeetsRequirement } from '@/lib/cardAssets';
+import {
+  BACKGROUNDS,
+  CATEGORIES,
+  tierMeetsRequirement,
+} from '@/lib/cardAssets';
 import { getTier } from '@/lib/cardPlans';
 
 export function BackgroundPicker({
@@ -25,15 +29,40 @@ export function BackgroundPicker({
 }) {
   const [customUrl, setCustomUrl] = useState(customBackgroundUrl || '');
   const [urlError, setUrlError] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
 
   const canCustomBg = userTier === 'advanced' || userTier === 'legendary';
 
-  const available = BACKGROUNDS.filter((bg) =>
-    tierMeetsRequirement(userTier, bg.minTier),
+  // ─── فلترة الخلفيات حسب الفئة + التير ───
+  const available = useMemo(
+    () =>
+      BACKGROUNDS.filter(
+        (bg) =>
+          tierMeetsRequirement(userTier, bg.minTier) &&
+          (activeCategory === 'all' || bg.category === activeCategory),
+      ),
+    [userTier, activeCategory],
   );
-  const locked = BACKGROUNDS.filter(
-    (bg) => !tierMeetsRequirement(userTier, bg.minTier),
+
+  const locked = useMemo(
+    () =>
+      BACKGROUNDS.filter(
+        (bg) =>
+          !tierMeetsRequirement(userTier, bg.minTier) &&
+          (activeCategory === 'all' || bg.category === activeCategory),
+      ),
+    [userTier, activeCategory],
   );
+
+  // ─── إحصاء كل فئة (للعرض في الفلتر) ───
+  const categoryCounts = useMemo(() => {
+    const counts = { all: 0 };
+    for (const bg of BACKGROUNDS) {
+      counts.all++;
+      counts[bg.category] = (counts[bg.category] || 0) + 1;
+    }
+    return counts;
+  }, []);
 
   const handleApplyCustomUrl = () => {
     if (!customUrl.trim()) {
@@ -65,7 +94,6 @@ export function BackgroundPicker({
       {/* ═══ خلفية شخصية مرفوعة ═══ */}
       {canCustomBg && (
         <Card className="p-4 space-y-3 relative overflow-hidden">
-          {/* ─── معاينة الخلفية المخصصة الحالية ─── */}
           {hasCustomBg && (
             <div
               className="absolute inset-0 opacity-10 pointer-events-none"
@@ -110,36 +138,64 @@ export function BackgroundPicker({
           )}
 
           <p className="relative text-xs text-muted-foreground">
-            ارفع الصورة على Imgur أو خدمة استضافة، ثم انسخ الرابط هنا.
-            دقة مقترحة: 1600×400
+            ارفع الصورة على Imgur أو خدمة استضافة. دقة مقترحة: 1600×400
           </p>
         </Card>
       )}
 
-      {/* ═══ الخلفيات المتاحة ═══ */}
-      <div>
-        <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-          <span>الخلفيات الجاهزة</span>
-          <Badge variant="outline" size="sm">
-            {available.length} متاحة
-          </Badge>
-        </h4>
+      {/* ═══ فلتر الفئات ═══ */}
+      <div className="flex items-center gap-2 flex-wrap pb-1">
+        {CATEGORIES.map((cat) => {
+          const count = categoryCounts[cat.id] || 0;
+          if (count === 0) return null;
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {available.map((bg) => (
-            <BackgroundCard
-              key={bg.id}
-              bg={bg}
-              isSelected={!hasCustomBg && currentBackgroundId === bg.id}
-              disabled={false}
-              onClick={() => {
-                onSelect?.(bg.id);
-                onCustomUrl?.(null);
-              }}
-            />
-          ))}
-        </div>
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all',
+                activeCategory === cat.id
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-card hover:border-primary/50 text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <span>{cat.emoji}</span>
+              <span>{cat.name}</span>
+              <Badge variant="outline" size="sm" className="text-[10px] px-1.5 py-0">
+                {count}
+              </Badge>
+            </button>
+          );
+        })}
       </div>
+
+      {/* ═══ الخلفيات المتاحة ═══ */}
+      {available.length > 0 && (
+        <div>
+          <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <span>المتاحة</span>
+            <Badge variant="outline" size="sm">
+              {available.length}
+            </Badge>
+          </h4>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {available.map((bg) => (
+              <BackgroundCard
+                key={bg.id}
+                bg={bg}
+                isSelected={!hasCustomBg && currentBackgroundId === bg.id}
+                disabled={false}
+                onClick={() => {
+                  onSelect?.(bg.id);
+                  onCustomUrl?.(null);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ═══ الخلفيات المقفولة ═══ */}
       {locked.length > 0 && (
@@ -148,7 +204,7 @@ export function BackgroundPicker({
             <Lock className="w-4 h-4" />
             <span>تحتاج ترقية</span>
             <Badge variant="outline" size="sm">
-              {locked.length} مقفولة
+              {locked.length}
             </Badge>
           </h4>
 
@@ -159,12 +215,19 @@ export function BackgroundPicker({
           </div>
         </div>
       )}
+
+      {/* ═══ في حال لا توجد نتائج ═══ */}
+      {available.length === 0 && locked.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="text-sm">لا توجد خلفيات في هذه الفئة</p>
+        </div>
+      )}
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════
-//  Background Card — مع loading state وerror handling
+//  Background Card
 // ════════════════════════════════════════════════════════════
 
 function BackgroundCard({ bg, isSelected, disabled, onClick }) {
@@ -184,14 +247,12 @@ function BackgroundCard({ bg, isSelected, disabled, onClick }) {
         disabled && 'opacity-50 cursor-not-allowed',
       )}
     >
-      {/* ─── خلفية placeholder وقت التحميل ─── */}
       {!imageLoaded && !imageError && bg.url && (
         <div className="absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-900 animate-pulse flex items-center justify-center">
           <span className="text-2xl opacity-50">{bg.emoji}</span>
         </div>
       )}
 
-      {/* ─── الصورة ─── */}
       {bg.url && !imageError ? (
         <img
           src={bg.url}
@@ -224,24 +285,20 @@ function BackgroundCard({ bg, isSelected, disabled, onClick }) {
         </div>
       )}
 
-      {/* ─── Overlay دائم ─── */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
 
-      {/* ─── الاسم ─── */}
       <div className="absolute bottom-0 inset-x-0 p-2 text-right z-10">
         <p className="text-xs font-bold text-white truncate drop-shadow-lg">
           {bg.emoji} {bg.name}
         </p>
       </div>
 
-      {/* ─── علامة الاختيار ─── */}
       {isSelected && (
         <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg z-20">
           <Check className="w-4 h-4 text-white" />
         </div>
       )}
 
-      {/* ─── القفل ─── */}
       {disabled && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1 z-20">
           <Lock className="w-5 h-5 text-white" />

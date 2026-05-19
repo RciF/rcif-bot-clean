@@ -1,161 +1,118 @@
 // ══════════════════════════════════════════════════════════════════
-//  CARD ASSETS LIBRARY v2.0
+//  CARD ASSETS LIBRARY v3.0 — مكتبة موسّعة
 //  المسار: config/cardAssets.js (Backend - في البوت)
 //
 //  ✨ التحسينات:
-//   - خلفيات حقيقية من Unsplash CDN
-//   - دقة 1600×400 مناسبة لنسبة البطاقة
-//   - تنوع كبير: Gaming, Nature, Space, Anime, Cyberpunk
+//   - 50+ خلفية حقيقية من Unsplash CDN
+//   - 5 فئات: Gaming, Space, Nature, Abstract, Premium
+//   - دقة 1600×400 (16:4 aspect ratio)
 // ══════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════
-//  BACKGROUNDS (15 خلفية حقيقية)
-//  Source: Unsplash (مجاني، رخصة Unsplash)
+//  BACKGROUNDS (50+ خلفية)
 // ══════════════════════════════════════════════════════════════════
 
 const BACKGROUNDS = [
-  // ─── Basic (10 خلفيات للأساسية وما فوقها) ───
+  // ──────────────────────────────────────────────
+  //  🆓 الافتراضي
+  // ──────────────────────────────────────────────
   {
     id: "default",
     name: "افتراضي",
-    description: "الخلفية الافتراضية بدون صورة",
+    description: "بدون صورة",
     emoji: "🆓",
     url: null,
     minTier: "basic",
     category: "simple",
   },
-  {
-    id: "gaming_neon",
-    name: "Gaming Neon",
-    description: "ألعاب نيون أزرق",
-    emoji: "🎮",
-    url: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "gaming",
-  },
-  {
-    id: "abstract_purple",
-    name: "Abstract Purple",
-    description: "تجريدي بنفسجي عميق",
-    emoji: "🟣",
-    url: "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "abstract",
-  },
-  {
-    id: "minimal_dark",
-    name: "Minimal Dark",
-    description: "بسيط داكن أنيق",
-    emoji: "⬛",
-    url: "https://images.unsplash.com/photo-1502691876148-a84978e59af8?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "minimal",
-  },
-  {
-    id: "nature_forest",
-    name: "Forest",
-    description: "غابة الصنوبر",
-    emoji: "🌲",
-    url: "https://images.unsplash.com/photo-1448375240586-882707db888b?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "nature",
-  },
-  {
-    id: "space_galaxy",
-    name: "Galaxy",
-    description: "مجرة درب التبانة",
-    emoji: "🌌",
-    url: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "space",
-  },
-  {
-    id: "city_neon",
-    name: "Neon City",
-    description: "مدينة الليل النيون",
-    emoji: "🌃",
-    url: "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "city",
-  },
-  {
-    id: "sunset_beach",
-    name: "Sunset Beach",
-    description: "غروب الشاطئ الذهبي",
-    emoji: "🌅",
-    url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "nature",
-  },
-  {
-    id: "anime_sakura",
-    name: "Anime Sakura",
-    description: "أزهار الكرز اليابانية",
-    emoji: "🌸",
-    url: "https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "anime",
-  },
-  {
-    id: "cyberpunk_red",
-    name: "Cyberpunk",
-    description: "سايبربانك أحمر",
-    emoji: "🟥",
-    url: "https://images.unsplash.com/photo-1601933973783-43cf8a7d4c5f?w=1600&h=400&fit=crop&q=80",
-    minTier: "basic",
-    category: "cyberpunk",
-  },
 
-  // ─── Advanced (5 خلفيات إضافية للمتقدمة وما فوق) ───
-  {
-    id: "premium_geometric",
-    name: "Geometric",
-    description: "هندسي متقدم 3D",
-    emoji: "💠",
-    url: "https://images.unsplash.com/photo-1604079628040-94301bb21b91?w=1600&h=400&fit=crop&q=80",
-    minTier: "advanced",
-    category: "premium",
-  },
-  {
-    id: "premium_aurora",
-    name: "Aurora",
-    description: "شفق قطبي ساحر",
-    emoji: "🌈",
-    url: "https://images.unsplash.com/photo-1483347756197-71ef80e95f73?w=1600&h=400&fit=crop&q=80",
-    minTier: "advanced",
-    category: "premium",
-  },
-  {
-    id: "premium_marble",
-    name: "Marble Gold",
-    description: "رخام ذهبي فاخر",
-    emoji: "✨",
-    url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1600&h=400&fit=crop&q=80",
-    minTier: "advanced",
-    category: "premium",
-  },
-  {
-    id: "premium_dragon",
-    name: "Dragon Smoke",
-    description: "دخان التنين الناري",
-    emoji: "🐉",
-    url: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=1600&h=400&fit=crop&q=80",
-    minTier: "advanced",
-    category: "premium",
-  },
-  {
-    id: "premium_crystal",
-    name: "Crystal",
-    description: "كريستال شفاف",
-    emoji: "💎",
-    url: "https://images.unsplash.com/photo-1610177498701-7fcfd7c3f9bf?w=1600&h=400&fit=crop&q=80",
-    minTier: "advanced",
-    category: "premium",
-  },
+  // ──────────────────────────────────────────────
+  //  🎮 Gaming (10 خلفيات)
+  // ──────────────────────────────────────────────
+  { id: "gaming_neon",       name: "Gaming Neon",      emoji: "🎮", url: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_setup",      name: "Gaming Setup",     emoji: "🖥️", url: "https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_keyboard",   name: "RGB Keyboard",     emoji: "⌨️", url: "https://images.unsplash.com/photo-1587202372634-32705e3bf49c?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_controller", name: "Controller",       emoji: "🕹️", url: "https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_arcade",     name: "Arcade",           emoji: "👾", url: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_esports",    name: "Esports",          emoji: "🏆", url: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_purple_pc",  name: "Purple PC",        emoji: "💜", url: "https://images.unsplash.com/photo-1591488320449-011701bb6704?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_room",       name: "Gaming Room",      emoji: "🎯", url: "https://images.unsplash.com/photo-1598550476439-6847785fcea6?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_anime",      name: "Anime Gaming",     emoji: "⚔️", url: "https://images.unsplash.com/photo-1614149162883-504ce4d13909?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+  { id: "gaming_streamer",   name: "Streamer",         emoji: "📹", url: "https://images.unsplash.com/photo-1542751110-97427bbecf20?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "gaming" },
+
+  // ──────────────────────────────────────────────
+  //  🌌 Space & Sci-Fi (10 خلفيات)
+  // ──────────────────────────────────────────────
+  { id: "space_galaxy",      name: "Galaxy",           emoji: "🌌", url: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_nebula",      name: "Nebula",           emoji: "💫", url: "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_milky_way",   name: "Milky Way",        emoji: "✨", url: "https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_stars",       name: "Starfield",        emoji: "⭐", url: "https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_planet",      name: "Planet",           emoji: "🪐", url: "https://images.unsplash.com/photo-1614728263952-84ea256f9679?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_aurora",      name: "Aurora",           emoji: "🌈", url: "https://images.unsplash.com/photo-1483347756197-71ef80e95f73?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_moon",        name: "Moon",             emoji: "🌙", url: "https://images.unsplash.com/photo-1532693322450-2cb5c511067d?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_sci_fi",      name: "Sci-Fi",           emoji: "🚀", url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_cosmic",      name: "Cosmic",           emoji: "🌠", url: "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+  { id: "space_void",        name: "Deep Space",       emoji: "🌑", url: "https://images.unsplash.com/photo-1539593395743-7da5ee10ff07?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "space" },
+
+  // ──────────────────────────────────────────────
+  //  🌿 Nature (10 خلفيات)
+  // ──────────────────────────────────────────────
+  { id: "nature_forest",     name: "Forest",           emoji: "🌲", url: "https://images.unsplash.com/photo-1448375240586-882707db888b?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_mountains",  name: "Mountains",        emoji: "⛰️", url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_ocean",      name: "Ocean",            emoji: "🌊", url: "https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_sunset",     name: "Sunset",           emoji: "🌅", url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_lake",       name: "Lake",             emoji: "🏞️", url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_desert",     name: "Desert",           emoji: "🏜️", url: "https://images.unsplash.com/photo-1473580044384-7ba9967e16a0?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_winter",     name: "Winter",           emoji: "❄️", url: "https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_sakura",     name: "Cherry Blossom",   emoji: "🌸", url: "https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_clouds",     name: "Clouds",           emoji: "☁️", url: "https://images.unsplash.com/photo-1419833173245-f59e1b93f9ee?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+  { id: "nature_waterfall",  name: "Waterfall",        emoji: "💦", url: "https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "nature" },
+
+  // ──────────────────────────────────────────────
+  //  🎨 Abstract & Art (10 خلفيات)
+  // ──────────────────────────────────────────────
+  { id: "abstract_purple",   name: "Abstract Purple",  emoji: "🟣", url: "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_blue",     name: "Abstract Blue",    emoji: "🔵", url: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_pink",     name: "Abstract Pink",    emoji: "🩷", url: "https://images.unsplash.com/photo-1620207418302-439b387441b0?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_dark",     name: "Minimal Dark",     emoji: "⬛", url: "https://images.unsplash.com/photo-1502691876148-a84978e59af8?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_cyber",    name: "Cyberpunk",        emoji: "🟥", url: "https://images.unsplash.com/photo-1601933973783-43cf8a7d4c5f?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_neon",     name: "Neon Lights",      emoji: "💡", url: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_smoke",    name: "Color Smoke",      emoji: "💨", url: "https://images.unsplash.com/photo-1614851099175-e5b30eb6f696?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_paint",    name: "Paint Strokes",    emoji: "🎨", url: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_geo",      name: "Geometric",        emoji: "💠", url: "https://images.unsplash.com/photo-1604079628040-94301bb21b91?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+  { id: "abstract_city",     name: "Neon City",        emoji: "🌃", url: "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=1600&h=400&fit=crop&q=80", minTier: "basic",    category: "abstract" },
+
+  // ──────────────────────────────────────────────
+  //  👑 Premium Exclusive (10 خلفيات للمتقدمة وأعلى)
+  // ──────────────────────────────────────────────
+  { id: "premium_marble",    name: "Marble Gold",      emoji: "✨", url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_dragon",    name: "Dragon Smoke",     emoji: "🐉", url: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_crystal",   name: "Crystal",          emoji: "💎", url: "https://images.unsplash.com/photo-1610177498701-7fcfd7c3f9bf?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_lava",      name: "Lava",             emoji: "🌋", url: "https://images.unsplash.com/photo-1554941426-94fde40e9d56?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_ice",       name: "Ice Crystal",      emoji: "❄️", url: "https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_fire",      name: "Fire",             emoji: "🔥", url: "https://images.unsplash.com/photo-1517959105821-eaf2591984ca?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_storm",     name: "Lightning Storm",  emoji: "⚡", url: "https://images.unsplash.com/photo-1500674425229-f692875b0ab7?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_golden",    name: "Golden Hour",      emoji: "🌇", url: "https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_diamond",   name: "Diamond Shine",    emoji: "💍", url: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
+  { id: "premium_royal",     name: "Royal Velvet",     emoji: "👑", url: "https://images.unsplash.com/photo-1614624532983-4ce03382d63d?w=1600&h=400&fit=crop&q=80", minTier: "advanced", category: "premium" },
 ]
 
 // ══════════════════════════════════════════════════════════════════
-//  THEMES (12 ثيم لوني)
+//  CATEGORIES (للتجميع في الـ UI)
+// ══════════════════════════════════════════════════════════════════
+
+const CATEGORIES = [
+  { id: "all",      name: "الكل",       emoji: "🌟" },
+  { id: "simple",   name: "افتراضي",    emoji: "🆓" },
+  { id: "gaming",   name: "الألعاب",    emoji: "🎮" },
+  { id: "space",    name: "الفضاء",     emoji: "🌌" },
+  { id: "nature",   name: "الطبيعة",    emoji: "🌿" },
+  { id: "abstract", name: "تجريدي",     emoji: "🎨" },
+  { id: "premium",  name: "Premium",     emoji: "👑" },
+]
+
+// ══════════════════════════════════════════════════════════════════
+//  THEMES (12 ثيم لوني — بدون تغيير)
 // ══════════════════════════════════════════════════════════════════
 
 const THEMES = [
@@ -174,7 +131,7 @@ const THEMES = [
 ]
 
 // ══════════════════════════════════════════════════════════════════
-//  BADGES (10 شارات)
+//  BADGES (10 شارات — بدون تغيير)
 // ══════════════════════════════════════════════════════════════════
 
 const BADGES = [
@@ -191,7 +148,7 @@ const BADGES = [
 ]
 
 // ══════════════════════════════════════════════════════════════════
-//  EFFECTS (6 تأثيرات)
+//  EFFECTS (6 تأثيرات — بدون تغيير)
 // ══════════════════════════════════════════════════════════════════
 
 const EFFECTS = [
@@ -232,6 +189,13 @@ function getBackgroundsForTier(tier) {
   return BACKGROUNDS.filter(bg => tierMeetsRequirement(tier, bg.minTier))
 }
 
+function getBackgroundsByCategory(tier, category) {
+  return BACKGROUNDS.filter(bg =>
+    tierMeetsRequirement(tier, bg.minTier) &&
+    (category === "all" || bg.category === category)
+  )
+}
+
 function getThemesForTier(tier) {
   return THEMES.filter(t => tierMeetsRequirement(tier, t.minTier))
 }
@@ -270,12 +234,14 @@ function getBorderStyle(id) {
 
 module.exports = {
   BACKGROUNDS,
+  CATEGORIES,
   THEMES,
   BADGES,
   EFFECTS,
   BORDER_STYLES,
   TIER_ORDER,
   getBackgroundsForTier,
+  getBackgroundsByCategory,
   getThemesForTier,
   getBadgesForTier,
   getEffectsForTier,
