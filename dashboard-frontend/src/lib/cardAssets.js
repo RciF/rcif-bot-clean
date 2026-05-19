@@ -1,32 +1,33 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Card Assets — Frontend Library
+ *  Card Assets — Frontend Library v2.0
  *  المسار: dashboard-frontend/src/lib/cardAssets.js
  *
- *  ⚠️ يجب أن يطابق: config/cardAssets.js (في البوت)
+ *  ✨ خلفيات حقيقية من Unsplash CDN
+ *  ⚠️ يطابق: config/cardAssets.js (في البوت)
  * ═══════════════════════════════════════════════════════════
  */
 
 // ════════════════════════════════════════════════════════════
-//  BACKGROUNDS (15)
+//  BACKGROUNDS (15 خلفية حقيقية من Unsplash)
 // ════════════════════════════════════════════════════════════
 
 export const BACKGROUNDS = [
-  { id: 'default',           name: 'افتراضي',       emoji: '🆓',  url: null,                                          minTier: 'basic',    category: 'simple' },
-  { id: 'gaming_neon',       name: 'Gaming Neon',   emoji: '🎮', url: 'https://i.imgur.com/PLACEHOLDER1.png',        minTier: 'basic',    category: 'gaming' },
-  { id: 'abstract_purple',   name: 'Abstract',      emoji: '🟣', url: 'https://i.imgur.com/PLACEHOLDER2.png',        minTier: 'basic',    category: 'abstract' },
-  { id: 'minimal_dark',      name: 'Minimal Dark',  emoji: '⬛', url: 'https://i.imgur.com/PLACEHOLDER3.png',        minTier: 'basic',    category: 'minimal' },
-  { id: 'nature_forest',     name: 'Forest',        emoji: '🌲', url: 'https://i.imgur.com/PLACEHOLDER4.png',        minTier: 'basic',    category: 'nature' },
-  { id: 'space_galaxy',      name: 'Galaxy',        emoji: '🌌', url: 'https://i.imgur.com/PLACEHOLDER5.png',        minTier: 'basic',    category: 'space' },
-  { id: 'city_neon',         name: 'Neon City',     emoji: '🌃', url: 'https://i.imgur.com/PLACEHOLDER6.png',        minTier: 'basic',    category: 'city' },
-  { id: 'sunset_beach',      name: 'Sunset Beach',  emoji: '🌅', url: 'https://i.imgur.com/PLACEHOLDER7.png',        minTier: 'basic',    category: 'nature' },
-  { id: 'anime_sakura',      name: 'Anime Sakura',  emoji: '🌸', url: 'https://i.imgur.com/PLACEHOLDER8.png',        minTier: 'basic',    category: 'anime' },
-  { id: 'cyberpunk_red',     name: 'Cyberpunk',     emoji: '🟥', url: 'https://i.imgur.com/PLACEHOLDER9.png',        minTier: 'basic',    category: 'cyberpunk' },
-  { id: 'premium_geometric', name: 'Geometric',     emoji: '💠', url: 'https://i.imgur.com/PLACEHOLDER10.png',       minTier: 'advanced', category: 'premium' },
-  { id: 'premium_aurora',    name: 'Aurora',        emoji: '🌈', url: 'https://i.imgur.com/PLACEHOLDER11.png',       minTier: 'advanced', category: 'premium' },
-  { id: 'premium_marble',    name: 'Marble Gold',   emoji: '✨', url: 'https://i.imgur.com/PLACEHOLDER12.png',       minTier: 'advanced', category: 'premium' },
-  { id: 'premium_dragon',    name: 'Dragon',        emoji: '🐉', url: 'https://i.imgur.com/PLACEHOLDER13.png',       minTier: 'advanced', category: 'premium' },
-  { id: 'premium_crystal',   name: 'Crystal',       emoji: '💎', url: 'https://i.imgur.com/PLACEHOLDER14.png',       minTier: 'advanced', category: 'premium' },
+  { id: 'default',           name: 'افتراضي',       emoji: '🆓', url: null,                                                                                  minTier: 'basic',    category: 'simple' },
+  { id: 'gaming_neon',       name: 'Gaming Neon',   emoji: '🎮', url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'gaming' },
+  { id: 'abstract_purple',   name: 'Abstract',      emoji: '🟣', url: 'https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'abstract' },
+  { id: 'minimal_dark',      name: 'Minimal Dark',  emoji: '⬛', url: 'https://images.unsplash.com/photo-1502691876148-a84978e59af8?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'minimal' },
+  { id: 'nature_forest',     name: 'Forest',        emoji: '🌲', url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'nature' },
+  { id: 'space_galaxy',      name: 'Galaxy',        emoji: '🌌', url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'space' },
+  { id: 'city_neon',         name: 'Neon City',     emoji: '🌃', url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'city' },
+  { id: 'sunset_beach',      name: 'Sunset Beach',  emoji: '🌅', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'nature' },
+  { id: 'anime_sakura',      name: 'Anime Sakura',  emoji: '🌸', url: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'anime' },
+  { id: 'cyberpunk_red',     name: 'Cyberpunk',     emoji: '🟥', url: 'https://images.unsplash.com/photo-1601933973783-43cf8a7d4c5f?w=1600&h=400&fit=crop&q=80', minTier: 'basic',    category: 'cyberpunk' },
+  { id: 'premium_geometric', name: 'Geometric',     emoji: '💠', url: 'https://images.unsplash.com/photo-1604079628040-94301bb21b91?w=1600&h=400&fit=crop&q=80', minTier: 'advanced', category: 'premium' },
+  { id: 'premium_aurora',    name: 'Aurora',        emoji: '🌈', url: 'https://images.unsplash.com/photo-1483347756197-71ef80e95f73?w=1600&h=400&fit=crop&q=80', minTier: 'advanced', category: 'premium' },
+  { id: 'premium_marble',    name: 'Marble Gold',   emoji: '✨', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1600&h=400&fit=crop&q=80', minTier: 'advanced', category: 'premium' },
+  { id: 'premium_dragon',    name: 'Dragon Smoke',  emoji: '🐉', url: 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=1600&h=400&fit=crop&q=80', minTier: 'advanced', category: 'premium' },
+  { id: 'premium_crystal',   name: 'Crystal',       emoji: '💎', url: 'https://images.unsplash.com/photo-1610177498701-7fcfd7c3f9bf?w=1600&h=400&fit=crop&q=80', minTier: 'advanced', category: 'premium' },
 ];
 
 // ════════════════════════════════════════════════════════════
