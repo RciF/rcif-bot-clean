@@ -95,7 +95,7 @@ async function fetchDiscordUser(userId) {
   const cached = getCached(userCache, userId, USER_CACHE_TTL)
   if (cached) return cached
 
-  const botToken = env.DISCORD_BOT_TOKEN || process.env.DISCORD_BOT_TOKEN
+  const botToken = env.BOT_TOKEN || process.env.BOT_TOKEN
   if (!botToken) {
     return { id: userId, username: null, global_name: null, avatar: null }
   }
