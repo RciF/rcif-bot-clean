@@ -1,11 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Card Preview — معاينة لحظية للبطاقة
+ *  Card Preview v2 — معاينة لحظية بشارات محسّنة
  *  المسار: dashboard-frontend/src/components/card/CardPreview.jsx
- *
- *  يحاكي تصميم بطاقة Discord باستخدام SVG
- *  - يعكس الإعدادات اللحظية بدون انتظار حفظ
- *  - يدعم: theme, background, badges, effects, tier
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -17,19 +13,11 @@ import {
   getBadgeById,
 } from '@/lib/cardAssets';
 
-// ════════════════════════════════════════════════════════════
-//  TIER ICONS
-// ════════════════════════════════════════════════════════════
-
 const TIER_BADGE_DATA = {
-  basic: { icon: '🥉', color: '#cd7f32' },
-  advanced: { icon: '🥈', color: '#c0c0c0' },
-  legendary: { icon: '👑', color: '#ffd700' },
+  basic: { icon: '🥉', color: '#cd7f32', glow: '#cd7f3260' },
+  advanced: { icon: '🥈', color: '#c0c0c0', glow: '#c0c0c060' },
+  legendary: { icon: '👑', color: '#ffd700', glow: '#ffd70080' },
 };
-
-// ════════════════════════════════════════════════════════════
-//  DEFAULT PREVIEW DATA
-// ════════════════════════════════════════════════════════════
 
 const DEFAULT_PREVIEW = {
   username: 'RcIf',
@@ -42,10 +30,6 @@ const DEFAULT_PREVIEW = {
   progressPercent: 41,
 };
 
-// ════════════════════════════════════════════════════════════
-//  HELPERS
-// ════════════════════════════════════════════════════════════
-
 function formatNum(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
@@ -55,7 +39,6 @@ function formatNum(n) {
 function resolveTheme(settings) {
   if (!settings) return getThemeById('amber').colors;
 
-  // ─── ألوان مخصصة ───
   if (settings.custom_colors && typeof settings.custom_colors === 'object') {
     const cc = settings.custom_colors;
     if (cc.accent || cc.bg || cc.bgCard) {
@@ -82,17 +65,6 @@ function resolveBackground(settings) {
   return null;
 }
 
-// ════════════════════════════════════════════════════════════
-//  COMPONENT
-// ════════════════════════════════════════════════════════════
-
-/**
- * @param {object} props
- * @param {object} props.settings - إعدادات البطاقة
- * @param {string} props.tier - فئة المستخدم
- * @param {object} props.previewData - بيانات المعاينة (username, level, ...)
- * @param {string} props.userAvatarUrl - رابط الصورة الشخصية
- */
 export function CardPreview({
   settings = {},
   tier = 'free',
@@ -110,14 +82,13 @@ export function CardPreview({
   const hasPulse = !!effects.pulse;
   const hasShine = !!effects.shine;
   const hasAnimatedBorder = !!effects.animated_border;
+  const hasParticles = !!effects.particles;
 
   const badges = Array.isArray(settings.badges) ? settings.badges : [];
 
   const isPremium = tier !== 'free';
   const isLegendary = tier === 'legendary';
   const tierBadge = TIER_BADGE_DATA[tier];
-
-  const fillW = Math.max(40, (data.progressPercent / 100) * 580);
 
   const avatar = userAvatarUrl || data.avatarUrl;
 
@@ -136,20 +107,25 @@ export function CardPreview({
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
-          {/* ─── Gradient للـ XP bar ─── */}
+          {/* ─── Gradients ─── */}
           <linearGradient id="xpGrad" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor={theme.accent} />
             <stop offset={hasGradient ? '50%' : '100%'} stopColor={theme.secondary} />
             {hasGradient && <stop offset="100%" stopColor={theme.accent} />}
           </linearGradient>
 
-          {/* ─── Gradient للاسم (لو effect gradient مفعّل) ─── */}
           <linearGradient id="nameGrad" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor={theme.accent} />
             <stop offset="100%" stopColor={theme.secondary} />
           </linearGradient>
 
-          {/* ─── Glow filter ─── */}
+          {/* ─── Badge Gradient (لكل شارة بلون مختلف عبر gradient) ─── */}
+          <radialGradient id="badgeShine" cx="0.3" cy="0.3" r="0.7">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.6)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+
+          {/* ─── Glow filters ─── */}
           <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="3" result="coloredBlur" />
             <feMerge>
@@ -158,12 +134,30 @@ export function CardPreview({
             </feMerge>
           </filter>
 
-          {/* ─── Clip path للصورة دائرية ─── */}
+          <filter id="badgeGlow" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+            <feMerge>
+              <feMergeNode in="coloredBlur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+
+          <filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+            <feOffset dx="0" dy="2" result="offsetblur" />
+            <feComponentTransfer>
+              <feFuncA type="linear" slope="0.4" />
+            </feComponentTransfer>
+            <feMerge>
+              <feMergeNode />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+
           <clipPath id="avatarClip">
             <circle cx="115" cy="125" r="65" />
           </clipPath>
 
-          {/* ─── Clip path للبطاقة كاملة (rounded) ─── */}
           <clipPath id="cardClip">
             <rect x="0" y="0" width="900" height="250" rx="20" ry="20" />
           </clipPath>
@@ -172,7 +166,7 @@ export function CardPreview({
         {/* ─── الخلفية الرئيسية ─── */}
         <rect width="900" height="250" rx="20" fill={theme.bg} />
 
-        {/* ─── خلفية مخصصة (لو موجودة) ─── */}
+        {/* ─── خلفية مخصصة ─── */}
         {bgImage && (
           <g clipPath="url(#cardClip)">
             <image
@@ -187,7 +181,6 @@ export function CardPreview({
           </g>
         )}
 
-        {/* ─── البطاقة الداخلية (لو ما في خلفية) ─── */}
         {!bgImage && (
           <rect x="10" y="10" width="880" height="230" rx="16" fill={theme.bgCard} />
         )}
@@ -202,6 +195,34 @@ export function CardPreview({
           fill={theme.accent}
           opacity="0.7"
         />
+
+        {/* ─── Particles effect (نقاط متحركة) ─── */}
+        {hasParticles && isPremium && (
+          <g opacity="0.6">
+            {[...Array(8)].map((_, i) => (
+              <circle
+                key={i}
+                cx={50 + i * 100}
+                cy={30 + (i % 3) * 70}
+                r="2"
+                fill={theme.accent}
+              >
+                <animate
+                  attributeName="opacity"
+                  values="0;1;0"
+                  dur={`${2 + i * 0.3}s`}
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="cy"
+                  values={`${30 + (i % 3) * 70};${20 + (i % 3) * 70};${30 + (i % 3) * 70}`}
+                  dur={`${3 + i * 0.2}s`}
+                  repeatCount="indefinite"
+                />
+              </circle>
+            ))}
+          </g>
+        )}
 
         {/* ─── Pulse حول الصورة ─── */}
         {hasPulse && isPremium && (
@@ -261,7 +282,7 @@ export function CardPreview({
           </>
         )}
 
-        {/* ─── حلقة الـ rank حول الصورة ─── */}
+        {/* ─── حلقة الـ rank ─── */}
         <circle
           cx="115"
           cy="125"
@@ -279,18 +300,36 @@ export function CardPreview({
           strokeWidth="3"
         />
 
-        {/* ─── شارة الفئة على الصورة ─── */}
+        {/* ─── شارة الفئة على الصورة (محسّنة) ─── */}
         {isPremium && tierBadge && (
           <g>
+            {/* glow حول الشارة */}
+            {isLegendary && (
+              <circle cx="172" cy="180" r="22" fill={tierBadge.glow}>
+                <animate
+                  attributeName="r"
+                  values="18;22;18"
+                  dur="2s"
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="opacity"
+                  values="0.4;0.8;0.4"
+                  dur="2s"
+                  repeatCount="indefinite"
+                />
+              </circle>
+            )}
             <circle
               cx="172"
               cy="180"
-              r="16"
+              r="17"
               fill={tierBadge.color}
               stroke="#000"
-              strokeWidth="2"
-              filter={isLegendary ? 'url(#glow)' : undefined}
+              strokeWidth="2.5"
+              filter="url(#dropShadow)"
             />
+            <circle cx="170" cy="178" r="15" fill="url(#badgeShine)" />
             <text x="172" y="187" textAnchor="middle" fontSize="18">
               {tierBadge.icon}
             </text>
@@ -310,31 +349,77 @@ export function CardPreview({
           {data.username.slice(0, 18)}
         </text>
 
-        {/* ─── شارات المستخدم ─── */}
+        {/* ═══════════════════════════════════════
+           ✨ الشارات المحسّنة (Premium Look)
+        ═══════════════════════════════════════ */}
         {badges.slice(0, 8).map((badgeId, idx) => {
           const badge = getBadgeById(badgeId);
           if (!badge) return null;
-          const x = 210 + idx * 26;
-          const y = 115;
+
+          const x = 210 + idx * 32;
+          const y = 110;
+          const size = 13;
+
           return (
-            <g key={badgeId}>
-              <circle cx={x + 11} cy={y + 11} r="11" fill={badge.color} />
+            <g key={badgeId} filter="url(#badgeGlow)">
+              {/* ─── Glow halo خفيف ─── */}
               <circle
-                cx={x + 11}
-                cy={y + 11}
-                r="11"
+                cx={x + size}
+                cy={y + size}
+                r={size + 3}
+                fill={badge.color}
+                opacity="0.25"
+              />
+
+              {/* ─── الشارة الأساسية (gradient) ─── */}
+              <defs>
+                <radialGradient id={`badge-grad-${badgeId}`} cx="0.3" cy="0.3" r="0.9">
+                  <stop offset="0%" stopColor={badge.color} stopOpacity="1" />
+                  <stop offset="60%" stopColor={badge.color} stopOpacity="0.9" />
+                  <stop offset="100%" stopColor={badge.color} stopOpacity="0.7" />
+                </radialGradient>
+              </defs>
+
+              <circle
+                cx={x + size}
+                cy={y + size}
+                r={size}
+                fill={`url(#badge-grad-${badgeId})`}
+                filter="url(#dropShadow)"
+              />
+
+              {/* ─── Inner shine ─── */}
+              <circle
+                cx={x + size - 3}
+                cy={y + size - 3}
+                r={size - 2}
+                fill="url(#badgeShine)"
+              />
+
+              {/* ─── Border ─── */}
+              <circle
+                cx={x + size}
+                cy={y + size}
+                r={size}
                 fill="none"
-                stroke="rgba(0,0,0,0.4)"
+                stroke="rgba(0,0,0,0.5)"
                 strokeWidth="1.5"
               />
-              <text x={x + 11} y={y + 16} textAnchor="middle" fontSize="13">
+
+              {/* ─── الأيقونة ─── */}
+              <text
+                x={x + size}
+                y={y + size + 4.5}
+                textAnchor="middle"
+                fontSize="14"
+              >
                 {badge.emoji}
               </text>
             </g>
           );
         })}
 
-        {/* ─── الترتيب (يمين) ─── */}
+        {/* ─── الترتيب ─── */}
         <text x="860" y="78" textAnchor="end" fontSize="16" fill="#8b949e">
           الترتيب
         </text>
@@ -357,7 +442,7 @@ export function CardPreview({
           #{data.rank}
         </text>
 
-        {/* ─── المستوى (يمين، قبل الترتيب) ─── */}
+        {/* ─── المستوى ─── */}
         <text x="750" y="78" textAnchor="end" fontSize="16" fill="#8b949e">
           المستوى
         </text>
@@ -373,7 +458,7 @@ export function CardPreview({
           {data.level}
         </text>
 
-        {/* ─── XP label ─── */}
+        {/* ─── XP labels ─── */}
         <text x="210" y="170" fontSize="14" fill="#8b949e">
           XP
         </text>
@@ -381,10 +466,9 @@ export function CardPreview({
           {formatNum(data.currentXP)} / {formatNum(data.requiredXP)}
         </text>
 
-        {/* ─── شريط التقدم (الخلفية) ─── */}
+        {/* ─── شريط التقدم ─── */}
         <rect x="210" y="180" width="650" height="22" rx="11" fill="#21262d" />
 
-        {/* ─── شريط التقدم (المعبأ) ─── */}
         <rect
           x="210"
           y="180"
@@ -394,7 +478,7 @@ export function CardPreview({
           fill="url(#xpGrad)"
         />
 
-        {/* ─── Shine effect على الشريط ─── */}
+        {/* ─── Shine effect ─── */}
         {hasShine && isPremium && data.progressPercent > 10 && (
           <rect
             x={210 + (data.progressPercent / 100) * 650 - 30}
@@ -414,10 +498,10 @@ export function CardPreview({
           </rect>
         )}
 
-        {/* ─── نسبة التقدم داخل الشريط ─── */}
+        {/* ─── نسبة التقدم ─── */}
         {data.progressPercent > 15 && (
           <text
-            x={210 + (data.progressPercent / 100) * 650 / 2}
+            x={210 + ((data.progressPercent / 100) * 650) / 2}
             y="195"
             textAnchor="middle"
             fontSize="11"
