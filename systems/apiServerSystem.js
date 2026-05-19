@@ -329,17 +329,10 @@ function startApiServer(client) {
           e.user_id,
           COALESCE(e.coins, 0)::bigint AS coins,
           COALESCE(e.bank, 0)::bigint AS bank,
-          COALESCE(
-            (
-              SELECT json_agg(json_build_object('item_id', i.item_id, 'quantity', i.quantity))
-              FROM inventory i
-              WHERE i.user_id = e.user_id AND i.quantity > 0
-            ),
-            '[]'::json
-          ) AS items
+          COALESCE(e.inventory, '[]'::jsonb) AS items
         FROM economy_users e
         WHERE COALESCE(e.coins, 0) + COALESCE(e.bank, 0) > 0
-           OR EXISTS (SELECT 1 FROM inventory i WHERE i.user_id = e.user_id AND i.quantity > 0)
+           OR jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
       `)
 
       const players = (result.rows || []).map(row => {
@@ -388,29 +381,29 @@ function startApiServer(client) {
     try {
       const limit = Math.min(parseInt(req.body?.limit) || 100, 100)
 
+      // ✅ جلب كل المستخدمين اللي عندهم inventory (JSONB) في query واحد
       const result = await databaseSystem.query(`
         SELECT
-          i.user_id,
-          SUM(i.quantity)::int AS total_items,
-          COUNT(DISTINCT i.item_id)::int AS unique_items,
+          e.user_id,
           COALESCE(e.coins, 0)::bigint AS coins,
-          COALESCE(e.bank, 0)::bigint AS bank
-        FROM inventory i
-        LEFT JOIN economy_users e ON e.user_id = i.user_id
-        WHERE i.quantity > 0
-        GROUP BY i.user_id, e.coins, e.bank
+          COALESCE(e.bank, 0)::bigint AS bank,
+          COALESCE(e.inventory, '[]'::jsonb) AS items,
+          (
+            SELECT COALESCE(SUM(COALESCE((item->>'quantity')::int, 0)), 0)
+            FROM jsonb_array_elements(COALESCE(e.inventory, '[]'::jsonb)) AS item
+          )::int AS total_items,
+          jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb))::int AS unique_items
+        FROM economy_users e
+        WHERE jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
         ORDER BY total_items DESC
         LIMIT $1
       `, [limit])
 
-      const players = await Promise.all((result.rows || []).map(async (row) => {
-        const invResult = await databaseSystem.query(
-          "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
-          [row.user_id]
-        )
+      const players = (result.rows || []).map((row) => {
+        const items = Array.isArray(row.items) ? row.items : []
 
         let itemsValue = 0
-        for (const asset of invResult.rows || []) {
+        for (const asset of items) {
           const def = ALL_ITEMS[asset.item_id]
           const qty = Number(asset.quantity) || 0
           if (def?.price) itemsValue += def.price * qty
@@ -424,7 +417,7 @@ function startApiServer(client) {
           bank: Number(row.bank) || 0,
           items_value: itemsValue,
         }
-      }))
+      })
 
       return res.json({ leaderboard: players, count: players.length })
     } catch (err) {

@@ -530,9 +530,18 @@ router.get(
 
     const itemsStats = await query(`
       SELECT
-        COUNT(DISTINCT user_id)::int AS active_collectors,
-        SUM(quantity)::bigint AS total_items
-      FROM inventory WHERE quantity > 0
+        COUNT(*) FILTER (
+          WHERE jsonb_array_length(COALESCE(inventory, '[]'::jsonb)) > 0
+        )::int AS active_collectors,
+        COALESCE(SUM(
+          (
+            SELECT SUM(COALESCE((item->>'quantity')::int, 0))
+            FROM jsonb_array_elements(COALESCE(inventory, '[]'::jsonb)) AS item
+          )
+        ), 0)::bigint AS total_items
+      FROM economy_users
+      WHERE inventory IS NOT NULL
+        AND jsonb_array_length(COALESCE(inventory, '[]'::jsonb)) > 0
     `).catch(() => ({ rows: [{}] }))
 
     const guildStats = await query(`

@@ -173,11 +173,11 @@ function pushCommand(filePath, commands) {
     // ══════════════════════════════════════
     //  ✅ Scheduler — كل الـ cron jobs هنا
     // ══════════════════════════════════════
-    const { updateAllGuilds, ensureTables } = require("./systems/statsSystem")
+    const statsSystem = require("./systems/statsSystem")
 
     // إنشاء الجداول عند البدء
     try {
-      await ensureTables()
+      await statsSystem.ensureTables()
       logger.success("STATS_TABLES_READY")
     } catch (err) {
       logger.error("STATS_TABLES_FAILED", { error: err.message })
@@ -187,7 +187,43 @@ function pushCommand(filePath, commands) {
     scheduler.register(
       "stats-panel-update",
       10 * 60 * 1000,
-      () => updateAllGuilds(client),
+      async () => {
+        try {
+          const enabledGuilds = await statsSystem.getEnabledGuilds()
+          if (!enabledGuilds || enabledGuilds.length === 0) return
+
+          let updated = 0
+          let failed = 0
+
+          for (const config of enabledGuilds) {
+            try {
+              const guild = client.guilds.cache.get(config.guild_id)
+              if (!guild) {
+                failed++
+                continue
+              }
+
+              const ok = await statsSystem.updatePanel(guild, client)
+              if (ok) updated++
+              else failed++
+
+              await new Promise(r => setTimeout(r, 500))
+            } catch (err) {
+              failed++
+              logger.error("STATS_PANEL_UPDATE_GUILD_FAILED", {
+                guildId: config.guild_id,
+                error: err.message
+              })
+            }
+          }
+
+          if (updated > 0 || failed > 0) {
+            logger.info(`STATS_PANEL_UPDATE_DONE updated=${updated} failed=${failed} total=${enabledGuilds.length}`)
+          }
+        } catch (err) {
+          logger.error("STATS_PANEL_UPDATE_BATCH_FAILED", { error: err.message })
+        }
+      },
       false // لا تشتغل فوراً — انتظر حتى يتحمل الكلاينت بالكامل
     )
 
