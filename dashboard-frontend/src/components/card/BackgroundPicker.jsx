@@ -1,12 +1,12 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Background Picker — اختيار خلفية البطاقة
+ *  Background Picker v2 — اختيار خلفية البطاقة بتصميم محسّن
  *  المسار: dashboard-frontend/src/components/card/BackgroundPicker.jsx
  * ═══════════════════════════════════════════════════════════
  */
 
 import { useState } from 'react';
-import { Check, Lock, Upload, X } from 'lucide-react';
+import { Check, Lock, Upload, X, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -15,13 +15,6 @@ import { cn } from '@/lib/utils';
 import { BACKGROUNDS, tierMeetsRequirement } from '@/lib/cardAssets';
 import { getTier } from '@/lib/cardPlans';
 
-/**
- * @param {string} props.currentBackgroundId
- * @param {string} props.customBackgroundUrl
- * @param {string} props.userTier - 'free' | 'basic' | 'advanced' | 'legendary'
- * @param {(bgId: string) => void} props.onSelect
- * @param {(url: string|null) => void} props.onCustomUrl
- */
 export function BackgroundPicker({
   currentBackgroundId = 'default',
   customBackgroundUrl = null,
@@ -35,7 +28,6 @@ export function BackgroundPicker({
 
   const canCustomBg = userTier === 'advanced' || userTier === 'legendary';
 
-  // ─── فلترة الخلفيات حسب الفئة ───
   const available = BACKGROUNDS.filter((bg) =>
     tierMeetsRequirement(userTier, bg.minTier),
   );
@@ -43,7 +35,6 @@ export function BackgroundPicker({
     (bg) => !tierMeetsRequirement(userTier, bg.minTier),
   );
 
-  // ─── معالجة رفع URL مخصص ───
   const handleApplyCustomUrl = () => {
     if (!customUrl.trim()) {
       onCustomUrl?.(null);
@@ -71,12 +62,22 @@ export function BackgroundPicker({
 
   return (
     <div className={cn('space-y-5', className)}>
-      {/* ═══════════════════════════════════════════
-         خلفية شخصية مرفوعة (Advanced/Legendary فقط)
-      ═══════════════════════════════════════════ */}
+      {/* ═══ خلفية شخصية مرفوعة ═══ */}
       {canCustomBg && (
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <Card className="p-4 space-y-3 relative overflow-hidden">
+          {/* ─── معاينة الخلفية المخصصة الحالية ─── */}
+          {hasCustomBg && (
+            <div
+              className="absolute inset-0 opacity-10 pointer-events-none"
+              style={{
+                backgroundImage: `url(${customBackgroundUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            />
+          )}
+
+          <div className="relative flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Upload className="w-4 h-4 text-violet-500" />
               <span className="font-semibold text-sm">خلفية شخصية</span>
@@ -86,7 +87,7 @@ export function BackgroundPicker({
             </Badge>
           </div>
 
-          <div className="flex gap-2">
+          <div className="relative flex gap-2">
             <Input
               placeholder="https://example.com/my-bg.png"
               value={customUrl}
@@ -105,19 +106,17 @@ export function BackgroundPicker({
           </div>
 
           {urlError && (
-            <p className="text-xs text-red-500">{urlError}</p>
+            <p className="relative text-xs text-red-500">{urlError}</p>
           )}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="relative text-xs text-muted-foreground">
             ارفع الصورة على Imgur أو خدمة استضافة، ثم انسخ الرابط هنا.
-            دقة مقترحة: 900×250
+            دقة مقترحة: 1600×400
           </p>
         </Card>
       )}
 
-      {/* ═══════════════════════════════════════════
-         الخلفيات المتاحة
-      ═══════════════════════════════════════════ */}
+      {/* ═══ الخلفيات المتاحة ═══ */}
       <div>
         <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
           <span>الخلفيات الجاهزة</span>
@@ -142,9 +141,7 @@ export function BackgroundPicker({
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════
-         الخلفيات المقفولة (Locked)
-      ═══════════════════════════════════════════ */}
+      {/* ═══ الخلفيات المقفولة ═══ */}
       {locked.length > 0 && (
         <div>
           <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-muted-foreground">
@@ -167,11 +164,13 @@ export function BackgroundPicker({
 }
 
 // ════════════════════════════════════════════════════════════
-//  Background Card (item)
+//  Background Card — مع loading state وerror handling
 // ════════════════════════════════════════════════════════════
 
 function BackgroundCard({ bg, isSelected, disabled, onClick }) {
   const requiredTier = getTier(bg.minTier);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   return (
     <button
@@ -181,47 +180,70 @@ function BackgroundCard({ bg, isSelected, disabled, onClick }) {
         'group relative aspect-video rounded-xl overflow-hidden border-2 transition-all',
         isSelected
           ? 'border-primary ring-2 ring-primary/50 scale-[1.02]'
-          : 'border-border hover:border-primary/50',
+          : 'border-border hover:border-primary/50 hover:scale-[1.01]',
         disabled && 'opacity-50 cursor-not-allowed',
       )}
     >
-      {/* ─── الصورة ─── */}
-      {bg.url ? (
-        <img
-          src={bg.url}
-          alt={bg.name}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onError={(e) => {
-            e.target.style.display = 'none';
-          }}
-        />
-      ) : (
-        <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center">
-          <span className="text-2xl">{bg.emoji}</span>
+      {/* ─── خلفية placeholder وقت التحميل ─── */}
+      {!imageLoaded && !imageError && bg.url && (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-900 animate-pulse flex items-center justify-center">
+          <span className="text-2xl opacity-50">{bg.emoji}</span>
         </div>
       )}
 
-      {/* ─── Overlay ─── */}
+      {/* ─── الصورة ─── */}
+      {bg.url && !imageError ? (
+        <img
+          src={bg.url}
+          alt={bg.name}
+          className={cn(
+            'w-full h-full object-cover transition-opacity duration-300',
+            imageLoaded ? 'opacity-100' : 'opacity-0',
+          )}
+          loading="lazy"
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageError(true)}
+        />
+      ) : bg.url && imageError ? (
+        <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 flex flex-col items-center justify-center gap-1">
+          <ImageOff className="w-6 h-6 text-muted-foreground/50" />
+          <span className="text-[10px] text-muted-foreground">فشل التحميل</span>
+        </div>
+      ) : (
+        <div className="w-full h-full bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 flex items-center justify-center">
+          <span className="text-3xl">{bg.emoji}</span>
+          {bg.id === 'default' && (
+            <Badge
+              variant="default"
+              size="sm"
+              className="absolute top-1.5 left-1.5 bg-blue-500/80 text-white text-[9px] px-1.5"
+            >
+              FREE
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* ─── Overlay دائم ─── */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
 
       {/* ─── الاسم ─── */}
-      <div className="absolute bottom-0 inset-x-0 p-2 text-right">
-        <p className="text-xs font-bold text-white truncate">
+      <div className="absolute bottom-0 inset-x-0 p-2 text-right z-10">
+        <p className="text-xs font-bold text-white truncate drop-shadow-lg">
           {bg.emoji} {bg.name}
         </p>
       </div>
 
       {/* ─── علامة الاختيار ─── */}
       {isSelected && (
-        <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+        <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg z-20">
           <Check className="w-4 h-4 text-white" />
         </div>
       )}
 
-      {/* ─── أيقونة القفل + الفئة المطلوبة ─── */}
+      {/* ─── القفل ─── */}
       {disabled && (
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1 z-20">
           <Lock className="w-5 h-5 text-white" />
           <span className="text-[10px] font-bold text-white">
             {requiredTier.icon} {requiredTier.name}

@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Effects Picker — اختيار التأثيرات
+ *  Effects Picker v2 — اختيار التأثيرات مع معاينة حية
  *  المسار: dashboard-frontend/src/components/card/EffectsPicker.jsx
  * ═══════════════════════════════════════════════════════════
  */
@@ -11,11 +11,6 @@ import { cn } from '@/lib/utils';
 import { EFFECTS, tierMeetsRequirement } from '@/lib/cardAssets';
 import { getTier, CARD_TIERS } from '@/lib/cardPlans';
 
-/**
- * @param {object} props.effects - { glow: true, gradient: true, ... }
- * @param {string} props.userTier
- * @param {(effects: object) => void} props.onChange
- */
 export function EffectsPicker({
   effects = {},
   userTier = 'free',
@@ -62,7 +57,6 @@ export function EffectsPicker({
 
   return (
     <div className={cn('space-y-5', className)}>
-      {/* ═══ Header ═══ */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-violet-500" />
@@ -77,7 +71,6 @@ export function EffectsPicker({
         </Badge>
       </div>
 
-      {/* ═══ المتاحة ═══ */}
       <div>
         <h5 className="text-xs font-medium text-muted-foreground mb-2">
           التأثيرات المتاحة
@@ -99,7 +92,6 @@ export function EffectsPicker({
         </div>
       </div>
 
-      {/* ═══ المقفولة ═══ */}
       {locked.length > 0 && (
         <div>
           <h5 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -119,7 +111,7 @@ export function EffectsPicker({
 }
 
 // ════════════════════════════════════════════════════════════
-//  Effect Card
+//  Effect Card — مع معاينة حية للتأثير
 // ════════════════════════════════════════════════════════════
 
 function EffectCard({ effect, isActive, disabled, canActivate, onClick }) {
@@ -131,18 +123,30 @@ function EffectCard({ effect, isActive, disabled, canActivate, onClick }) {
       onClick={!disabled && (canActivate || isActive) ? onClick : undefined}
       disabled={disabled || cannotAdd}
       className={cn(
-        'relative rounded-xl border-2 p-4 transition-all text-right',
+        'group relative rounded-xl border-2 p-4 transition-all text-right overflow-hidden',
         isActive
-          ? 'border-primary ring-2 ring-primary/50 bg-primary/5'
+          ? 'border-primary ring-2 ring-primary/50 bg-primary/5 scale-[1.02]'
           : 'border-border hover:border-primary/50 bg-card',
         (disabled || cannotAdd) && 'opacity-50 cursor-not-allowed',
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="text-3xl flex-shrink-0">{effect.emoji}</div>
+      {/* ─── خلفية تأثير ديكورية ─── */}
+      {!disabled && (
+        <EffectBackgroundPreview effectId={effect.id} isActive={isActive} />
+      )}
 
+      <div className="relative flex items-start gap-3 z-10">
+        {/* ─── معاينة التأثير ─── */}
+        <div className="flex-shrink-0">
+          <EffectPreview effectId={effect.id} isActive={isActive} disabled={disabled} />
+        </div>
+
+        {/* ─── الاسم والوصف ─── */}
         <div className="flex-1 min-w-0">
-          <h5 className="font-bold text-sm mb-0.5">{effect.name}</h5>
+          <h5 className="font-bold text-sm mb-0.5 flex items-center gap-1.5">
+            <span className="text-lg">{effect.emoji}</span>
+            {effect.name}
+          </h5>
           <p className="text-xs text-muted-foreground line-clamp-2">
             {effect.description}
           </p>
@@ -150,7 +154,7 @@ function EffectCard({ effect, isActive, disabled, canActivate, onClick }) {
 
         {/* ─── الاختيار/القفل ─── */}
         {isActive && (
-          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0 z-20">
             <Check className="w-4 h-4 text-white" />
           </div>
         )}
@@ -166,4 +170,140 @@ function EffectCard({ effect, isActive, disabled, canActivate, onClick }) {
       </div>
     </button>
   );
+}
+
+// ════════════════════════════════════════════════════════════
+//  Effect Background Preview (ديكور خلفية)
+// ════════════════════════════════════════════════════════════
+
+function EffectBackgroundPreview({ effectId, isActive }) {
+  if (!isActive) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none opacity-30">
+      {effectId === 'glow' && (
+        <div className="absolute -top-8 -right-8 w-32 h-32 bg-violet-500 rounded-full blur-3xl" />
+      )}
+      {effectId === 'gradient' && (
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/40 via-pink-500/40 to-amber-500/40" />
+      )}
+      {effectId === 'particles' && (
+        <div className="absolute inset-0">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-amber-300 rounded-full animate-pulse"
+              style={{
+                top: `${15 + (i * 13) % 70}%`,
+                left: `${10 + (i * 17) % 80}%`,
+                animationDelay: `${i * 0.3}s`,
+                boxShadow: '0 0 8px rgba(251, 191, 36, 0.8)',
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {effectId === 'shine' && (
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+      )}
+      {effectId === 'pulse' && (
+        <div className="absolute top-1/2 right-8 -translate-y-1/2">
+          <div className="w-16 h-16 rounded-full border-2 border-pink-400 animate-ping" />
+        </div>
+      )}
+      {effectId === 'animated_border' && (
+        <div className="absolute inset-0 rounded-xl border-2 border-amber-400 animate-pulse" />
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  Effect Preview Icon
+// ════════════════════════════════════════════════════════════
+
+function EffectPreview({ effectId, isActive, disabled }) {
+  const baseClasses = 'relative w-12 h-12 rounded-xl flex items-center justify-center text-2xl';
+
+  const previews = {
+    glow: (
+      <div
+        className={cn(baseClasses, 'bg-violet-500/10')}
+        style={
+          !disabled && isActive
+            ? { boxShadow: '0 0 25px rgba(139, 92, 246, 0.7)' }
+            : !disabled
+            ? { boxShadow: '0 0 12px rgba(139, 92, 246, 0.3)' }
+            : {}
+        }
+      >
+        💫
+      </div>
+    ),
+    gradient: (
+      <div
+        className={cn(baseClasses, 'overflow-hidden')}
+        style={
+          !disabled
+            ? {
+                background: 'linear-gradient(135deg, #8b5cf6, #ec4899, #f59e0b)',
+              }
+            : { background: '#1a1a1a' }
+        }
+      >
+        🌈
+      </div>
+    ),
+    animated_border: (
+      <div
+        className={cn(
+          baseClasses,
+          'border-2',
+          !disabled && isActive
+            ? 'border-amber-500 animate-pulse'
+            : !disabled
+            ? 'border-amber-500/50'
+            : 'border-muted',
+        )}
+      >
+        🎯
+      </div>
+    ),
+    particles: (
+      <div className={cn(baseClasses, 'bg-amber-500/10 relative')}>
+        <span>✨</span>
+        {!disabled && isActive && (
+          <>
+            <div className="absolute top-1 left-1 w-1 h-1 bg-amber-300 rounded-full animate-pulse" />
+            <div
+              className="absolute bottom-1 right-1 w-1 h-1 bg-amber-300 rounded-full animate-pulse"
+              style={{ animationDelay: '0.5s' }}
+            />
+            <div
+              className="absolute top-1 right-2 w-1 h-1 bg-amber-300 rounded-full animate-pulse"
+              style={{ animationDelay: '1s' }}
+            />
+          </>
+        )}
+      </div>
+    ),
+    shine: (
+      <div className={cn(baseClasses, 'bg-amber-500/10 overflow-hidden relative')}>
+        <span>⚡</span>
+        {!disabled && isActive && (
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-pulse" />
+        )}
+      </div>
+    ),
+    pulse: (
+      <div className={cn(baseClasses, 'bg-pink-500/10 relative')}>
+        <span>💗</span>
+        {!disabled && isActive && (
+          <div className="absolute inset-0 rounded-xl border-2 border-pink-400 animate-ping" />
+        )}
+      </div>
+    ),
+  };
+
+  return previews[effectId] || <div className={cn(baseClasses, 'bg-muted')}>✨</div>;
 }

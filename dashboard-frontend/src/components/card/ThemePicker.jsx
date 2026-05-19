@@ -1,10 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Theme Picker — اختيار ألوان البطاقة
+ *  Theme Picker v2 — اختيار ألوان البطاقة بمعاينات أحلى
  *  المسار: dashboard-frontend/src/components/card/ThemePicker.jsx
- *
- *  - ثيمات جاهزة (5-12 حسب الفئة)
- *  - Color Picker مخصص (Advanced/Legendary فقط)
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -17,13 +14,6 @@ import { cn } from '@/lib/utils';
 import { THEMES, tierMeetsRequirement } from '@/lib/cardAssets';
 import { getTier } from '@/lib/cardPlans';
 
-/**
- * @param {string} props.currentThemeId
- * @param {object} props.customColors - { accent, secondary, bg, bgCard }
- * @param {string} props.userTier
- * @param {(themeId: string) => void} props.onSelectTheme
- * @param {(colors: object|null) => void} props.onCustomColors
- */
 export function ThemePicker({
   currentThemeId = 'amber',
   customColors = {},
@@ -43,9 +33,6 @@ export function ThemePicker({
 
   return (
     <div className={cn('space-y-5', className)}>
-      {/* ═══════════════════════════════════════════
-         Color Picker مخصص (Advanced/Legendary فقط)
-      ═══════════════════════════════════════════ */}
       {canCustomColors && (
         <CustomColorsPicker
           customColors={customColors}
@@ -53,9 +40,6 @@ export function ThemePicker({
         />
       )}
 
-      {/* ═══════════════════════════════════════════
-         الثيمات الجاهزة
-      ═══════════════════════════════════════════ */}
       <div>
         <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
           <span>الثيمات الجاهزة</span>
@@ -80,9 +64,6 @@ export function ThemePicker({
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════
-         الثيمات المقفولة
-      ═══════════════════════════════════════════ */}
       {locked.length > 0 && (
         <div>
           <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-muted-foreground">
@@ -105,7 +86,7 @@ export function ThemePicker({
 }
 
 // ════════════════════════════════════════════════════════════
-//  Theme Card
+//  Theme Card — معاينة محسّنة
 // ════════════════════════════════════════════════════════════
 
 function ThemeCard({ theme, isSelected, disabled, onClick }) {
@@ -119,23 +100,36 @@ function ThemeCard({ theme, isSelected, disabled, onClick }) {
         'group relative aspect-square rounded-xl overflow-hidden border-2 transition-all',
         isSelected
           ? 'border-primary ring-2 ring-primary/50 scale-[1.05]'
-          : 'border-border hover:border-primary/50',
+          : 'border-border hover:border-primary/50 hover:scale-[1.02]',
         disabled && 'opacity-50 cursor-not-allowed',
       )}
-      style={{ background: theme.colors.bgCard }}
+      style={{ background: theme.colors.bg }}
     >
-      {/* ─── معاينة الألوان (gradient bars) ─── */}
-      <div className="absolute inset-0 flex flex-col">
-        <div
-          className="flex-1"
-          style={{
-            background: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.secondary})`,
-          }}
-        />
-        <div className="h-1/3" style={{ background: theme.colors.bgCard }} />
+      {/* ─── المعاينة الكبيرة (gradient) ─── */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `linear-gradient(135deg, ${theme.colors.accent}, ${theme.colors.secondary})`,
+        }}
+      />
+
+      {/* ─── طبقة شفافة لتغميق النصف السفلي ─── */}
+      <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
+
+      {/* ─── شريط XP وهمي معاينة ─── */}
+      <div className="absolute bottom-7 inset-x-2">
+        <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full"
+            style={{
+              width: '60%',
+              background: `linear-gradient(to right, ${theme.colors.accent}, ${theme.colors.secondary})`,
+            }}
+          />
+        </div>
       </div>
 
-      {/* ─── اسم الثيم ─── */}
+      {/* ─── الاسم ─── */}
       <div className="absolute bottom-1 inset-x-0 text-center">
         <span className="text-[10px] font-bold text-white drop-shadow-lg">
           {theme.emoji} {theme.name}
@@ -144,14 +138,17 @@ function ThemeCard({ theme, isSelected, disabled, onClick }) {
 
       {/* ─── علامة الاختيار ─── */}
       {isSelected && (
-        <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-          <Check className="w-3 h-3 text-white" />
+        <div
+          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg z-10"
+          style={{ boxShadow: `0 0 16px ${theme.colors.accent}aa` }}
+        >
+          <Check className="w-3.5 h-3.5 text-white" />
         </div>
       )}
 
       {/* ─── القفل ─── */}
       {disabled && (
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-0.5">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center gap-0.5 z-10">
           <Lock className="w-4 h-4 text-white" />
           <span className="text-[9px] font-bold text-white">
             {requiredTier.icon}
@@ -163,7 +160,7 @@ function ThemeCard({ theme, isSelected, disabled, onClick }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Custom Colors Picker (Advanced/Legendary)
+//  Custom Colors Picker
 // ════════════════════════════════════════════════════════════
 
 function CustomColorsPicker({ customColors, onChange }) {
@@ -197,8 +194,18 @@ function CustomColorsPicker({ customColors, onChange }) {
     customColors && Object.keys(customColors).length > 0 && customColors.accent;
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
+    <Card className="p-4 space-y-4 relative overflow-hidden">
+      {/* ─── خلفية معاينة الألوان المخصصة ─── */}
+      {hasActive && (
+        <div
+          className="absolute -top-12 -right-12 w-40 h-40 rounded-full blur-3xl opacity-20 pointer-events-none"
+          style={{
+            background: `linear-gradient(135deg, ${colors.accent}, ${colors.secondary})`,
+          }}
+        />
+      )}
+
+      <div className="relative flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Palette className="w-4 h-4 text-violet-500" />
           <span className="font-semibold text-sm">ألوان مخصصة</span>
@@ -215,7 +222,7 @@ function CustomColorsPicker({ customColors, onChange }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-3">
         <ColorInput
           label="اللون الأساسي"
           value={colors.accent}
@@ -238,7 +245,7 @@ function CustomColorsPicker({ customColors, onChange }) {
         />
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="relative text-xs text-muted-foreground">
         💡 اختر ألوانك المفضلة. التغييرات تنعكس لحظياً في المعاينة.
       </p>
     </Card>
