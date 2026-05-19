@@ -21,7 +21,8 @@ const { getDatabaseStats } = require("./databaseStatsSystem")
 const { checkRepositories } = require("./repositoryHealthSystem")
 const subscriptionRoleSystem = require("./subscriptionRoleSystem")
 const cardNotificationSystem = require("./cardNotificationSystem")
-
+const { ALL_ITEMS } = require("../config/economyConfig")
+const databaseSystem = require("./databaseSystem")
 // ✅ NEW (Batch 2): معالج aliases
 const commandAliases = require("./commandAliases")
 const giveawayInternalRoutes = require("./giveawayRoutes")
@@ -313,7 +314,170 @@ function startApiServer(client) {
   app.locals.discordClient = client
   app.use("/api/internal/giveaway", giveawayInternalRoutes)
   app.use("/api/internal/bulk", bulkActionsInternalRoutes)
-  
+  // ════════════════════════════════════════════════════════
+  //  ✅ NEW: Leaderboard Internal Endpoints
+  //  يستخدمهم الـ Backend لحساب net worth و items (يحتاج ALL_ITEMS)
+  // ════════════════════════════════════════════════════════
+
+  // ─── POST /api/internal/leaderboard/networth ───
+  app.post("/api/internal/leaderboard/networth", requireBotSecret, async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.body?.limit) || 100, 100)
+
+      const result = await databaseSystem.query(`
+        SELECT
+          e.user_id,
+          COALESCE(e.coins, 0)::bigint AS coins,
+          COALESCE(e.bank, 0)::bigint AS bank,
+          COALESCE(
+            (
+              SELECT json_agg(json_build_object('item_id', i.item_id, 'quantity', i.quantity))
+              FROM inventory i
+              WHERE i.user_id = e.user_id AND i.quantity > 0
+            ),
+            '[]'::json
+          ) AS items
+        FROM economy_users e
+        WHERE COALESCE(e.coins, 0) + COALESCE(e.bank, 0) > 0
+           OR EXISTS (SELECT 1 FROM inventory i WHERE i.user_id = e.user_id AND i.quantity > 0)
+      `)
+
+      const players = (result.rows || []).map(row => {
+        const coins = Number(row.coins) || 0
+        const bank = Number(row.bank) || 0
+        const cashTotal = coins + bank
+        const items = Array.isArray(row.items) ? row.items : []
+
+        let itemsValue = 0
+        let totalItems = 0
+        for (const asset of items) {
+          const def = ALL_ITEMS[asset.item_id]
+          const qty = Number(asset.quantity) || 0
+          totalItems += qty
+          if (def?.price) {
+            itemsValue += def.price * qty
+          }
+        }
+
+        return {
+          user_id: row.user_id,
+          coins,
+          bank,
+          cash_total: cashTotal,
+          items_value: itemsValue,
+          total_items: totalItems,
+          net_worth: cashTotal + itemsValue,
+        }
+      })
+
+      players.sort((a, b) => b.net_worth - a.net_worth)
+
+      return res.json({
+        leaderboard: players.slice(0, limit),
+        count: Math.min(players.length, limit),
+        total_players: players.length,
+      })
+    } catch (err) {
+      logger.error("NETWORTH_LEADERBOARD_FAILED", { error: err.message })
+      return res.status(500).json({ error: "internal_error" })
+    }
+  })
+
+  // ─── POST /api/internal/leaderboard/items ───
+  app.post("/api/internal/leaderboard/items", requireBotSecret, async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.body?.limit) || 100, 100)
+
+      const result = await databaseSystem.query(`
+        SELECT
+          i.user_id,
+          SUM(i.quantity)::int AS total_items,
+          COUNT(DISTINCT i.item_id)::int AS unique_items,
+          COALESCE(e.coins, 0)::bigint AS coins,
+          COALESCE(e.bank, 0)::bigint AS bank
+        FROM inventory i
+        LEFT JOIN economy_users e ON e.user_id = i.user_id
+        WHERE i.quantity > 0
+        GROUP BY i.user_id, e.coins, e.bank
+        ORDER BY total_items DESC
+        LIMIT $1
+      `, [limit])
+
+      const players = await Promise.all((result.rows || []).map(async (row) => {
+        const invResult = await databaseSystem.query(
+          "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
+          [row.user_id]
+        )
+
+        let itemsValue = 0
+        for (const asset of invResult.rows || []) {
+          const def = ALL_ITEMS[asset.item_id]
+          const qty = Number(asset.quantity) || 0
+          if (def?.price) itemsValue += def.price * qty
+        }
+
+        return {
+          user_id: row.user_id,
+          total_items: Number(row.total_items) || 0,
+          unique_items: Number(row.unique_items) || 0,
+          coins: Number(row.coins) || 0,
+          bank: Number(row.bank) || 0,
+          items_value: itemsValue,
+        }
+      }))
+
+      return res.json({ leaderboard: players, count: players.length })
+    } catch (err) {
+      logger.error("ITEMS_LEADERBOARD_FAILED", { error: err.message })
+      return res.status(500).json({ error: "internal_error" })
+    }
+  })
+
+  // ─── POST /api/internal/networth-for-user ───
+  app.post("/api/internal/networth-for-user", requireBotSecret, async (req, res) => {
+    try {
+      const { userId } = req.body || {}
+      if (!userId || !/^\d{15,22}$/.test(userId)) {
+        return res.status(400).json({ error: "invalid_user_id" })
+      }
+
+      const userResult = await databaseSystem.query(
+        "SELECT coins, bank FROM economy_users WHERE user_id = $1",
+        [userId]
+      )
+      const user = userResult.rows[0] || { coins: 0, bank: 0 }
+
+      const invResult = await databaseSystem.query(
+        "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
+        [userId]
+      )
+
+      let itemsValue = 0
+      let totalItems = 0
+      for (const asset of invResult.rows || []) {
+        const def = ALL_ITEMS[asset.item_id]
+        const qty = Number(asset.quantity) || 0
+        totalItems += qty
+        if (def?.price) itemsValue += def.price * qty
+      }
+
+      const coins = Number(user.coins) || 0
+      const bank = Number(user.bank) || 0
+
+      return res.json({
+        user_id: userId,
+        coins,
+        bank,
+        cash_total: coins + bank,
+        items_value: itemsValue,
+        total_items: totalItems,
+        net_worth: coins + bank + itemsValue,
+      })
+    } catch (err) {
+      logger.error("NETWORTH_USER_FAILED", { error: err.message })
+      return res.status(500).json({ error: "internal_error" })
+    }
+  })
   app.listen(PORT, "0.0.0.0", () => {
     logger.success(`API_SERVER_RUNNING ${PORT}`)
     console.log(`🚀 Server listening on 0.0.0.0:${PORT}`)

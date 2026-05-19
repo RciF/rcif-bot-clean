@@ -1,0 +1,124 @@
+/**
+ * ═══════════════════════════════════════════════════════════
+ *  Card Assets — Frontend Library
+ *  المسار: dashboard-frontend/src/lib/cardAssets.js
+ *
+ *  ⚠️ يجب أن يطابق: config/cardAssets.js (في البوت)
+ * ═══════════════════════════════════════════════════════════
+ */
+
+// ════════════════════════════════════════════════════════════
+//  BACKGROUNDS (15)
+// ════════════════════════════════════════════════════════════
+
+export const BACKGROUNDS = [
+  { id: 'default',           name: 'افتراضي',       emoji: '🆓',  url: null,                                          minTier: 'basic',    category: 'simple' },
+  { id: 'gaming_neon',       name: 'Gaming Neon',   emoji: '🎮', url: 'https://i.imgur.com/PLACEHOLDER1.png',        minTier: 'basic',    category: 'gaming' },
+  { id: 'abstract_purple',   name: 'Abstract',      emoji: '🟣', url: 'https://i.imgur.com/PLACEHOLDER2.png',        minTier: 'basic',    category: 'abstract' },
+  { id: 'minimal_dark',      name: 'Minimal Dark',  emoji: '⬛', url: 'https://i.imgur.com/PLACEHOLDER3.png',        minTier: 'basic',    category: 'minimal' },
+  { id: 'nature_forest',     name: 'Forest',        emoji: '🌲', url: 'https://i.imgur.com/PLACEHOLDER4.png',        minTier: 'basic',    category: 'nature' },
+  { id: 'space_galaxy',      name: 'Galaxy',        emoji: '🌌', url: 'https://i.imgur.com/PLACEHOLDER5.png',        minTier: 'basic',    category: 'space' },
+  { id: 'city_neon',         name: 'Neon City',     emoji: '🌃', url: 'https://i.imgur.com/PLACEHOLDER6.png',        minTier: 'basic',    category: 'city' },
+  { id: 'sunset_beach',      name: 'Sunset Beach',  emoji: '🌅', url: 'https://i.imgur.com/PLACEHOLDER7.png',        minTier: 'basic',    category: 'nature' },
+  { id: 'anime_sakura',      name: 'Anime Sakura',  emoji: '🌸', url: 'https://i.imgur.com/PLACEHOLDER8.png',        minTier: 'basic',    category: 'anime' },
+  { id: 'cyberpunk_red',     name: 'Cyberpunk',     emoji: '🟥', url: 'https://i.imgur.com/PLACEHOLDER9.png',        minTier: 'basic',    category: 'cyberpunk' },
+  { id: 'premium_geometric', name: 'Geometric',     emoji: '💠', url: 'https://i.imgur.com/PLACEHOLDER10.png',       minTier: 'advanced', category: 'premium' },
+  { id: 'premium_aurora',    name: 'Aurora',        emoji: '🌈', url: 'https://i.imgur.com/PLACEHOLDER11.png',       minTier: 'advanced', category: 'premium' },
+  { id: 'premium_marble',    name: 'Marble Gold',   emoji: '✨', url: 'https://i.imgur.com/PLACEHOLDER12.png',       minTier: 'advanced', category: 'premium' },
+  { id: 'premium_dragon',    name: 'Dragon',        emoji: '🐉', url: 'https://i.imgur.com/PLACEHOLDER13.png',       minTier: 'advanced', category: 'premium' },
+  { id: 'premium_crystal',   name: 'Crystal',       emoji: '💎', url: 'https://i.imgur.com/PLACEHOLDER14.png',       minTier: 'advanced', category: 'premium' },
+];
+
+// ════════════════════════════════════════════════════════════
+//  THEMES (12)
+// ════════════════════════════════════════════════════════════
+
+export const THEMES = [
+  { id: 'amber',  name: 'ذهبي',         emoji: '🟡', minTier: 'basic',    colors: { accent: '#f59e0b', secondary: '#fbbf24', bg: '#0d1117', bgCard: '#161b22' } },
+  { id: 'blue',   name: 'أزرق',         emoji: '🔵', minTier: 'basic',    colors: { accent: '#3b82f6', secondary: '#60a5fa', bg: '#0a0f1e', bgCard: '#0d1525' } },
+  { id: 'purple', name: 'بنفسجي',       emoji: '🟣', minTier: 'basic',    colors: { accent: '#8b5cf6', secondary: '#a78bfa', bg: '#0d0a1e', bgCard: '#130d24' } },
+  { id: 'green',  name: 'أخضر',         emoji: '🟢', minTier: 'basic',    colors: { accent: '#22c55e', secondary: '#4ade80', bg: '#0a1a0f', bgCard: '#0d1f12' } },
+  { id: 'red',    name: 'أحمر',         emoji: '🔴', minTier: 'basic',    colors: { accent: '#ef4444', secondary: '#f87171', bg: '#1a0a0a', bgCard: '#1f0d0d' } },
+  { id: 'pink',   name: 'وردي',         emoji: '🩷', minTier: 'advanced', colors: { accent: '#ec4899', secondary: '#f472b6', bg: '#1a0a12', bgCard: '#1f0d16' } },
+  { id: 'cyan',   name: 'سماوي',        emoji: '🩵', minTier: 'advanced', colors: { accent: '#06b6d4', secondary: '#22d3ee', bg: '#0a1519', bgCard: '#0d1c21' } },
+  { id: 'orange', name: 'برتقالي',      emoji: '🟠', minTier: 'advanced', colors: { accent: '#f97316', secondary: '#fb923c', bg: '#1a0f0a', bgCard: '#1f130d' } },
+  { id: 'white',  name: 'أبيض',         emoji: '⚪', minTier: 'advanced', colors: { accent: '#e2e8f0', secondary: '#f8fafc', bg: '#0f0f0f', bgCard: '#1a1a1a' } },
+  { id: 'sunset', name: 'غروب',         emoji: '🌅', minTier: 'advanced', colors: { accent: '#f59e0b', secondary: '#ec4899', bg: '#1a0a14', bgCard: '#1f0d1a' } },
+  { id: 'ocean',  name: 'محيط',         emoji: '🌊', minTier: 'advanced', colors: { accent: '#06b6d4', secondary: '#3b82f6', bg: '#0a141a', bgCard: '#0d1820' } },
+  { id: 'gold',   name: 'ذهبي ملكي',    emoji: '👑', minTier: 'advanced', colors: { accent: '#ffd700', secondary: '#fbbf24', bg: '#1a1410', bgCard: '#1f1813' } },
+];
+
+// ════════════════════════════════════════════════════════════
+//  BADGES (10)
+// ════════════════════════════════════════════════════════════
+
+export const BADGES = [
+  { id: 'subscriber', name: 'مشترك',    description: 'شارة مشترك Lyn',    emoji: '⭐', minTier: 'basic',     color: '#f59e0b' },
+  { id: 'gamer',      name: 'Gamer',     description: 'شارة الألعاب',       emoji: '🎮', minTier: 'advanced',  color: '#8b5cf6' },
+  { id: 'pro',        name: 'Pro',       description: 'شارة المحترف',       emoji: '🔥', minTier: 'advanced',  color: '#ef4444' },
+  { id: 'vip',        name: 'VIP',       description: 'شارة VIP',          emoji: '💼', minTier: 'advanced',  color: '#06b6d4' },
+  { id: 'diamond',    name: 'Diamond',   description: 'شارة الماس',        emoji: '💎', minTier: 'advanced',  color: '#3b82f6' },
+  { id: 'star',       name: 'Star',      description: 'شارة النجم',         emoji: '🌟', minTier: 'advanced',  color: '#fbbf24' },
+  { id: 'legend',     name: 'LEGEND',    description: 'شارة أسطورية حصرية', emoji: '👑', minTier: 'legendary', color: '#ffd700' },
+  { id: 'mvp',        name: 'MVP',       description: 'شارة الأفضل',        emoji: '🏆', minTier: 'legendary', color: '#ffd700' },
+  { id: 'phoenix',    name: 'Phoenix',   description: 'شارة العنقاء',       emoji: '🔥', minTier: 'legendary', color: '#f97316' },
+  { id: 'thunder',    name: 'Thunder',   description: 'شارة الرعد',         emoji: '⚡', minTier: 'legendary', color: '#fbbf24' },
+];
+
+// ════════════════════════════════════════════════════════════
+//  EFFECTS (6)
+// ════════════════════════════════════════════════════════════
+
+export const EFFECTS = [
+  { id: 'glow',             name: 'Glow',             description: 'توهج حول الاسم',     emoji: '💫', minTier: 'advanced' },
+  { id: 'gradient',         name: 'Gradient',         description: 'تدرج لوني للنص',     emoji: '🌈', minTier: 'advanced' },
+  { id: 'animated_border',  name: 'Animated Border',  description: 'إطار متحرك',        emoji: '🎯', minTier: 'legendary' },
+  { id: 'particles',        name: 'Particles',        description: 'جسيمات متناثرة',     emoji: '✨', minTier: 'legendary' },
+  { id: 'shine',            name: 'Shine',            description: 'بريق متحرك',        emoji: '⚡', minTier: 'legendary' },
+  { id: 'pulse',            name: 'Pulse',            description: 'نبض حول الصورة',     emoji: '💗', minTier: 'legendary' },
+];
+
+// ════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════
+
+const TIER_ORDER = ['free', 'basic', 'advanced', 'legendary'];
+
+export function tierMeetsRequirement(currentTier, requiredTier) {
+  const a = TIER_ORDER.indexOf(currentTier || 'free');
+  const b = TIER_ORDER.indexOf(requiredTier || 'basic');
+  if (a < 0 || b < 0) return false;
+  return a >= b;
+}
+
+export function getBackgroundsForTier(tier) {
+  return BACKGROUNDS.filter((bg) => tierMeetsRequirement(tier, bg.minTier));
+}
+
+export function getThemesForTier(tier) {
+  return THEMES.filter((t) => tierMeetsRequirement(tier, t.minTier));
+}
+
+export function getBadgesForTier(tier) {
+  return BADGES.filter((b) => tierMeetsRequirement(tier, b.minTier));
+}
+
+export function getEffectsForTier(tier) {
+  return EFFECTS.filter((e) => tierMeetsRequirement(tier, e.minTier));
+}
+
+export function getBackgroundById(id) {
+  return BACKGROUNDS.find((bg) => bg.id === id) || null;
+}
+
+export function getThemeById(id) {
+  return THEMES.find((t) => t.id === id) || THEMES[0];
+}
+
+export function getBadgeById(id) {
+  return BADGES.find((b) => b.id === id) || null;
+}
+
+export function getEffectById(id) {
+  return EFFECTS.find((e) => e.id === id) || null;
+}

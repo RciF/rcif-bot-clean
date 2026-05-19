@@ -1,22 +1,18 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Global Leaderboards Routes — v2 (Legendary Edition)
+ *  Global Leaderboards Routes — v3 (Mega Legendary)
  *  المسار: dashboard-backend/routes/globalLeaderboards.js
  *
- *  ✨ Features:
- *   • جلب أسماء وصور Discord الحقيقية (مع caching ساعة)
- *   • Badges + Achievements لكل لاعب
- *   • Daily streak في الاقتصاد
- *   • Highest level + servers count في XP
- *   • Global user profile endpoint
- *   • Comprehensive stats
+ *  ✨ 5 توبات عالمية:
+ *   • Economy (الأغنى — رصيد + بنك)
+ *   • NetWorth (الثروة — رصيد + بنك + ممتلكات) ← يحسبها البوت
+ *   • Items (أكثر ممتلكات) ← يحسبها البوت
+ *   • XP (الأعلى خبرة عبر كل السيرفرات)
+ *   • Level (أعلى مستوى محقق)
  *
- *  Endpoints:
- *   GET /api/global/leaderboard/economy   — أغنى لاعب
- *   GET /api/global/leaderboard/xp        — أعلى XP إجمالي
- *   GET /api/global/leaderboard/level     — أعلى مستوى محقق
- *   GET /api/global/stats                 — إحصائيات شاملة
- *   GET /api/global/user/:userId          — بروفايل عالمي لمستخدم
+ *  + جلب أسماء وصور Discord الحقيقية
+ *  + Badges & Achievements لكل تاب
+ *  + Profile Modal كامل
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -29,14 +25,14 @@ const env = require("../config/env")
 const router = express.Router()
 
 // ════════════════════════════════════════════════════════════
-//  Caching
+//  Caches
 // ════════════════════════════════════════════════════════════
 
 const leaderboardCache = new Map()
 const userCache = new Map()
 
-const LEADERBOARD_TTL = 5 * 60 * 1000    // 5 دقايق
-const USER_CACHE_TTL = 60 * 60 * 1000    // ساعة
+const LEADERBOARD_TTL = 5 * 60 * 1000
+const USER_CACHE_TTL = 60 * 60 * 1000
 
 function getCached(map, key, ttl) {
   const entry = map.get(key)
@@ -92,7 +88,7 @@ async function fetchDiscordUser(userId) {
 
     setCached(userCache, userId, userData)
     return userData
-  } catch (err) {
+  } catch {
     const fallback = { id: userId, username: `User ${userId.slice(-6)}`, avatar: null, global_name: null }
     setCached(userCache, userId, fallback)
     return fallback
@@ -105,7 +101,7 @@ async function fetchDiscordUsers(userIds) {
 
   for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
     const batch = userIds.slice(i, i + BATCH_SIZE)
-    const users = await Promise.all(batch.map(id => fetchDiscordUser(id)))
+    const users = await Promise.all(batch.map((id) => fetchDiscordUser(id)))
     for (const user of users) {
       results[user.id] = user
     }
@@ -127,9 +123,45 @@ function getAvatarUrl(user) {
   }
 }
 
-// ────────────────────────────────────────────────────────────
-//  Badges Computation
-// ────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+//  Bot API Call (للـ networth و items)
+// ════════════════════════════════════════════════════════════
+
+async function callBot(path, body = {}) {
+  const botUrl = env.BOT_URL || process.env.BOT_URL
+  const botSecret = env.BOT_SECRET || process.env.BOT_SECRET
+
+  if (!botUrl || !botSecret) {
+    console.warn("[BOT_API] BOT_URL or BOT_SECRET not set")
+    return null
+  }
+
+  try {
+    const response = await fetch(`${botUrl.replace(/\/+$/, "")}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-bot-secret": botSecret,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    if (!response.ok) {
+      console.error(`[BOT_API] ${path} → ${response.status}`)
+      return null
+    }
+
+    return await response.json()
+  } catch (err) {
+    console.error(`[BOT_API] ${path} failed:`, err.message)
+    return null
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  Badges
+// ════════════════════════════════════════════════════════════
 
 function computeBadges(row, type) {
   const badges = []
@@ -144,10 +176,26 @@ function computeBadges(row, type) {
     const coins = Number(row.coins) || 0
     if (bank > 0 && bank > coins * 3) badges.push({ icon: "🔐", label: "مدّخر", color: "violet" })
     if (coins > 0 && coins > bank * 3) badges.push({ icon: "💸", label: "منفق", color: "rose" })
+  }
 
-    const streak = Number(row.daily_streak) || 0
-    if (streak >= 30) badges.push({ icon: "🔥", label: `سلسلة ${streak}`, color: "rose" })
-    else if (streak >= 7) badges.push({ icon: "⚡", label: `${streak} يوم متواصل`, color: "amber" })
+  if (type === "networth") {
+    const nw = Number(row.net_worth) || 0
+    if (nw >= 100_000_000) badges.push({ icon: "👑", label: "إمبراطور", color: "amber" })
+    else if (nw >= 10_000_000) badges.push({ icon: "💎", label: "أرستقراطي", color: "sky" })
+    else if (nw >= 1_000_000) badges.push({ icon: "🏰", label: "نخبة", color: "violet" })
+
+    const items = Number(row.total_items) || 0
+    if (items >= 100) badges.push({ icon: "📦", label: `${items} عنصر`, color: "emerald" })
+    else if (items >= 30) badges.push({ icon: "🎒", label: "مجمّع", color: "rose" })
+  }
+
+  if (type === "items") {
+    const total = Number(row.total_items) || 0
+    const unique = Number(row.unique_items) || 0
+
+    if (total >= 100) badges.push({ icon: "🏆", label: "مهووس", color: "amber" })
+    else if (total >= 50) badges.push({ icon: "📦", label: "مجمّع", color: "sky" })
+    if (unique >= 20) badges.push({ icon: "🌟", label: `${unique} نوع`, color: "violet" })
   }
 
   if (type === "xp") {
@@ -183,43 +231,23 @@ router.get(
     const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
     if (cached) return res.json(cached)
 
-    // محاولة جلب daily_streak — fallback لو العمود مش موجود
-    let r
-    try {
-      r = await query(
-        `SELECT user_id,
-                COALESCE(coins, 0)::bigint AS coins,
-                COALESCE(bank, 0)::bigint AS bank,
-                (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total,
-                COALESCE(daily_streak, 0)::int AS daily_streak,
-                created_at
-         FROM economy_users
-         WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
-         ORDER BY total DESC
-         LIMIT $1`,
-        [limit]
-      )
-    } catch {
-      r = await query(
-        `SELECT user_id,
-                COALESCE(coins, 0)::bigint AS coins,
-                COALESCE(bank, 0)::bigint AS bank,
-                (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total
-         FROM economy_users
-         WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
-         ORDER BY total DESC
-         LIMIT $1`,
-        [limit]
-      ).catch(() => ({ rows: [] }))
-    }
+    const r = await query(
+      `SELECT user_id,
+              COALESCE(coins, 0)::bigint AS coins,
+              COALESCE(bank, 0)::bigint AS bank,
+              (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total
+       FROM economy_users
+       WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
+       ORDER BY total DESC
+       LIMIT $1`,
+      [limit],
+    ).catch(() => ({ rows: [] }))
 
-    const userIds = r.rows.map(row => row.user_id)
+    const userIds = r.rows.map((row) => row.user_id)
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = r.rows.map((row, idx) => {
       const user = users[row.user_id] || { id: row.user_id, username: null }
-      const badges = computeBadges(row, "economy")
-
       return {
         rank: idx + 1,
         user_id: row.user_id,
@@ -228,9 +256,7 @@ router.get(
         coins: Number(row.coins) || 0,
         bank: Number(row.bank) || 0,
         total: Number(row.total) || 0,
-        daily_streak: Number(row.daily_streak) || 0,
-        member_since: row.created_at,
-        badges,
+        badges: computeBadges(row, "economy"),
       }
     })
 
@@ -242,7 +268,123 @@ router.get(
 
     setCached(leaderboardCache, cacheKey, result)
     res.json(result)
-  })
+  }),
+)
+
+// ════════════════════════════════════════════════════════════
+//  GET /global/leaderboard/networth
+//  يستدعي البوت لحساب القيمة الدقيقة
+// ════════════════════════════════════════════════════════════
+
+router.get(
+  "/global/leaderboard/networth",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 100, 100)
+    const cacheKey = `networth:${limit}`
+
+    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    if (cached) return res.json(cached)
+
+    // استدعاء البوت
+    const botResponse = await callBot("/api/internal/leaderboard/networth", { limit })
+
+    if (!botResponse || !Array.isArray(botResponse.leaderboard)) {
+      return res.json({
+        leaderboard: [],
+        count: 0,
+        error: "bot_unavailable",
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    const rawList = botResponse.leaderboard
+    const userIds = rawList.map((row) => row.user_id)
+    const users = await fetchDiscordUsers(userIds)
+
+    const leaderboard = rawList.map((row, idx) => {
+      const user = users[row.user_id] || { id: row.user_id, username: null }
+      return {
+        rank: idx + 1,
+        user_id: row.user_id,
+        username: user.global_name || user.username || `User ${row.user_id.slice(-6)}`,
+        avatar_url: getAvatarUrl(user),
+        coins: Number(row.coins) || 0,
+        bank: Number(row.bank) || 0,
+        cash_total: Number(row.cash_total) || 0,
+        items_value: Number(row.items_value) || 0,
+        total_items: Number(row.total_items) || 0,
+        net_worth: Number(row.net_worth) || 0,
+        badges: computeBadges(row, "networth"),
+      }
+    })
+
+    const result = {
+      leaderboard,
+      count: leaderboard.length,
+      updated_at: new Date().toISOString(),
+    }
+
+    setCached(leaderboardCache, cacheKey, result)
+    res.json(result)
+  }),
+)
+
+// ════════════════════════════════════════════════════════════
+//  GET /global/leaderboard/items
+//  يستدعي البوت
+// ════════════════════════════════════════════════════════════
+
+router.get(
+  "/global/leaderboard/items",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 100, 100)
+    const cacheKey = `items:${limit}`
+
+    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    if (cached) return res.json(cached)
+
+    const botResponse = await callBot("/api/internal/leaderboard/items", { limit })
+
+    if (!botResponse || !Array.isArray(botResponse.leaderboard)) {
+      return res.json({
+        leaderboard: [],
+        count: 0,
+        error: "bot_unavailable",
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    const rawList = botResponse.leaderboard
+    const userIds = rawList.map((row) => row.user_id)
+    const users = await fetchDiscordUsers(userIds)
+
+    const leaderboard = rawList.map((row, idx) => {
+      const user = users[row.user_id] || { id: row.user_id, username: null }
+      return {
+        rank: idx + 1,
+        user_id: row.user_id,
+        username: user.global_name || user.username || `User ${row.user_id.slice(-6)}`,
+        avatar_url: getAvatarUrl(user),
+        total_items: Number(row.total_items) || 0,
+        unique_items: Number(row.unique_items) || 0,
+        coins: Number(row.coins) || 0,
+        bank: Number(row.bank) || 0,
+        items_value: Number(row.items_value) || 0,
+        badges: computeBadges(row, "items"),
+      }
+    })
+
+    const result = {
+      leaderboard,
+      count: leaderboard.length,
+      updated_at: new Date().toISOString(),
+    }
+
+    setCached(leaderboardCache, cacheKey, result)
+    res.json(result)
+  }),
 )
 
 // ════════════════════════════════════════════════════════════
@@ -271,16 +413,14 @@ router.get(
        GROUP BY user_id
        ORDER BY total_xp DESC
        LIMIT $1`,
-      [limit]
+      [limit],
     ).catch(() => ({ rows: [] }))
 
-    const userIds = r.rows.map(row => row.user_id)
+    const userIds = r.rows.map((row) => row.user_id)
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = r.rows.map((row, idx) => {
       const user = users[row.user_id] || { id: row.user_id, username: null }
-      const badges = computeBadges(row, "xp")
-
       return {
         rank: idx + 1,
         user_id: row.user_id,
@@ -290,7 +430,7 @@ router.get(
         total_levels: Number(row.total_levels) || 0,
         highest_level: Number(row.highest_level) || 0,
         servers_count: Number(row.servers_count) || 0,
-        badges,
+        badges: computeBadges(row, "xp"),
       }
     })
 
@@ -302,7 +442,7 @@ router.get(
 
     setCached(leaderboardCache, cacheKey, result)
     res.json(result)
-  })
+  }),
 )
 
 // ════════════════════════════════════════════════════════════
@@ -326,10 +466,10 @@ router.get(
        WHERE level > 0
        ORDER BY level DESC, xp DESC
        LIMIT $1`,
-      [limit]
+      [limit],
     ).catch(() => ({ rows: [] }))
 
-    const userIds = [...new Set(r.rows.map(row => row.user_id))]
+    const userIds = [...new Set(r.rows.map((row) => row.user_id))]
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = r.rows.map((row, idx) => {
@@ -353,7 +493,7 @@ router.get(
 
     setCached(leaderboardCache, cacheKey, result)
     res.json(result)
-  })
+  }),
 )
 
 // ════════════════════════════════════════════════════════════
@@ -383,24 +523,20 @@ router.get(
         COUNT(DISTINCT user_id)::int AS active_users,
         COUNT(DISTINCT guild_id)::int AS active_guilds,
         SUM(((level * (level - 1) * 50) + xp))::bigint AS total_xp,
-        MAX(level)::int AS highest_level,
-        AVG(level)::numeric(10,1) AS avg_level
+        MAX(level)::int AS highest_level
       FROM xp
       WHERE level > 0 OR xp > 0
     `).catch(() => ({ rows: [{}] }))
 
-    const subsStats = await query(`
+    const itemsStats = await query(`
       SELECT
-        COUNT(*) FILTER (WHERE status = 'active')::int AS active_subs,
-        COUNT(*) FILTER (WHERE plan_id = 'silver' AND status = 'active')::int AS silver_count,
-        COUNT(*) FILTER (WHERE plan_id = 'gold' AND status = 'active')::int AS gold_count,
-        COUNT(*) FILTER (WHERE plan_id = 'diamond' AND status = 'active')::int AS diamond_count
-      FROM subscriptions
+        COUNT(DISTINCT user_id)::int AS active_collectors,
+        SUM(quantity)::bigint AS total_items
+      FROM inventory WHERE quantity > 0
     `).catch(() => ({ rows: [{}] }))
 
     const guildStats = await query(`
-      SELECT COUNT(DISTINCT guild_id)::int AS total_guilds
-      FROM guilds
+      SELECT COUNT(DISTINCT guild_id)::int AS total_guilds FROM guilds
     `).catch(() => ({ rows: [{}] }))
 
     const result = {
@@ -415,13 +551,10 @@ router.get(
         active_guilds: Number(xpStats.rows[0]?.active_guilds) || 0,
         total_xp: Number(xpStats.rows[0]?.total_xp) || 0,
         highest_level: Number(xpStats.rows[0]?.highest_level) || 0,
-        avg_level: Number(xpStats.rows[0]?.avg_level) || 0,
       },
-      subscriptions: {
-        total_active: Number(subsStats.rows[0]?.active_subs) || 0,
-        silver: Number(subsStats.rows[0]?.silver_count) || 0,
-        gold: Number(subsStats.rows[0]?.gold_count) || 0,
-        diamond: Number(subsStats.rows[0]?.diamond_count) || 0,
+      items: {
+        active_collectors: Number(itemsStats.rows[0]?.active_collectors) || 0,
+        total_items: Number(itemsStats.rows[0]?.total_items) || 0,
       },
       guilds: {
         total: Number(guildStats.rows[0]?.total_guilds) || 0,
@@ -431,11 +564,11 @@ router.get(
 
     setCached(leaderboardCache, cacheKey, result)
     res.json(result)
-  })
+  }),
 )
 
 // ════════════════════════════════════════════════════════════
-//  GET /global/user/:userId — Global Profile
+//  GET /global/user/:userId
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -450,44 +583,49 @@ router.get(
 
     const discordUser = await fetchDiscordUser(userId)
 
-    const eco = await query(
-      `SELECT coins, bank,
-              (COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total
-       FROM economy_users WHERE user_id = $1`,
-      [userId]
-    ).catch(() => ({ rows: [] }))
-
-    const ecoRank = await query(`
+    // ─── Economy ranks ───
+    const ecoRank = await query(
+      `
       SELECT (COUNT(*) + 1)::int AS rank FROM economy_users
       WHERE (COALESCE(coins, 0) + COALESCE(bank, 0)) >
             (SELECT COALESCE(coins, 0) + COALESCE(bank, 0) FROM economy_users WHERE user_id = $1)
-    `, [userId]).catch(() => ({ rows: [{}] }))
+    `,
+      [userId],
+    ).catch(() => ({ rows: [{}] }))
 
-    const xpData = await query(`
+    // ─── XP data ───
+    const xpData = await query(
+      `
       SELECT
         COUNT(DISTINCT guild_id)::int AS servers,
         SUM(((level * (level - 1) * 50) + xp))::bigint AS total_xp,
         SUM(level)::int AS total_levels,
         MAX(level)::int AS highest_level
       FROM xp WHERE user_id = $1
-    `, [userId]).catch(() => ({ rows: [{}] }))
+    `,
+      [userId],
+    ).catch(() => ({ rows: [{}] }))
 
-    const xpRank = await query(`
+    const xpRank = await query(
+      `
       WITH user_totals AS (
-        SELECT user_id, SUM(((level * (level - 1) * 50) + xp)) AS total
-        FROM xp
-        GROUP BY user_id
+        SELECT user_id, SUM(((level * (level - 1) * 50) + xp)) AS total FROM xp GROUP BY user_id
       )
       SELECT (COUNT(*) + 1)::int AS rank FROM user_totals
       WHERE total > (SELECT COALESCE(SUM(((level * (level - 1) * 50) + xp)), 0) FROM xp WHERE user_id = $1)
-    `, [userId]).catch(() => ({ rows: [{}] }))
+    `,
+      [userId],
+    ).catch(() => ({ rows: [{}] }))
 
+    // ─── Subscription ───
     const sub = await query(
       `SELECT plan_id, status, expires_at FROM subscriptions WHERE user_id = $1`,
-      [userId]
+      [userId],
     ).catch(() => ({ rows: [] }))
 
-    const ecoData = eco.rows[0] || {}
+    // ─── Net worth + items من البوت ───
+    const networthData = await callBot("/api/internal/networth-for-user", { userId }) || {}
+
     const xpRow = xpData.rows[0] || {}
     const subRow = sub.rows[0] || {}
 
@@ -498,10 +636,16 @@ router.get(
       banner: discordUser.banner,
       accent_color: discordUser.accent_color,
       economy: {
-        coins: Number(ecoData.coins) || 0,
-        bank: Number(ecoData.bank) || 0,
-        total: Number(ecoData.total) || 0,
+        coins: Number(networthData.coins) || 0,
+        bank: Number(networthData.bank) || 0,
+        total: Number(networthData.cash_total) || 0,
         rank: Number(ecoRank.rows[0]?.rank) || null,
+      },
+      networth: {
+        cash_total: Number(networthData.cash_total) || 0,
+        items_value: Number(networthData.items_value) || 0,
+        total_items: Number(networthData.total_items) || 0,
+        net_worth: Number(networthData.net_worth) || 0,
       },
       xp: {
         servers: Number(xpRow.servers) || 0,
@@ -510,13 +654,15 @@ router.get(
         highest_level: Number(xpRow.highest_level) || 0,
         rank: Number(xpRank.rows[0]?.rank) || null,
       },
-      subscription: subRow.plan_id ? {
-        plan_id: subRow.plan_id,
-        status: subRow.status,
-        expires_at: subRow.expires_at,
-      } : null,
+      subscription: subRow.plan_id
+        ? {
+            plan_id: subRow.plan_id,
+            status: subRow.status,
+            expires_at: subRow.expires_at,
+          }
+        : null,
     })
-  })
+  }),
 )
 
 module.exports = router
