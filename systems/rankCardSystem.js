@@ -10,7 +10,7 @@
 // ══════════════════════════════════════════════════════════════════
 
 const { createCanvas, loadImage } = require("@napi-rs/canvas")
-const GIFEncoder = require("gifencoder")
+const GIFEncoder = require("gif-encoder-2")
 const {
   getTheme,
   getBackgroundById,
@@ -794,12 +794,12 @@ async function generateRankCardGIF(data) {
   // ─── تحميل الصور مرة وحدة ───
   const { avatarImage, bgImage } = await preloadImages(data)
 
-  // ─── إعداد GIF Encoder ───
-  const encoder = new GIFEncoder(W, H)
-  encoder.start()
-  encoder.setRepeat(0)        // 0 = infinite loop
+  // ─── إعداد GIF Encoder (gif-encoder-2) ───
+  const encoder = new GIFEncoder(W, H, "neuquant", true)
   encoder.setDelay(GIF_DELAY)
   encoder.setQuality(GIF_QUALITY)
+  encoder.setRepeat(0)        // 0 = infinite loop
+  encoder.start()
 
   // ─── توليد كل الـ frames ───
   const canvas = createCanvas(W, H)
