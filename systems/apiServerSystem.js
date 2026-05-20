@@ -497,20 +497,17 @@ function startApiServer(client) {
         return res.status(400).json({ error: "invalid_user_id" })
       }
 
+      // ✅ نقرأ من economy_users.inventory (JSONB) — مو من جدول inventory المنفصل
       const userResult = await databaseSystem.query(
-        "SELECT coins FROM economy_users WHERE user_id = $1",
+        "SELECT COALESCE(coins, 0) AS coins, COALESCE(inventory, '[]'::jsonb) AS inventory FROM economy_users WHERE user_id = $1",
         [userId]
       )
-      const user = userResult.rows[0] || { coins: 0 }
-
-      const invResult = await databaseSystem.query(
-        "SELECT item_id, quantity FROM inventory WHERE user_id = $1 AND quantity > 0",
-        [userId]
-      )
+      const user = userResult.rows[0] || { coins: 0, inventory: [] }
+      const inventoryArr = Array.isArray(user.inventory) ? user.inventory : []
 
       let itemsValue = 0
       let totalItems = 0
-      for (const asset of invResult.rows || []) {
+      for (const asset of inventoryArr) {
         const def = ALL_ITEMS[asset.item_id]
         const qty = Number(asset.quantity) || 0
         totalItems += qty
