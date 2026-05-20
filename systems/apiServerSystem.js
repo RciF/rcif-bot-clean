@@ -530,6 +530,256 @@ function startApiServer(client) {
       return res.status(500).json({ error: "internal_error" })
     }
   })
+  // ════════════════════════════════════════════════════════
+  //  Owner Endpoints — إدارة السيرفرات (Owner only)
+  //  محمية بـ requireBotSecret + check تطبيقي للـ owner
+  // ════════════════════════════════════════════════════════
+
+  // ─── 1) قائمة كل السيرفرات ───
+  app.post("/api/internal/owner/servers-list", requireBotSecret, async (req, res) => {
+    try {
+      if (!client?.isReady?.()) {
+        return res.json({ servers: [], ready: false })
+      }
+
+      const servers = []
+      for (const guild of client.guilds.cache.values()) {
+        let ownerName = null
+        let ownerAvatar = null
+        try {
+          const owner = await guild.fetchOwner()
+          ownerName = owner.user.globalName || owner.user.username
+          ownerAvatar = owner.user.displayAvatarURL({ extension: "png", size: 128 })
+        } catch {
+          // ignore
+        }
+
+        servers.push({
+          id: guild.id,
+          name: guild.name,
+          icon_url: guild.iconURL({ extension: "png", size: 256 }) || null,
+          banner_url: guild.bannerURL({ size: 1024 }) || null,
+          member_count: guild.memberCount || 0,
+          channel_count: guild.channels?.cache?.size || 0,
+          role_count: guild.roles?.cache?.size || 0,
+          owner_id: guild.ownerId,
+          owner_name: ownerName,
+          owner_avatar: ownerAvatar,
+          bot_joined_at: guild.joinedTimestamp || null,
+          created_at: guild.createdTimestamp || null,
+          boost_tier: guild.premiumTier || 0,
+          boost_count: guild.premiumSubscriptionCount || 0,
+          locale: guild.preferredLocale || null,
+          verified: guild.verified || false,
+          partnered: guild.partnered || false,
+        })
+      }
+
+      return res.json({
+        servers,
+        total: servers.length,
+        total_members: servers.reduce((s, g) => s + g.member_count, 0),
+        ready: true,
+      })
+    } catch (err) {
+      logger.error("OWNER_SERVERS_LIST_FAILED", { error: err.message })
+      return res.status(500).json({ error: "internal_error" })
+    }
+  })
+
+  // ─── 2) تفاصيل سيرفر واحد ───
+  app.post("/api/internal/owner/server-detail", requireBotSecret, async (req, res) => {
+    try {
+      const { guildId } = req.body || {}
+      if (!guildId) return res.status(400).json({ error: "guildId required" })
+
+      const guild = client.guilds.cache.get(guildId)
+      if (!guild) {
+        return res.status(404).json({ error: "guild_not_found" })
+      }
+
+      // معلومات إضافية تفصيلية
+      let ownerData = null
+      try {
+        const owner = await guild.fetchOwner()
+        ownerData = {
+          id: owner.id,
+          name: owner.user.globalName || owner.user.username,
+          tag: owner.user.tag,
+          avatar: owner.user.displayAvatarURL({ extension: "png", size: 256 }),
+          created_at: owner.user.createdTimestamp,
+        }
+      } catch {}
+
+      // عدّ القنوات حسب النوع
+      const { ChannelType } = require("discord.js")
+      const channels = guild.channels.cache
+      const channelStats = {
+        text: channels.filter((c) => c.type === ChannelType.GuildText).size,
+        voice: channels.filter((c) => c.type === ChannelType.GuildVoice).size,
+        category: channels.filter((c) => c.type === ChannelType.GuildCategory).size,
+        forum: channels.filter((c) => c.type === ChannelType.GuildForum).size,
+        stage: channels.filter((c) => c.type === ChannelType.GuildStageVoice).size,
+        announcement: channels.filter((c) => c.type === ChannelType.GuildAnnouncement).size,
+      }
+
+      // عدّ الأعضاء (humans vs bots) — لو الكاش متاح
+      let humansCount = 0
+      let botsCount = 0
+      try {
+        await guild.members.fetch()
+        humansCount = guild.members.cache.filter((m) => !m.user.bot).size
+        botsCount = guild.members.cache.filter((m) => m.user.bot).size
+      } catch {}
+
+      return res.json({
+        server: {
+          id: guild.id,
+          name: guild.name,
+          description: guild.description || null,
+          icon_url: guild.iconURL({ extension: "png", size: 512 }) || null,
+          banner_url: guild.bannerURL({ size: 2048 }) || null,
+          splash_url: guild.splashURL({ size: 2048 }) || null,
+          member_count: guild.memberCount || 0,
+          humans_count: humansCount,
+          bots_count: botsCount,
+          channel_count: channels.size,
+          channel_stats: channelStats,
+          role_count: guild.roles.cache.size,
+          emoji_count: guild.emojis.cache.size,
+          sticker_count: guild.stickers.cache.size,
+          owner: ownerData,
+          bot_joined_at: guild.joinedTimestamp,
+          created_at: guild.createdTimestamp,
+          boost_tier: guild.premiumTier || 0,
+          boost_count: guild.premiumSubscriptionCount || 0,
+          verification_level: guild.verificationLevel,
+          mfa_level: guild.mfaLevel,
+          locale: guild.preferredLocale,
+          features: guild.features || [],
+          verified: guild.verified || false,
+          partnered: guild.partnered || false,
+          vanity_url: guild.vanityURLCode || null,
+        },
+      })
+    } catch (err) {
+      logger.error("OWNER_SERVER_DETAIL_FAILED", { error: err.message })
+      return res.status(500).json({ error: "internal_error" })
+    }
+  })
+
+  // ─── 3) إرسال DM لمالك السيرفر ───
+  app.post("/api/internal/owner/dm-server-owner", requireBotSecret, async (req, res) => {
+    try {
+      const { guildId, message, fromOwnerId } = req.body || {}
+
+      if (!guildId || !message) {
+        return res.status(400).json({ error: "guildId and message required" })
+      }
+
+      const guild = client.guilds.cache.get(guildId)
+      if (!guild) {
+        return res.status(404).json({ success: false, error: "guild_not_found" })
+      }
+
+      const { EmbedBuilder } = require("discord.js")
+
+      let owner
+      try {
+        owner = await guild.fetchOwner()
+      } catch {
+        return res.json({ success: false, error: "cannot_fetch_owner" })
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x10b981)
+        .setTitle("📩 رسالة من فريق Lyn")
+        .setDescription(message)
+        .addFields({
+          name: "🏰 السيرفر",
+          value: `**${guild.name}** (\`${guild.id}\`)`,
+          inline: false,
+        })
+        .setFooter({ text: "هذه رسالة رسمية من مالك البوت" })
+        .setTimestamp()
+
+      try {
+        await owner.send({ embeds: [embed] })
+      } catch (err) {
+        return res.json({
+          success: false,
+          error: "dms_closed",
+          message: "مالك السيرفر قافل الـ DMs",
+        })
+      }
+
+      logger.info("OWNER_DM_SENT", {
+        guildId,
+        ownerId: owner.id,
+        fromOwnerId,
+      })
+
+      return res.json({
+        success: true,
+        recipient_id: owner.id,
+        recipient_name: owner.user.username,
+      })
+    } catch (err) {
+      logger.error("OWNER_DM_FAILED", { error: err.message })
+      return res.status(500).json({ success: false, error: "internal_error" })
+    }
+  })
+
+  // ─── 4) خروج البوت من السيرفر ───
+  app.post("/api/internal/owner/leave-guild", requireBotSecret, async (req, res) => {
+    try {
+      const { guildId, byUserId } = req.body || {}
+
+      if (!guildId) {
+        return res.status(400).json({ error: "guildId required" })
+      }
+
+      const guild = client.guilds.cache.get(guildId)
+      if (!guild) {
+        return res.status(404).json({ success: false, error: "guild_not_found" })
+      }
+
+      const guildName = guild.name
+
+      // محاولة إرسال رسالة وداع لصاحب السيرفر (اختياري)
+      try {
+        const owner = await guild.fetchOwner()
+        const { EmbedBuilder } = require("discord.js")
+        const embed = new EmbedBuilder()
+          .setColor(0xef4444)
+          .setTitle("👋 البوت غادر السيرفر")
+          .setDescription(
+            `للأسف تم سحب بوت Lyn من سيرفر **${guildName}**.\n` +
+            `إذا كان هذا خطأ أو تبي تواصل معنا، تواصل عبر سيرفر الدعم.`
+          )
+          .setTimestamp()
+        await owner.send({ embeds: [embed] }).catch(() => {})
+      } catch {}
+
+      // الخروج
+      await guild.leave()
+
+      logger.warn("OWNER_LEFT_GUILD", {
+        guildId,
+        guildName,
+        byUserId,
+      })
+
+      return res.json({
+        success: true,
+        guild_id: guildId,
+        guild_name: guildName,
+      })
+    } catch (err) {
+      logger.error("OWNER_LEAVE_GUILD_FAILED", { error: err.message })
+      return res.status(500).json({ success: false, error: "internal_error" })
+    }
+  })
   app.listen(PORT, "0.0.0.0", () => {
     logger.success(`API_SERVER_RUNNING ${PORT}`)
     console.log(`🚀 Server listening on 0.0.0.0:${PORT}`)

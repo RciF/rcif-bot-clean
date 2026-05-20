@@ -5,7 +5,7 @@ import {
   Ticket, Bell, LogOut, Menu, X, Moon, Sun, PartyPopper, ScrollText,
   Gavel, ToggleRight, Sparkles, BarChart3, Users, History, Layers,
   CreditCard, Terminal, CalendarDays, Clock, ChevronDown, Crown,
-  Search, UserPlus, ShieldAlert, Gift, Trophy, Palette, 
+  Search, UserPlus, ShieldAlert, Gift, Trophy, Palette, Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/ui/ThemeProvider';
@@ -87,8 +87,9 @@ const OWNER_NAV_SECTION = {
   label: 'إدارة المالك',
   ownerOnly: true,
   items: [
-    { to: '/dashboard/owner-admin', label: 'لوحة المالك',         icon: Crown },
-    { to: '/dashboard/card-admin',  label: 'إدارة Premium البطاقة', icon: Palette },
+    { to: '/dashboard/owner-admin',   label: 'لوحة المالك',         icon: Crown },
+    { to: '/dashboard/owner-servers', label: 'السيرفرات',           icon: Globe },
+    { to: '/dashboard/card-admin',    label: 'إدارة Premium البطاقة', icon: Palette },
   ],
 };
 
