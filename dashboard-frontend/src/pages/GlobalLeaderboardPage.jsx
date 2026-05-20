@@ -14,7 +14,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Trophy, Crown, Coins, Star, Award, Gem, Package,
-  Users, RefreshCw, Search, X, ChevronRight, ChevronLeft,
+  RefreshCw, Search, X, ChevronRight, ChevronLeft,
   Sparkles, AlertCircle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -69,7 +69,7 @@ const BADGE_COLORS = {
 
 const STAT_TO_TAB = {
   networth: 'networth',
-  players:  'xp',
+  topXp:    'xp',
   money:    'economy',
   items:    'items',
   topLevel: 'level',
@@ -250,13 +250,13 @@ function StatsBar({ stats, onStatClick, activeTab }) {
         isActive={activeTab === STAT_TO_TAB.money}
       />
       <StatCard
-        statKey="players"
-        icon={<Users />}
-        label="اللاعبين"
-        value={formatCompact(stats?.xp?.active_users || 0)}
+        statKey="topXp"
+        icon={<Star />}
+        label="أعلى XP"
+        value={formatCompact(stats?.xp?.total_xp || 0)}
         color="emerald"
         onClick={onStatClick}
-        isActive={activeTab === STAT_TO_TAB.players}
+        isActive={activeTab === STAT_TO_TAB.topXp}
       />
       <StatCard
         statKey="networth"
