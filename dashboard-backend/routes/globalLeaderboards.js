@@ -508,6 +508,18 @@ router.get(
       WHERE COALESCE(coins, 0) > 0
     `).catch(() => ({ rows: [{}] }))
 
+    // ✨ Total net worth (coins + items value) — من البوت
+    let totalNetWorth = 0
+    try {
+      const nwResponse = await callBot("/api/internal/leaderboard/networth", { limit: 100 })
+      if (nwResponse?.leaderboard) {
+        totalNetWorth = nwResponse.leaderboard.reduce(
+          (sum, p) => sum + (Number(p.net_worth) || 0),
+          0
+        )
+      }
+    } catch {}
+
     const xpStats = await query(`
       SELECT
         COUNT(DISTINCT user_id)::int AS active_users,
@@ -560,6 +572,7 @@ router.get(
       economy: {
         total_users: Number(economyStats.rows[0]?.total_users) || 0,
         total_money: Number(economyStats.rows[0]?.total_money) || 0,
+        total_net_worth: totalNetWorth,
         richest_balance: Number(economyStats.rows[0]?.richest) || 0,
         avg_balance: Number(economyStats.rows[0]?.avg_balance) || 0,
       },

@@ -262,7 +262,7 @@ function StatsBar({ stats, onStatClick, activeTab }) {
         statKey="networth"
         icon={<Gem />}
         label="الثروة الكاملة"
-        value={formatCompact(stats?.economy?.total_money || 0)}
+        value={formatCompact(stats?.economy?.total_net_worth || 0)}
         color="violet"
         onClick={onStatClick}
         isActive={activeTab === STAT_TO_TAB.networth}
