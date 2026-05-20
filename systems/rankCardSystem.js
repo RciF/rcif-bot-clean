@@ -11,6 +11,7 @@
 // ══════════════════════════════════════════════════════════════════
 
 const { createCanvas, loadImage } = require("@napi-rs/canvas")
+const GIFEncoder = require("gif-encoder-2")
 const {
   getTheme,
   getThemeById,
@@ -18,6 +19,20 @@ const {
   getBadgeById,
   getEffectById,
 } = require("./cardCustomizationSystem")
+
+// ─── GIF Settings ───
+const GIF_FRAMES = 16
+const GIF_DELAY = 80
+const GIF_QUALITY = 10
+const gifCache = new Map()
+const GIF_CACHE_TTL = 5 * 60_000
+
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of gifCache.entries()) {
+    if (now - entry.createdAt > GIF_CACHE_TTL) gifCache.delete(key)
+  }
+}, 60_000)
 
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG
@@ -696,4 +711,83 @@ async function generateRankCard(data) {
   return canvas.toBuffer("image/png")
 }
 
-module.exports = { generateRankCard }
+// ══════════════════════════════════════════════════════════════════
+//  ✨ GENERATE GIF (للأسطورية فقط)
+// ══════════════════════════════════════════════════════════════════
+
+async function generateRankCardGIF(data) {
+  // ─── فحص الـ cache ───
+  const cacheKey = JSON.stringify({
+    u: data.username,
+    l: data.level,
+    r: data.rank,
+    p: data.progressPercent,
+    c: data.customization,
+    t: data.tier,
+  })
+
+  const cached = gifCache.get(cacheKey)
+  if (cached && Date.now() - cached.createdAt < GIF_CACHE_TTL) {
+    return cached.buffer
+  }
+
+  const W = 900
+  const H = 250
+
+  // ─── إعداد GIF Encoder (gif-encoder-2) ───
+  const encoder = new GIFEncoder(W, H, "neuquant", true)
+  encoder.setDelay(GIF_DELAY)
+  encoder.setQuality(GIF_QUALITY)
+  encoder.setRepeat(0)
+  encoder.start()
+
+  const canvas = createCanvas(W, H)
+  const ctx = canvas.getContext("2d")
+
+  // ─── توليد frames ───
+  for (let frame = 0; frame < GIF_FRAMES; frame++) {
+    ctx.clearRect(0, 0, W, H)
+
+    // animation phase
+    const animProgress = frame / GIF_FRAMES
+    const halfSine = Math.sin(animProgress * Math.PI)
+
+    // عدّل البيانات قليلاً لكل frame (للحركة)
+    const frameData = {
+      ...data,
+      _animFrame: frame,
+      _animTotal: GIF_FRAMES,
+      _animProgress: animProgress,
+      _halfSine: halfSine,
+    }
+
+    // ارسم الـ frame باستخدام generateRankCard internal logic
+    const frameBuffer = await generateRankCard(frameData)
+    const frameImg = await loadImage(frameBuffer)
+    ctx.drawImage(frameImg, 0, 0)
+
+    encoder.addFrame(ctx)
+  }
+
+  encoder.finish()
+  const buffer = encoder.out.getData()
+
+  // ─── حفظ في الـ cache ───
+  gifCache.set(cacheKey, {
+    buffer,
+    createdAt: Date.now(),
+  })
+
+  // تنظيف الـ cache لو كبر
+  if (gifCache.size > 100) {
+    const oldestKey = gifCache.keys().next().value
+    gifCache.delete(oldestKey)
+  }
+
+  return buffer
+}
+
+module.exports = {
+  generateRankCard,
+  generateRankCardGIF,
+}

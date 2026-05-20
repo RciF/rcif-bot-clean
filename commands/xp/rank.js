@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require("discord.js")
 const levelSystem = require("../../systems/levelSystem")
-const { generateRankCard } = require("../../systems/rankCardSystem")
+const { generateRankCard, generateRankCardGIF } = require("../../systems/rankCardSystem")
 const cardCustomizationSystem = require("../../systems/cardCustomizationSystem")
 
 module.exports = {
@@ -76,9 +76,9 @@ module.exports = {
         ? subscription.tier
         : "free"
 
-      // ✅ توليد الصورة
+      // ✅ توليد الصورة (GIF للأسطورية، PNG للباقي)
       try {
-        const imageBuffer = await generateRankCard({
+        const cardData = {
           username: member?.displayName || targetUser.username,
           discriminator: targetUser.discriminator || "0",
           avatarURL: targetUser.displayAvatarURL({ extension: "png", size: 256 }),
@@ -90,9 +90,24 @@ module.exports = {
           progressPercent: xpData.progressPercent,
           customization: settings,
           tier: tier
-        })
+        }
 
-        const attachment = new AttachmentBuilder(imageBuffer, { name: "rank.png" })
+        let imageBuffer
+        let fileName = "rank.png"
+
+        if (tier === "legendary") {
+          try {
+            imageBuffer = await generateRankCardGIF(cardData)
+            fileName = "rank.gif"
+          } catch (gifErr) {
+            console.error("[RANK GIF ERROR]", gifErr.message)
+            imageBuffer = await generateRankCard(cardData)
+          }
+        } else {
+          imageBuffer = await generateRankCard(cardData)
+        }
+
+        const attachment = new AttachmentBuilder(imageBuffer, { name: fileName })
 
         // ✅ بدون رسالة الإعلان المزعجة — اللي يبي يخصص يستخدم /بطاقتي
         return interaction.editReply({ files: [attachment] })
