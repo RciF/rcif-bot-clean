@@ -1,28 +1,13 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  GlobalLeaderboardPage v4 — Ultra Legendary Edition
+ *  GlobalLeaderboardPage v5 — Simplified Edition
  *  المسار: dashboard-frontend/src/pages/GlobalLeaderboardPage.jsx
  *
- *  ✨ مميزات هذه النسخة:
- *   • 5 تبويبات أسطورية:
- *      - 💰 الأغنى (الرصيد + البنك)
- *      - 💎 الثروة (Net Worth = نقدي + ممتلكات)
- *      - 📦 الممتلكات (عدد العناصر)
- *      - ⭐ الأعلى XP (مجموع كل السيرفرات)
- *      - 🏆 أعلى مستوى (Level واحد record)
- *
- *   • Stat Cards قابلة للضغط — كل بطاقة تنقلك للتبويب المرتبط بها
- *   • فلاتر زمنية (يومي / أسبوعي / شهري / كل الوقت)
- *   • Pagination — صفحات (10 عناصر / صفحة)
- *   • Hall of Fame Card للأول
- *   • Podium للثاني والثالث
- *   • Search bar + Profile Modal
- *   • Badges & Achievements
- *
- *  ⚠️ ملاحظات:
- *   - تبويبات الاقتصاد (الأغنى/الثروة/الممتلكات) تعتمد على البوت
- *     عبر callBot من الـ Backend. لو البوت ما رد، نظهر رسالة واضحة.
- *   - تبويبات XP و Level تعمل مباشرة من PostgreSQL.
+ *  ✨ التغييرات في v5:
+ *   - حذف الفلتر الزمني نهائياً (الداش = All-time فقط)
+ *   - الفلاتر الزمنية موجودة في /متصدرين الديسكورد
+ *   - بقاء كل شي ثاني: Stats Cards قابلة للضغط، Hall of Fame،
+ *     Podium، Search، Pagination، Profile Modal
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -30,7 +15,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Trophy, Crown, Coins, Star, Award, Gem, Package,
   Globe, Users, RefreshCw, Search, X, ChevronRight, ChevronLeft,
-  Sparkles, Calendar, Clock, AlertCircle,
+  Sparkles, AlertCircle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -46,13 +31,6 @@ import { toast } from 'sonner'
 // ════════════════════════════════════════════════════════════
 
 const PAGE_SIZE = 10
-
-const TIME_FILTERS = [
-  { id: 'all',     label: 'كل الوقت', icon: '∞' },
-  { id: 'monthly', label: 'شهري',     icon: '🗓️' },
-  { id: 'weekly',  label: 'أسبوعي',   icon: '📆' },
-  { id: 'daily',   label: 'يومي',     icon: '⚡' },
-]
 
 const RANK_STYLES = {
   1: {
@@ -89,13 +67,12 @@ const BADGE_COLORS = {
   rose:    'bg-rose-500/15 text-rose-300 border-rose-500/30',
 }
 
-// ربط بطاقة الإحصائية بالتبويب الذي تنقل إليه
 const STAT_TO_TAB = {
-  servers:    null,        // ما فيه تبويب — معلومة فقط
-  players:    'xp',        // اللاعبين النشطين → تبويب XP
-  money:      'economy',   // الفلوس → تبويب الأغنى
-  items:      'items',     // الممتلكات → تبويب الممتلكات
-  topLevel:   'level',     // أعلى مستوى → تبويب Level
+  servers:  null,
+  players:  'xp',
+  money:    'economy',
+  items:    'items',
+  topLevel: 'level',
 }
 
 // ════════════════════════════════════════════════════════════
@@ -107,7 +84,6 @@ export default function GlobalLeaderboardPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
   const [activeTab, setActiveTab] = useState('economy')
-  const [timeFilter, setTimeFilter] = useState('all')
 
   const loadStats = useCallback(async () => {
     try {
@@ -129,12 +105,10 @@ export default function GlobalLeaderboardPage() {
     toast.success('تم التحديث')
   }
 
-  // Stat card click handler → ينقل للتبويب المناسب
   const handleStatClick = (statKey) => {
     const targetTab = STAT_TO_TAB[statKey]
     if (targetTab) {
       setActiveTab(targetTab)
-      // smooth scroll للتبويبات
       const tabsEl = document.getElementById('leaderboard-tabs')
       if (tabsEl) {
         tabsEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -144,16 +118,10 @@ export default function GlobalLeaderboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* ─── Header ─── */}
       <Header onRefresh={handleRefresh} refreshing={refreshing} />
 
-      {/* ─── Stats Bar (clickable cards) ─── */}
       <StatsBar stats={stats} onStatClick={handleStatClick} activeTab={activeTab} />
 
-      {/* ─── Time Filter ─── */}
-      <TimeFilterBar value={timeFilter} onChange={setTimeFilter} />
-
-      {/* ─── Tabs ─── */}
       <div id="leaderboard-tabs">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap">
@@ -180,49 +148,23 @@ export default function GlobalLeaderboardPage() {
           </TabsList>
 
           <TabsContent value="economy">
-            <LeaderboardTab
-              endpoint="economy"
-              type="economy"
-              timeFilter={timeFilter}
-              onUserClick={setSelectedUser}
-            />
+            <LeaderboardTab endpoint="economy" type="economy" onUserClick={setSelectedUser} />
           </TabsContent>
           <TabsContent value="networth">
-            <LeaderboardTab
-              endpoint="networth"
-              type="networth"
-              timeFilter={timeFilter}
-              onUserClick={setSelectedUser}
-            />
+            <LeaderboardTab endpoint="networth" type="networth" onUserClick={setSelectedUser} />
           </TabsContent>
           <TabsContent value="items">
-            <LeaderboardTab
-              endpoint="items"
-              type="items"
-              timeFilter={timeFilter}
-              onUserClick={setSelectedUser}
-            />
+            <LeaderboardTab endpoint="items" type="items" onUserClick={setSelectedUser} />
           </TabsContent>
           <TabsContent value="xp">
-            <LeaderboardTab
-              endpoint="xp"
-              type="xp"
-              timeFilter={timeFilter}
-              onUserClick={setSelectedUser}
-            />
+            <LeaderboardTab endpoint="xp" type="xp" onUserClick={setSelectedUser} />
           </TabsContent>
           <TabsContent value="level">
-            <LeaderboardTab
-              endpoint="level"
-              type="level"
-              timeFilter={timeFilter}
-              onUserClick={setSelectedUser}
-            />
+            <LeaderboardTab endpoint="level" type="level" onUserClick={setSelectedUser} />
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* ─── Profile Modal ─── */}
       {selectedUser && (
         <UserProfileModal userId={selectedUser} onClose={() => setSelectedUser(null)} />
       )}
@@ -251,7 +193,7 @@ function Header({ onRefresh, refreshing }) {
             قائمة المتصدرين العالمية
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            الأقوى في عالم Lyn — كل السيرفرات في مكان واحد ✨
+            أقوى 100 لاعب في عالم Lyn — كل السيرفرات في مكان واحد ✨
           </p>
         </div>
       </div>
@@ -264,7 +206,7 @@ function Header({ onRefresh, refreshing }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Stats Bar — clickable cards
+//  Stats Bar
 // ════════════════════════════════════════════════════════════
 
 function StatsBar({ stats, onStatClick, activeTab }) {
@@ -376,42 +318,10 @@ function StatCard({ icon, label, value, color, statKey, onClick, isActive, click
 }
 
 // ════════════════════════════════════════════════════════════
-//  Time Filter Bar
+//  Leaderboard Tab (الـ tab الموحد — بدون فلتر زمني)
 // ════════════════════════════════════════════════════════════
 
-function TimeFilterBar({ value, onChange }) {
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-2">
-        <Calendar className="w-3.5 h-3.5" />
-        <span>الفترة:</span>
-      </div>
-      <div className="flex items-center gap-1 bg-card/50 border border-border rounded-xl p-1">
-        {TIME_FILTERS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => onChange(f.id)}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
-              value === f.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-            )}
-          >
-            <span>{f.icon}</span>
-            <span>{f.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════
-//  Leaderboard Tab — الـ tab الموحد
-// ════════════════════════════════════════════════════════════
-
-function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
+function LeaderboardTab({ endpoint, type, onUserClick }) {
   const [data, setData] = useState(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -420,15 +330,11 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
     setData(null)
     setPage(1)
 
-    const url = timeFilter === 'all'
-      ? `/api/global/leaderboard/${endpoint}?limit=100`
-      : `/api/global/leaderboard/${endpoint}?limit=100&period=${timeFilter}`
-
     apiClient
-      .get(url)
+      .get(`/api/global/leaderboard/${endpoint}?limit=100`)
       .then((r) => setData(r?.data ?? r))
       .catch(() => setData({ leaderboard: [], error: true }))
-  }, [endpoint, timeFilter])
+  }, [endpoint])
 
   const filtered = useMemo(() => {
     if (!data?.leaderboard) return []
@@ -441,7 +347,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
     )
   }, [data, search])
 
-  // ─── Loading ───
   if (data === null) {
     return (
       <div className="space-y-3 mt-6">
@@ -460,7 +365,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
   const fullList = data.leaderboard || []
   const emptyConfig = getEmptyConfig(type)
 
-  // ─── Empty State ───
   if (fullList.length === 0) {
     return (
       <Card className="p-12 text-center mt-6">
@@ -481,9 +385,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
     )
   }
 
-  // ─── Pagination ───
-  // أول 3 محجوزين للـ Hall of Fame + Podium
-  // الباقي (من index 3 وفوق) يعرض بالصفحات
   const restList = search ? filtered : filtered.slice(3)
   const totalPages = Math.max(1, Math.ceil(restList.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -492,7 +393,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
 
   return (
     <div className="space-y-6 mt-6">
-      {/* Hall of Fame — رقم 1 */}
       {!search && fullList[0] && (
         <HallOfFameCard
           row={fullList[0]}
@@ -501,7 +401,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
         />
       )}
 
-      {/* Top 2 & 3 */}
       {!search && fullList.length >= 2 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {fullList.slice(1, 3).map((row) => (
@@ -515,7 +414,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
         </div>
       )}
 
-      {/* Search */}
       <div className="relative">
         <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
@@ -529,7 +427,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
         />
       </div>
 
-      {/* Rows */}
       <div className="space-y-2">
         {pageItems.map((row) => (
           <LeaderboardRow
@@ -547,7 +444,6 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
         )}
       </div>
 
-      {/* Pagination */}
       {!search && totalPages > 1 && (
         <Pagination
           page={safePage}
@@ -561,23 +457,18 @@ function LeaderboardTab({ endpoint, type, timeFilter, onUserClick }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Pagination Component
+//  Pagination
 // ════════════════════════════════════════════════════════════
 
 function Pagination({ page, totalPages, onChange, totalItems }) {
   const canPrev = page > 1
   const canNext = page < totalPages
 
-  // pages to show: dense around current page
   const pages = useMemo(() => {
     const arr = []
     const showRange = 2
     for (let i = 1; i <= totalPages; i++) {
-      if (
-        i === 1 ||
-        i === totalPages ||
-        (i >= page - showRange && i <= page + showRange)
-      ) {
+      if (i === 1 || i === totalPages || (i >= page - showRange && i <= page + showRange)) {
         arr.push(i)
       } else if (arr[arr.length - 1] !== '...') {
         arr.push('...')
@@ -594,23 +485,13 @@ function Pagination({ page, totalPages, onChange, totalItems }) {
         <span className="font-bold text-foreground font-mono">{totalPages}</span>
       </p>
       <div className="flex items-center gap-1">
-        {/* السابق */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!canPrev}
-          onClick={() => onChange(page - 1)}
-        >
+        <Button variant="outline" size="sm" disabled={!canPrev} onClick={() => onChange(page - 1)}>
           <ChevronRight className="w-4 h-4" />
-          <span className="sr-only">السابق</span>
         </Button>
 
-        {/* Pages */}
         {pages.map((p, i) =>
           p === '...' ? (
-            <span key={`dots-${i}`} className="px-2 text-muted-foreground">
-              ···
-            </span>
+            <span key={`dots-${i}`} className="px-2 text-muted-foreground">···</span>
           ) : (
             <button
               key={p}
@@ -627,15 +508,8 @@ function Pagination({ page, totalPages, onChange, totalItems }) {
           ),
         )}
 
-        {/* التالي */}
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!canNext}
-          onClick={() => onChange(page + 1)}
-        >
+        <Button variant="outline" size="sm" disabled={!canNext} onClick={() => onChange(page + 1)}>
           <ChevronLeft className="w-4 h-4" />
-          <span className="sr-only">التالي</span>
         </Button>
       </div>
     </div>
@@ -680,9 +554,7 @@ function HallOfFameCard({ row, type, onClick }) {
     <Card
       className={cn(
         'p-6 cursor-pointer hover:scale-[1.01] transition-all border-2',
-        style.bg,
-        style.border,
-        style.glow,
+        style.bg, style.border, style.glow,
       )}
       onClick={onClick}
     >
@@ -715,9 +587,7 @@ function HallOfFameCard({ row, type, onClick }) {
 
           {row.badges?.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {row.badges.map((b, i) => (
-                <BadgePill key={i} badge={b} />
-              ))}
+              {row.badges.map((b, i) => <BadgePill key={i} badge={b} />)}
             </div>
           )}
         </div>
@@ -730,10 +600,6 @@ function HallOfFameCard({ row, type, onClick }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════
-//  Podium Card (2 & 3)
-// ════════════════════════════════════════════════════════════
-
 function PodiumCard({ row, type, onClick }) {
   const style = RANK_STYLES[row.rank]
   if (!style) return null
@@ -742,9 +608,7 @@ function PodiumCard({ row, type, onClick }) {
     <Card
       className={cn(
         'p-4 cursor-pointer hover:scale-105 transition-all border-2',
-        style.bg,
-        style.border,
-        style.glow,
+        style.bg, style.border, style.glow,
       )}
       onClick={onClick}
     >
@@ -772,18 +636,12 @@ function PodiumCard({ row, type, onClick }) {
 
       {row.badges?.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-border/50">
-          {row.badges.slice(0, 3).map((b, i) => (
-            <BadgePill key={i} badge={b} small />
-          ))}
+          {row.badges.slice(0, 3).map((b, i) => <BadgePill key={i} badge={b} small />)}
         </div>
       )}
     </Card>
   )
 }
-
-// ════════════════════════════════════════════════════════════
-//  Leaderboard Row (rank 4+)
-// ════════════════════════════════════════════════════════════
 
 function LeaderboardRow({ row, type, onClick }) {
   return (
@@ -809,9 +667,7 @@ function LeaderboardRow({ row, type, onClick }) {
         <div className="flex-1 min-w-0">
           <p className="font-semibold truncate">{row.username}</p>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
-            {row.badges?.slice(0, 2).map((b, i) => (
-              <BadgePill key={i} badge={b} small />
-            ))}
+            {row.badges?.slice(0, 2).map((b, i) => <BadgePill key={i} badge={b} small />)}
           </div>
         </div>
 
@@ -823,10 +679,6 @@ function LeaderboardRow({ row, type, onClick }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════
-//  Value Display
-// ════════════════════════════════════════════════════════════
-
 function ValueDisplay({ row, type, large }) {
   const size = large ? 'text-3xl' : 'text-base'
 
@@ -836,9 +688,7 @@ function ValueDisplay({ row, type, large }) {
         <p className={cn('font-bold text-amber-400 font-mono', size)}>
           {formatCompact(row.total)}
         </p>
-        <p className="text-[10px] text-muted-foreground mt-0.5">
-          🪙 {formatCompact(row.coins)} • 🏦 {formatCompact(row.bank)}
-        </p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">🪙 كوين</p>
       </div>
     )
   }
@@ -898,10 +748,6 @@ function ValueDisplay({ row, type, large }) {
   return null
 }
 
-// ════════════════════════════════════════════════════════════
-//  Badge Pill
-// ════════════════════════════════════════════════════════════
-
 function BadgePill({ badge, small }) {
   return (
     <span
@@ -918,7 +764,7 @@ function BadgePill({ badge, small }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  User Profile Modal — أسطوري شامل
+//  User Profile Modal
 // ════════════════════════════════════════════════════════════
 
 function UserProfileModal({ userId, onClose }) {
@@ -931,7 +777,6 @@ function UserProfileModal({ userId, onClose }) {
       .catch(() => setProfile({ error: true }))
   }, [userId])
 
-  // ESC to close
   useEffect(() => {
     const handler = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', handler)
@@ -967,96 +812,65 @@ function UserProfileModal({ userId, onClose }) {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Header */}
             <div className="flex items-center gap-4">
-              <img
-                src={profile.avatar_url}
-                alt=""
-                className="w-20 h-20 rounded-2xl border-2 border-primary/30"
-              />
+              <img src={profile.avatar_url} alt="" className="w-20 h-20 rounded-2xl border-2 border-primary/30" />
               <div className="flex-1 min-w-0">
                 <h2 className="text-2xl font-bold truncate">{profile.username}</h2>
                 <p className="text-xs text-muted-foreground font-mono">{profile.user_id}</p>
                 {profile.subscription && (
                   <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-xs">
                     <Sparkles className="w-3 h-3 text-amber-400" />
-                    <span className="text-amber-300 font-medium">
-                      {profile.subscription.plan_id}
-                    </span>
+                    <span className="text-amber-300 font-medium">{profile.subscription.plan_id}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-3">
-              {/* Economy */}
               <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
                 <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold mb-2">
                   <Coins className="w-3.5 h-3.5" />
                   <span>الاقتصاد</span>
                 </div>
-                <p className="text-xl font-bold font-mono">
-                  {formatCompact(profile.economy?.total || 0)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  🪙 {formatCompact(profile.economy?.coins || 0)} • 🏦{' '}
-                  {formatCompact(profile.economy?.bank || 0)}
-                </p>
+                <p className="text-xl font-bold font-mono">{formatCompact(profile.economy?.total || 0)}</p>
+                <p className="text-xs text-muted-foreground mt-1">🪙 كوين</p>
                 {profile.economy?.rank && (
-                  <p className="text-xs text-amber-400/80 mt-2 font-mono">
-                    الترتيب: #{profile.economy.rank}
-                  </p>
+                  <p className="text-xs text-amber-400/80 mt-2 font-mono">الترتيب: #{profile.economy.rank}</p>
                 )}
               </div>
 
-              {/* Net Worth */}
               <div className="p-4 rounded-xl bg-sky-500/5 border border-sky-500/20">
                 <div className="flex items-center gap-2 text-sky-400 text-xs font-semibold mb-2">
                   <Gem className="w-3.5 h-3.5" />
                   <span>الثروة الكاملة</span>
                 </div>
-                <p className="text-xl font-bold font-mono">
-                  {formatCompact(profile.networth?.net_worth || 0)}
-                </p>
+                <p className="text-xl font-bold font-mono">{formatCompact(profile.networth?.net_worth || 0)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  📦 {profile.networth?.total_items || 0} عنصر • 💎{' '}
-                  {formatCompact(profile.networth?.items_value || 0)}
+                  📦 {profile.networth?.total_items || 0} عنصر • 💎 {formatCompact(profile.networth?.items_value || 0)}
                 </p>
               </div>
 
-              {/* XP */}
               <div className="p-4 rounded-xl bg-violet-500/5 border border-violet-500/20">
                 <div className="flex items-center gap-2 text-violet-400 text-xs font-semibold mb-2">
                   <Star className="w-3.5 h-3.5" />
                   <span>الـ XP</span>
                 </div>
-                <p className="text-xl font-bold font-mono">
-                  {formatCompact(profile.xp?.total_xp || 0)}
-                </p>
+                <p className="text-xl font-bold font-mono">{formatCompact(profile.xp?.total_xp || 0)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  🎮 {profile.xp?.servers || 0} سيرفر • 📈 إجمالي{' '}
-                  {profile.xp?.total_levels || 0} مستوى
+                  🎮 {profile.xp?.servers || 0} سيرفر • 📈 إجمالي {profile.xp?.total_levels || 0} مستوى
                 </p>
                 {profile.xp?.rank && (
-                  <p className="text-xs text-violet-400/80 mt-2 font-mono">
-                    الترتيب: #{profile.xp.rank}
-                  </p>
+                  <p className="text-xs text-violet-400/80 mt-2 font-mono">الترتيب: #{profile.xp.rank}</p>
                 )}
               </div>
 
-              {/* Highest Level */}
               <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
                 <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold mb-2">
                   <Award className="w-3.5 h-3.5" />
                   <span>أعلى مستوى</span>
                 </div>
-                <p className="text-xl font-bold font-mono">
-                  Lv.{profile.xp?.highest_level || 0}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  في سيرفر واحد
-                </p>
+                <p className="text-xl font-bold font-mono">Lv.{profile.xp?.highest_level || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">في سيرفر واحد</p>
               </div>
             </div>
           </div>

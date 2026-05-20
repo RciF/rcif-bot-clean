@@ -1,30 +1,22 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  Global Leaderboards Routes — v4 (Legendary Edition)
+ *  Global Leaderboards Routes — v5 (Simplified Edition)
  *  المسار: dashboard-backend/routes/globalLeaderboards.js
  *
- *  Endpoints العامة (بدون guild_id):
- *   • GET /api/global/leaderboard/economy   — أغنى لاعبين (DB)
+ *  ✨ التغييرات في v5:
+ *   - حذف ?period= نهائياً (الداش = All-time فقط)
+ *   - إزالة كل ذكر لـ bank (العمود غير موجود)
+ *   - تبسيط الـ caching
+ *   - إصلاح /global/stats لقراءة guilds من 4 مصادر
+ *
+ *  Endpoints:
+ *   • GET /api/global/leaderboard/economy   — أغنى 100 لاعب (DB)
  *   • GET /api/global/leaderboard/networth  — أعلى ثروة (يستدعي البوت)
  *   • GET /api/global/leaderboard/items     — أكثر ممتلكات (يستدعي البوت)
  *   • GET /api/global/leaderboard/xp        — أعلى XP إجمالي (DB)
- *   • GET /api/global/leaderboard/level     — أعلى مستوى محقق (DB)
+ *   • GET /api/global/leaderboard/level     — أعلى مستوى (DB)
  *   • GET /api/global/stats                 — إحصائيات عامة
  *   • GET /api/global/user/:userId          — بروفايل لاعب
- *
- *  ✨ NEW في v4:
- *   - دعم ?period=daily|weekly|monthly|all
- *     - للاقتصاد: نستخدم last_daily/last_work timestamps
- *     - لـ XP/level: نستخدم آخر نشاط من ai_usage_log + stats_counters
- *     - عملياً، "النشطين في الفترة" — مو "كسبوا في الفترة"
- *       لأن DB ما يحتفظ بسجل تاريخي لكل تغيير في XP/coins
- *   - تحسين guild stats: نقرأ من جدولين (guilds + guild_subscriptions)
- *
- *  ⚠️ هذي endpoints عامة:
- *   - تتطلب authentication
- *   - لا تحتاج guild admin
- *   - لا تحتاج اشتراك
- *   - Cache 5 دقائق
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -41,59 +33,39 @@ const router = express.Router()
 // ════════════════════════════════════════════════════════════
 
 const leaderboardCache = new Map()
-const LEADERBOARD_TTL = 5 * 60 * 1000 // 5 دقائق
+const LEADERBOARD_TTL = 5 * 60 * 1000
 
-function getCached(cache, key, ttl) {
-  const entry = cache.get(key)
+function getCached(key) {
+  const entry = leaderboardCache.get(key)
   if (!entry) return null
-  if (Date.now() - entry.time > ttl) {
-    cache.delete(key)
+  if (Date.now() - entry.time > LEADERBOARD_TTL) {
+    leaderboardCache.delete(key)
     return null
   }
   return entry.data
 }
 
-function setCached(cache, key, data) {
-  cache.set(key, { data, time: Date.now() })
-}
+function setCached(key, data) {
+  leaderboardCache.set(key, { data, time: Date.now() })
 
-// ════════════════════════════════════════════════════════════
-//  Time period helpers
-// ════════════════════════════════════════════════════════════
-
-const VALID_PERIODS = ["all", "daily", "weekly", "monthly"]
-
-function normalizePeriod(p) {
-  return VALID_PERIODS.includes(p) ? p : "all"
-}
-
-/**
- * يُرجع timestamp (ms) لبداية الفترة المطلوبة.
- * لـ daily: آخر 24 ساعة
- * لـ weekly: آخر 7 أيام
- * لـ monthly: آخر 30 يوم
- * لـ all: 0 (من البداية)
- */
-function periodStartMs(period) {
-  const now = Date.now()
-  switch (period) {
-    case "daily":   return now - 24 * 60 * 60 * 1000
-    case "weekly":  return now - 7 * 24 * 60 * 60 * 1000
-    case "monthly": return now - 30 * 24 * 60 * 60 * 1000
-    default:        return 0
+  if (leaderboardCache.size > 100) {
+    const firstKey = leaderboardCache.keys().next().value
+    leaderboardCache.delete(firstKey)
   }
 }
 
 // ════════════════════════════════════════════════════════════
-//  Discord users fetching (cached)
+//  Discord users (cached 30 min)
 // ════════════════════════════════════════════════════════════
 
 const userCache = new Map()
-const USER_CACHE_TTL = 30 * 60 * 1000 // 30 دقيقة
+const USER_CACHE_TTL = 30 * 60 * 1000
 
 async function fetchDiscordUser(userId) {
-  const cached = getCached(userCache, userId, USER_CACHE_TTL)
-  if (cached) return cached
+  const cached = userCache.get(userId)
+  if (cached && Date.now() - cached.time < USER_CACHE_TTL) {
+    return cached.data
+  }
 
   const botToken = env.BOT_TOKEN || process.env.BOT_TOKEN
   if (!botToken) {
@@ -108,12 +80,12 @@ async function fetchDiscordUser(userId) {
 
     if (!response.ok) {
       const fallback = { id: userId, username: null, global_name: null, avatar: null }
-      setCached(userCache, userId, fallback)
+      userCache.set(userId, { data: fallback, time: Date.now() })
       return fallback
     }
 
     const user = await response.json()
-    setCached(userCache, userId, user)
+    userCache.set(userId, { data: user, time: Date.now() })
     return user
   } catch {
     return { id: userId, username: null, global_name: null, avatar: null }
@@ -153,10 +125,7 @@ async function callBot(path, body = {}) {
   const botUrl = env.BOT_URL || process.env.BOT_URL
   const botSecret = env.BOT_SECRET || process.env.BOT_SECRET
 
-  if (!botUrl || !botSecret) {
-    console.warn("[BOT_API] BOT_URL or BOT_SECRET not set")
-    return null
-  }
+  if (!botUrl || !botSecret) return null
 
   try {
     const response = await fetch(`${botUrl.replace(/\/+$/, "")}${path}`, {
@@ -173,7 +142,6 @@ async function callBot(path, body = {}) {
       console.error(`[BOT_API] ${path} → ${response.status}`)
       return null
     }
-
     return await response.json()
   } catch (err) {
     console.error(`[BOT_API] ${path} failed:`, err.message)
@@ -193,11 +161,6 @@ function computeBadges(row, type) {
     if (total >= 1_000_000) badges.push({ icon: "💎", label: "مليونير", color: "sky" })
     else if (total >= 100_000) badges.push({ icon: "🏦", label: "ثري", color: "amber" })
     else if (total >= 10_000) badges.push({ icon: "💰", label: "غني", color: "emerald" })
-
-    const bank = Number(row.bank) || 0
-    const coins = Number(row.coins) || 0
-    if (bank > 0 && bank > coins * 3) badges.push({ icon: "🔐", label: "مدّخر", color: "violet" })
-    if (coins > 0 && coins > bank * 3) badges.push({ icon: "💸", label: "منفق", color: "rose" })
   }
 
   if (type === "networth") {
@@ -214,7 +177,6 @@ function computeBadges(row, type) {
   if (type === "items") {
     const total = Number(row.total_items) || 0
     const unique = Number(row.unique_items) || 0
-
     if (total >= 100) badges.push({ icon: "🏆", label: "مهووس", color: "amber" })
     else if (total >= 50) badges.push({ icon: "📦", label: "مجمّع", color: "sky" })
     if (unique >= 20) badges.push({ icon: "🌟", label: `${unique} نوع`, color: "violet" })
@@ -229,7 +191,7 @@ function computeBadges(row, type) {
     else if (totalXp >= 100_000) badges.push({ icon: "⚡", label: "محترف", color: "sky" })
     else if (totalXp >= 10_000) badges.push({ icon: "🔥", label: "نشيط", color: "rose" })
 
-    if (servers >= 10) badges.push({ icon: "🌍", label: "متعدد السيرفرات", color: "violet" })
+    if (servers >= 10) badges.push({ icon: "🌍", label: "متعدد", color: "violet" })
     else if (servers >= 5) badges.push({ icon: "🎮", label: `${servers} سيرفرات`, color: "emerald" })
 
     if (highestLevel >= 100) badges.push({ icon: "🏆", label: "بطل", color: "amber" })
@@ -248,37 +210,6 @@ function computeBadges(row, type) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Period filter: list of user_ids active in period
-//  نستخدم ai_usage_log + stats_counters + economy timestamps
-// ════════════════════════════════════════════════════════════
-
-async function getActiveUserIdsInPeriod(period) {
-  if (period === "all") return null // null = no filter
-
-  const startMs = periodStartMs(period)
-  const startDate = new Date(startMs).toISOString().slice(0, 10) // YYYY-MM-DD
-
-  // مصدر 1: ai_usage_log — لو فيه استخدام AI
-  const aiResult = await query(
-    `SELECT DISTINCT user_id FROM ai_usage_log
-     WHERE created_at >= NOW() - INTERVAL '${period === "daily" ? "1 day" : period === "weekly" ? "7 days" : "30 days"}'`
-  ).catch(() => ({ rows: [] }))
-
-  // مصدر 2: economy_users.last_daily أو last_work (timestamps بالـ ms)
-  const ecoResult = await query(
-    `SELECT user_id FROM economy_users
-     WHERE last_daily >= $1 OR last_work >= $1`,
-    [startMs]
-  ).catch(() => ({ rows: [] }))
-
-  const activeIds = new Set()
-  for (const r of aiResult.rows) activeIds.add(r.user_id)
-  for (const r of ecoResult.rows) activeIds.add(r.user_id)
-
-  return activeIds
-}
-
-// ════════════════════════════════════════════════════════════
 //  GET /global/leaderboard/economy
 // ════════════════════════════════════════════════════════════
 
@@ -287,43 +218,27 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 100, 100)
-    const period = normalizePeriod(req.query.period)
-    const cacheKey = `economy:${period}:${limit}`
+    const cacheKey = `economy:${limit}`
 
-    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    const cached = getCached(cacheKey)
     if (cached) return res.json(cached)
 
-    let r
-    if (period === "all") {
-      r = await query(
-        `SELECT user_id,
-                COALESCE(coins, 0)::bigint AS coins
-         FROM economy_users
-         WHERE COALESCE(coins, 0) > 0
-         ORDER BY coins DESC
-         LIMIT $1`,
-        [limit],
-      ).catch(() => ({ rows: [] }))
-    } else {
-      const startMs = periodStartMs(period)
-      r = await query(
-        `SELECT user_id,
-                COALESCE(coins, 0)::bigint AS coins
-         FROM economy_users
-         WHERE COALESCE(coins, 0) > 0
-           AND (last_daily >= $1 OR last_work >= $1)
-         ORDER BY coins DESC
-         LIMIT $2`,
-        [startMs, limit],
-      ).catch(() => ({ rows: [] }))
-    }
+    const r = await query(
+      `SELECT user_id,
+              COALESCE(coins, 0)::bigint AS coins
+       FROM economy_users
+       WHERE COALESCE(coins, 0) > 0
+       ORDER BY coins DESC
+       LIMIT $1`,
+      [limit]
+    ).catch(() => ({ rows: [] }))
 
     const userIds = r.rows.map((row) => row.user_id)
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = r.rows.map((row, idx) => {
       const coins = Number(row.coins) || 0
-      const user = users[row.user_id] || { id: row.user_id, username: null }
+      const user = users[row.user_id] || { id: row.user_id }
       return {
         rank: idx + 1,
         user_id: row.user_id,
@@ -332,20 +247,19 @@ router.get(
         coins,
         bank: 0,
         total: coins,
-        badges: computeBadges({ total: coins, coins, bank: 0 }, "economy"),
+        badges: computeBadges({ total: coins }, "economy"),
       }
     })
 
     const result = {
       leaderboard,
       count: leaderboard.length,
-      period,
       updated_at: new Date().toISOString(),
     }
 
-    setCached(leaderboardCache, cacheKey, result)
+    setCached(cacheKey, result)
     res.json(result)
-  }),
+  })
 )
 
 // ════════════════════════════════════════════════════════════
@@ -357,19 +271,17 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 100, 100)
-    const period = normalizePeriod(req.query.period)
-    const cacheKey = `networth:${period}:${limit}`
+    const cacheKey = `networth:${limit}`
 
-    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    const cached = getCached(cacheKey)
     if (cached) return res.json(cached)
 
-    const botResponse = await callBot("/api/internal/leaderboard/networth", { limit, period })
+    const botResponse = await callBot("/api/internal/leaderboard/networth", { limit })
 
     if (!botResponse || !Array.isArray(botResponse.leaderboard)) {
       return res.json({
         leaderboard: [],
         count: 0,
-        period,
         error: "bot_unavailable",
         updated_at: new Date().toISOString(),
       })
@@ -380,14 +292,14 @@ router.get(
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = rawList.map((row, idx) => {
-      const user = users[row.user_id] || { id: row.user_id, username: null }
+      const user = users[row.user_id] || { id: row.user_id }
       return {
         rank: idx + 1,
         user_id: row.user_id,
         username: user.global_name || user.username || `User ${row.user_id.slice(-6)}`,
         avatar_url: getAvatarUrl(user),
         coins: Number(row.coins) || 0,
-        bank: Number(row.bank) || 0,
+        bank: 0,
         cash_total: Number(row.cash_total) || 0,
         items_value: Number(row.items_value) || 0,
         total_items: Number(row.total_items) || 0,
@@ -399,13 +311,12 @@ router.get(
     const result = {
       leaderboard,
       count: leaderboard.length,
-      period,
       updated_at: new Date().toISOString(),
     }
 
-    setCached(leaderboardCache, cacheKey, result)
+    setCached(cacheKey, result)
     res.json(result)
-  }),
+  })
 )
 
 // ════════════════════════════════════════════════════════════
@@ -417,19 +328,17 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 100, 100)
-    const period = normalizePeriod(req.query.period)
-    const cacheKey = `items:${period}:${limit}`
+    const cacheKey = `items:${limit}`
 
-    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    const cached = getCached(cacheKey)
     if (cached) return res.json(cached)
 
-    const botResponse = await callBot("/api/internal/leaderboard/items", { limit, period })
+    const botResponse = await callBot("/api/internal/leaderboard/items", { limit })
 
     if (!botResponse || !Array.isArray(botResponse.leaderboard)) {
       return res.json({
         leaderboard: [],
         count: 0,
-        period,
         error: "bot_unavailable",
         updated_at: new Date().toISOString(),
       })
@@ -440,7 +349,7 @@ router.get(
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = rawList.map((row, idx) => {
-      const user = users[row.user_id] || { id: row.user_id, username: null }
+      const user = users[row.user_id] || { id: row.user_id }
       return {
         rank: idx + 1,
         user_id: row.user_id,
@@ -449,7 +358,7 @@ router.get(
         total_items: Number(row.total_items) || 0,
         unique_items: Number(row.unique_items) || 0,
         coins: Number(row.coins) || 0,
-        bank: Number(row.bank) || 0,
+        bank: 0,
         items_value: Number(row.items_value) || 0,
         badges: computeBadges(row, "items"),
       }
@@ -458,13 +367,12 @@ router.get(
     const result = {
       leaderboard,
       count: leaderboard.length,
-      period,
       updated_at: new Date().toISOString(),
     }
 
-    setCached(leaderboardCache, cacheKey, result)
+    setCached(cacheKey, result)
     res.json(result)
-  }),
+  })
 )
 
 // ════════════════════════════════════════════════════════════
@@ -476,63 +384,31 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 100, 100)
-    const period = normalizePeriod(req.query.period)
-    const cacheKey = `xp:${period}:${limit}`
+    const cacheKey = `xp:${limit}`
 
-    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    const cached = getCached(cacheKey)
     if (cached) return res.json(cached)
 
-    // فلتر بالـ active users لو فيه period
-    const activeIds = await getActiveUserIdsInPeriod(period)
-
-    let r
-    if (!activeIds || activeIds.size === 0) {
-      // كل الوقت — أو ما فيه لاعبين نشطين في الفترة
-      // لو period != all لكن activeIds فاضي → نرجع leaderboard فاضي
-      if (period !== "all") {
-        const empty = { leaderboard: [], count: 0, period, updated_at: new Date().toISOString() }
-        setCached(leaderboardCache, cacheKey, empty)
-        return res.json(empty)
-      }
-
-      r = await query(
-        `SELECT
-           user_id,
-           COUNT(DISTINCT guild_id)::int AS servers_count,
-           SUM(level)::bigint AS total_levels,
-           SUM(((level * (level - 1) * 50) + xp))::bigint AS total_xp,
-           MAX(level)::int AS highest_level
-         FROM xp
-         WHERE xp > 0 OR level > 0
-         GROUP BY user_id
-         ORDER BY total_xp DESC
-         LIMIT $1`,
-        [limit],
-      ).catch(() => ({ rows: [] }))
-    } else {
-      const idsArray = [...activeIds]
-      r = await query(
-        `SELECT
-           user_id,
-           COUNT(DISTINCT guild_id)::int AS servers_count,
-           SUM(level)::bigint AS total_levels,
-           SUM(((level * (level - 1) * 50) + xp))::bigint AS total_xp,
-           MAX(level)::int AS highest_level
-         FROM xp
-         WHERE (xp > 0 OR level > 0)
-           AND user_id = ANY($1::text[])
-         GROUP BY user_id
-         ORDER BY total_xp DESC
-         LIMIT $2`,
-        [idsArray, limit],
-      ).catch(() => ({ rows: [] }))
-    }
+    const r = await query(
+      `SELECT
+         user_id,
+         COUNT(DISTINCT guild_id)::int AS servers_count,
+         SUM(level)::bigint AS total_levels,
+         SUM(((level * (level - 1) * 50) + xp))::bigint AS total_xp,
+         MAX(level)::int AS highest_level
+       FROM xp
+       WHERE xp > 0 OR level > 0
+       GROUP BY user_id
+       ORDER BY total_xp DESC
+       LIMIT $1`,
+      [limit]
+    ).catch(() => ({ rows: [] }))
 
     const userIds = r.rows.map((row) => row.user_id)
     const users = await fetchDiscordUsers(userIds)
 
     const leaderboard = r.rows.map((row, idx) => {
-      const user = users[row.user_id] || { id: row.user_id, username: null }
+      const user = users[row.user_id] || { id: row.user_id }
       return {
         rank: idx + 1,
         user_id: row.user_id,
@@ -549,13 +425,12 @@ router.get(
     const result = {
       leaderboard,
       count: leaderboard.length,
-      period,
       updated_at: new Date().toISOString(),
     }
 
-    setCached(leaderboardCache, cacheKey, result)
+    setCached(cacheKey, result)
     res.json(result)
-  }),
+  })
 )
 
 // ════════════════════════════════════════════════════════════
@@ -567,50 +442,26 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 100, 100)
-    const period = normalizePeriod(req.query.period)
-    const cacheKey = `level:${period}:${limit}`
+    const cacheKey = `level:${limit}`
 
-    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    const cached = getCached(cacheKey)
     if (cached) return res.json(cached)
 
-    const activeIds = await getActiveUserIdsInPeriod(period)
+    const r = await query(
+      `SELECT user_id, guild_id, level, xp,
+              ((level * (level - 1) * 50) + xp)::bigint AS total_xp
+       FROM xp
+       WHERE level > 0
+       ORDER BY level DESC, xp DESC
+       LIMIT $1`,
+      [limit]
+    ).catch(() => ({ rows: [] }))
 
-    let r
-    if (!activeIds || activeIds.size === 0) {
-      if (period !== "all") {
-        const empty = { leaderboard: [], count: 0, period, updated_at: new Date().toISOString() }
-        setCached(leaderboardCache, cacheKey, empty)
-        return res.json(empty)
-      }
-
-      r = await query(
-        `SELECT user_id, guild_id, level, xp,
-                ((level * (level - 1) * 50) + xp)::bigint AS total_xp
-         FROM xp
-         WHERE level > 0
-         ORDER BY level DESC, xp DESC
-         LIMIT $1`,
-        [limit],
-      ).catch(() => ({ rows: [] }))
-    } else {
-      const idsArray = [...activeIds]
-      r = await query(
-        `SELECT user_id, guild_id, level, xp,
-                ((level * (level - 1) * 50) + xp)::bigint AS total_xp
-         FROM xp
-         WHERE level > 0
-           AND user_id = ANY($1::text[])
-         ORDER BY level DESC, xp DESC
-         LIMIT $2`,
-        [idsArray, limit],
-      ).catch(() => ({ rows: [] }))
-    }
-
-    const userIds = [...new Set(r.rows.map((row) => row.user_id))]
+    const userIds = [...new Set((r.rows || []).map((row) => row.user_id))]
     const users = await fetchDiscordUsers(userIds)
 
-    const leaderboard = r.rows.map((row, idx) => {
-      const user = users[row.user_id] || { id: row.user_id, username: null }
+    const leaderboard = (r.rows || []).map((row, idx) => {
+      const user = users[row.user_id] || { id: row.user_id }
       return {
         rank: idx + 1,
         user_id: row.user_id,
@@ -626,18 +477,16 @@ router.get(
     const result = {
       leaderboard,
       count: leaderboard.length,
-      period,
       updated_at: new Date().toISOString(),
     }
 
-    setCached(leaderboardCache, cacheKey, result)
+    setCached(cacheKey, result)
     res.json(result)
-  }),
+  })
 )
 
 // ════════════════════════════════════════════════════════════
 //  GET /global/stats
-//  ✨ تحسين: قراءة guild count من مصدرين (DB + Bot)
 // ════════════════════════════════════════════════════════════
 
 router.get(
@@ -645,17 +494,18 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const cacheKey = "stats"
-    const cached = getCached(leaderboardCache, cacheKey, LEADERBOARD_TTL)
+    const cached = getCached(cacheKey)
     if (cached) return res.json(cached)
 
+    // ✅ بدون bank
     const economyStats = await query(`
       SELECT
         COUNT(*)::int AS total_users,
-        SUM(COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS total_money,
-        MAX(COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS richest,
-        AVG(COALESCE(coins, 0) + COALESCE(bank, 0))::bigint AS avg_balance
+        SUM(COALESCE(coins, 0))::bigint AS total_money,
+        MAX(COALESCE(coins, 0))::bigint AS richest,
+        AVG(COALESCE(coins, 0))::bigint AS avg_balance
       FROM economy_users
-      WHERE COALESCE(coins, 0) + COALESCE(bank, 0) > 0
+      WHERE COALESCE(coins, 0) > 0
     `).catch(() => ({ rows: [{}] }))
 
     const xpStats = await query(`
@@ -684,11 +534,7 @@ router.get(
         AND jsonb_array_length(COALESCE(inventory, '[]'::jsonb)) > 0
     `).catch(() => ({ rows: [{}] }))
 
-    // ✨ تحسين: قراءة عدد السيرفرات من مصادر متعددة
-    // 1) جدول guilds (الأساسي)
-    // 2) جدول guild_subscriptions (المشترك)
-    // 3) جدول xp (DISTINCT guild_id)
-    // نأخذ أكبر رقم — لأنه أقرب لعدد سيرفرات البوت الفعلي
+    // عدد السيرفرات من 4 مصادر + البوت live (يأخذ الأكبر)
     const guildSources = await Promise.allSettled([
       query(`SELECT COUNT(DISTINCT id)::int AS total FROM guilds`),
       query(`SELECT COUNT(DISTINCT guild_id)::int AS total FROM guild_subscriptions`),
@@ -704,14 +550,11 @@ router.get(
       }
     }
 
-    // 4) محاولة استدعاء البوت — أدق مصدر
     try {
       const botStats = await callBot("/api/internal/bot-stats", {})
       const botGuilds = Number(botStats?.guild_count) || 0
       if (botGuilds > guildCount) guildCount = botGuilds
-    } catch {
-      // البوت غير متاح — نكمل بالأرقام من DB
-    }
+    } catch {}
 
     const result = {
       economy: {
@@ -736,9 +579,9 @@ router.get(
       updated_at: new Date().toISOString(),
     }
 
-    setCached(leaderboardCache, cacheKey, result)
+    setCached(cacheKey, result)
     res.json(result)
-  }),
+  })
 )
 
 // ════════════════════════════════════════════════════════════
@@ -757,18 +600,16 @@ router.get(
 
     const discordUser = await fetchDiscordUser(userId)
 
-    // ─── Economy ranks ───
+    // ✅ Economy rank بدون bank
     const ecoRank = await query(
       `
       SELECT (COUNT(*) + 1)::int AS rank FROM economy_users
-      WHERE (COALESCE(coins, 0) + COALESCE(bank, 0)) >
-            (SELECT COALESCE(coins, 0) + COALESCE(bank, 0)
-             FROM economy_users WHERE user_id = $1)
+      WHERE COALESCE(coins, 0) >
+            (SELECT COALESCE(coins, 0) FROM economy_users WHERE user_id = $1)
     `,
-      [userId],
+      [userId]
     ).catch(() => ({ rows: [{}] }))
 
-    // ─── XP data ───
     const xpData = await query(
       `
       SELECT
@@ -778,7 +619,7 @@ router.get(
         MAX(level)::int AS highest_level
       FROM xp WHERE user_id = $1
     `,
-      [userId],
+      [userId]
     ).catch(() => ({ rows: [{}] }))
 
     const xpRank = await query(
@@ -789,16 +630,14 @@ router.get(
       SELECT (COUNT(*) + 1)::int AS rank FROM user_totals
       WHERE total > (SELECT COALESCE(SUM(((level * (level - 1) * 50) + xp)), 0) FROM xp WHERE user_id = $1)
     `,
-      [userId],
+      [userId]
     ).catch(() => ({ rows: [{}] }))
 
-    // ─── Subscription ───
     const sub = await query(
       `SELECT plan_id, status, expires_at FROM subscriptions WHERE user_id = $1`,
-      [userId],
+      [userId]
     ).catch(() => ({ rows: [] }))
 
-    // ─── Net worth + items من البوت ───
     const networthData = (await callBot("/api/internal/networth-for-user", { userId })) || {}
 
     const xpRow = xpData.rows[0] || {}
@@ -812,7 +651,7 @@ router.get(
       accent_color: discordUser.accent_color,
       economy: {
         coins: Number(networthData.coins) || 0,
-        bank: Number(networthData.bank) || 0,
+        bank: 0,
         total: Number(networthData.cash_total) || 0,
         rank: Number(ecoRank.rows[0]?.rank) || null,
       },
@@ -837,7 +676,7 @@ router.get(
           }
         : null,
     })
-  }),
+  })
 )
 
 module.exports = router
