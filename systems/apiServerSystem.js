@@ -573,6 +573,74 @@ function startApiServer(client) {
       return res.status(500).json({ error: "internal_error" })
     }
   })
+  // ═══════════════════════════════════════════════════════
+  //  POST /api/internal/rank-for-user
+  //  يحسب ترتيب لاعب معين في items أو networth
+  // ═══════════════════════════════════════════════════════
+  app.post("/api/internal/rank-for-user", requireBotSecret, async (req, res) => {
+    try {
+      const { userId, type } = req.body || {}
+      if (!userId || !/^\d{15,22}$/.test(userId)) {
+        return res.status(400).json({ error: "invalid_user_id" })
+      }
+      if (!["items", "networth"].includes(type)) {
+        return res.status(400).json({ error: "invalid_type" })
+      }
+
+      // جلب كل اللاعبين عشان نحسب الترتيب
+      const result = await databaseSystem.query(`
+        SELECT
+          e.user_id,
+          COALESCE(e.coins, 0)::bigint AS coins,
+          COALESCE(e.inventory, '[]'::jsonb) AS items
+        FROM economy_users e
+        WHERE COALESCE(e.coins, 0) > 0
+           OR jsonb_array_length(COALESCE(e.inventory, '[]'::jsonb)) > 0
+      `)
+
+      // حساب القيم لكل لاعب
+      const players = (result.rows || []).map(row => {
+        const coins = Number(row.coins) || 0
+        const itemsArr = Array.isArray(row.items) ? row.items : []
+        let itemsValue = 0
+        let totalItems = 0
+        for (const asset of itemsArr) {
+          const def = ALL_ITEMS[asset.item_id]
+          const qty = Number(asset.quantity) || 0
+          totalItems += qty
+          if (def?.price) itemsValue += def.price * qty
+        }
+        return {
+          user_id: row.user_id,
+          total_items: totalItems,
+          net_worth: coins + itemsValue,
+        }
+      })
+
+      // ترتيب حسب النوع
+      if (type === "items") {
+        players.sort((a, b) => b.total_items - a.total_items)
+      } else {
+        players.sort((a, b) => b.net_worth - a.net_worth)
+      }
+
+      // البحث عن المستخدم
+      const idx = players.findIndex(p => p.user_id === userId)
+      if (idx === -1) {
+        return res.json({ rank: null, in_top_100: false })
+      }
+
+      const rank = idx + 1
+      return res.json({
+        rank,
+        in_top_100: rank <= 100,
+        total_players: players.length,
+      })
+    } catch (err) {
+      logger.error("RANK_FOR_USER_FAILED", { error: err.message })
+      return res.status(500).json({ error: "internal_error" })
+    }
+  })
 }
 
 module.exports = {

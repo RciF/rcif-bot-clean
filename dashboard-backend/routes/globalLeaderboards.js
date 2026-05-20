@@ -27,7 +27,28 @@ const { query } = require("../config/database")
 const env = require("../config/env")
 
 const router = express.Router()
+// ════════════════════════════════════════════════════════════
+//  Helper: حساب ترتيب المستخدم الحالي + بياناته
+// ════════════════════════════════════════════════════════════
 
+/**
+ * يفحص لو user_id موجود في الـ leaderboard.
+ * لو موجود → يرجع null (لأنه ظاهر أصلاً)
+ * لو غير موجود → يرجع { rank, ...user_data } للعرض بالأسفل
+ */
+function buildMyPosition(leaderboard, userId, allRanks) {
+  if (!userId) return null
+
+  // لو موجود في التوب → لا داعي لعرض صف إضافي
+  const inTop = leaderboard.some(r => r.user_id === userId)
+  if (inTop) return null
+
+  // ابحث عن المستخدم في الـ allRanks (كل اللاعبين)
+  const me = allRanks.find(r => r.user_id === userId)
+  if (!me) return null
+
+  return me
+}
 // ════════════════════════════════════════════════════════════
 //  In-memory cache (5 minutes)
 // ════════════════════════════════════════════════════════════
@@ -689,6 +710,138 @@ router.get(
           }
         : null,
     })
+  })
+)
+
+// ════════════════════════════════════════════════════════════
+//  GET /global/me
+//  يرجّع إحصائيات المستخدم الحالي الشخصية + ترتيبه في كل فئة
+// ════════════════════════════════════════════════════════════
+
+router.get(
+  "/global/me",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = req.user.id
+    const cacheKey = `me:${userId}`
+
+    const cached = getCached(cacheKey)
+    if (cached) return res.json(cached)
+
+    // ─── Economy (coins + rank) ───
+    const ecoResult = await query(
+      `SELECT
+         COALESCE(coins, 0)::bigint AS coins,
+         (
+           SELECT COUNT(*) + 1
+           FROM economy_users e2
+           WHERE COALESCE(e2.coins, 0) >
+                 (SELECT COALESCE(coins, 0) FROM economy_users WHERE user_id = $1)
+         )::int AS rank
+       FROM economy_users
+       WHERE user_id = $1`,
+      [userId]
+    ).catch(() => ({ rows: [{}] }))
+
+    const myCoins = Number(ecoResult.rows[0]?.coins) || 0
+    const myEcoRank = Number(ecoResult.rows[0]?.rank) || null
+
+    // ─── XP + Level (مجموع كل السيرفرات) ───
+    const xpResult = await query(
+      `SELECT
+         COUNT(DISTINCT guild_id)::int AS servers_count,
+         SUM(level)::int AS total_levels,
+         SUM(((level * (level - 1) * 50) + xp))::bigint AS total_xp,
+         MAX(level)::int AS highest_level
+       FROM xp WHERE user_id = $1`,
+      [userId]
+    ).catch(() => ({ rows: [{}] }))
+
+    const myTotalXp = Number(xpResult.rows[0]?.total_xp) || 0
+    const myHighestLevel = Number(xpResult.rows[0]?.highest_level) || 0
+    const myServersCount = Number(xpResult.rows[0]?.servers_count) || 0
+
+    // ─── XP rank ───
+    const xpRank = await query(
+      `
+      WITH user_totals AS (
+        SELECT user_id, SUM(((level * (level - 1) * 50) + xp)) AS total
+        FROM xp GROUP BY user_id
+      )
+      SELECT (COUNT(*) + 1)::int AS rank FROM user_totals
+      WHERE total > (
+        SELECT COALESCE(SUM(((level * (level - 1) * 50) + xp)), 0)
+        FROM xp WHERE user_id = $1
+      )
+    `,
+      [userId]
+    ).catch(() => ({ rows: [{}] }))
+
+    // ─── Level rank ───
+    const levelRank = await query(
+      `SELECT (COUNT(*) + 1)::int AS rank FROM xp
+       WHERE level > $1
+         OR (level = $1 AND xp > (SELECT COALESCE(MAX(xp), 0) FROM xp WHERE user_id = $2 AND level = $1))`,
+      [myHighestLevel, userId]
+    ).catch(() => ({ rows: [{}] }))
+
+    // ─── Net worth + items من البوت ───
+    const networthData = (await callBot("/api/internal/networth-for-user", { userId })) || {}
+    const myItemsCount = Number(networthData.total_items) || 0
+    const myItemsValue = Number(networthData.items_value) || 0
+    const myNetWorth = Number(networthData.net_worth) || (myCoins + myItemsValue)
+
+    // ─── Items rank — من البوت ───
+    let myItemsRank = null
+    let myNetworthRank = null
+    try {
+      const itemsResp = await callBot("/api/internal/rank-for-user", {
+        userId,
+        type: "items",
+      })
+      if (itemsResp?.rank) myItemsRank = Number(itemsResp.rank)
+
+      const nwResp = await callBot("/api/internal/rank-for-user", {
+        userId,
+        type: "networth",
+      })
+      if (nwResp?.rank) myNetworthRank = Number(nwResp.rank)
+    } catch {
+      // البوت غير متاح — نكمل بدون ranks
+    }
+
+    const result = {
+      user_id: userId,
+      username: req.user.username,
+      avatar: req.user.avatar,
+      stats: {
+        level: {
+          value: myHighestLevel,
+          rank: Number(levelRank.rows[0]?.rank) || null,
+        },
+        items: {
+          value: myItemsCount,
+          rank: myItemsRank,
+        },
+        coins: {
+          value: myCoins,
+          rank: myEcoRank,
+        },
+        xp: {
+          value: myTotalXp,
+          rank: Number(xpRank.rows[0]?.rank) || null,
+          servers_count: myServersCount,
+        },
+        networth: {
+          value: myNetWorth,
+          rank: myNetworthRank,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    }
+
+    setCached(cacheKey, result)
+    res.json(result)
   })
 )
 

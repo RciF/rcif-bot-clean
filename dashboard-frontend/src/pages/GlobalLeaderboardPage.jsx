@@ -1,13 +1,13 @@
 /**
  * ═══════════════════════════════════════════════════════════
- *  GlobalLeaderboardPage v5 — Simplified Edition
+ *  GlobalLeaderboardPage v6 — Personal Stats Edition
  *  المسار: dashboard-frontend/src/pages/GlobalLeaderboardPage.jsx
  *
- *  ✨ التغييرات في v5:
- *   - حذف الفلتر الزمني نهائياً (الداش = All-time فقط)
- *   - الفلاتر الزمنية موجودة في /متصدرين الديسكورد
- *   - بقاء كل شي ثاني: Stats Cards قابلة للضغط، Hall of Fame،
- *     Podium، Search، Pagination، Profile Modal
+ *  ✨ التغييرات في v6:
+ *   - البطاقات الـ 5 فوق تعرض إحصائيات المستخدم الحالي (مو الأعلى)
+ *   - أسماء التبويبات الجديدة: مستوى / الممتلكات / فلوس / الخبرة / الثروة الكاملة
+ *   - داخل كل تبويب: Top 100 + لو خارجها → صف إضافي بترتيبي
+ *   - بطاقات الـ Stats قابلة للضغط (تنقل للتبويب)
  * ═══════════════════════════════════════════════════════════
  */
 
@@ -67,12 +67,13 @@ const BADGE_COLORS = {
   rose:    'bg-rose-500/15 text-rose-300 border-rose-500/30',
 }
 
+// ربط البطاقة بالتبويب
 const STAT_TO_TAB = {
-  networth: 'networth',
-  topXp:    'xp',
-  money:    'economy',
+  level:    'level',
   items:    'items',
-  topLevel: 'level',
+  coins:    'economy',
+  xp:       'xp',
+  networth: 'networth',
 }
 
 // ════════════════════════════════════════════════════════════
@@ -80,27 +81,27 @@ const STAT_TO_TAB = {
 // ════════════════════════════════════════════════════════════
 
 export default function GlobalLeaderboardPage() {
-  const [stats, setStats] = useState(null)
+  const [me, setMe] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
   const [activeTab, setActiveTab] = useState('economy')
 
-  const loadStats = useCallback(async () => {
+  const loadMe = useCallback(async () => {
     try {
-      const r = await apiClient.get('/api/global/stats')
-      setStats(r?.data ?? r)
+      const r = await apiClient.get('/api/global/me')
+      setMe(r?.data ?? r)
     } catch {
-      setStats({})
+      setMe({})
     }
   }, [])
 
   useEffect(() => {
-    loadStats()
-  }, [loadStats])
+    loadMe()
+  }, [loadMe])
 
   const handleRefresh = async () => {
     setRefreshing(true)
-    await loadStats()
+    await loadMe()
     setRefreshing(false)
     toast.success('تم التحديث')
   }
@@ -120,26 +121,26 @@ export default function GlobalLeaderboardPage() {
     <div className="space-y-8">
       <Header onRefresh={handleRefresh} refreshing={refreshing} />
 
-      <StatsBar stats={stats} onStatClick={handleStatClick} activeTab={activeTab} />
+      <PersonalStatsBar me={me} onStatClick={handleStatClick} activeTab={activeTab} />
 
       <div id="leaderboard-tabs">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="economy" variant="pills">
               <Coins className="w-4 h-4" />
-              <span>الأغنى</span>
+              <span>فلوس</span>
             </TabsTrigger>
             <TabsTrigger value="items" variant="pills">
               <Package className="w-4 h-4" />
-              <span>أكثر ممتلكات</span>
+              <span>الممتلكات</span>
             </TabsTrigger>
             <TabsTrigger value="xp" variant="pills">
               <Star className="w-4 h-4" />
-              <span>الأعلى XP</span>
+              <span>الخبرة</span>
             </TabsTrigger>
             <TabsTrigger value="level" variant="pills">
               <Award className="w-4 h-4" />
-              <span>أعلى مستوى</span>
+              <span>مستوى</span>
             </TabsTrigger>
             <TabsTrigger value="networth" variant="pills">
               <Gem className="w-4 h-4" />
@@ -148,19 +149,19 @@ export default function GlobalLeaderboardPage() {
           </TabsList>
 
           <TabsContent value="economy">
-            <LeaderboardTab endpoint="economy" type="economy" onUserClick={setSelectedUser} />
-          </TabsContent>
-          <TabsContent value="networth">
-            <LeaderboardTab endpoint="networth" type="networth" onUserClick={setSelectedUser} />
+            <LeaderboardTab endpoint="economy" type="economy" me={me} onUserClick={setSelectedUser} />
           </TabsContent>
           <TabsContent value="items">
-            <LeaderboardTab endpoint="items" type="items" onUserClick={setSelectedUser} />
+            <LeaderboardTab endpoint="items" type="items" me={me} onUserClick={setSelectedUser} />
           </TabsContent>
           <TabsContent value="xp">
-            <LeaderboardTab endpoint="xp" type="xp" onUserClick={setSelectedUser} />
+            <LeaderboardTab endpoint="xp" type="xp" me={me} onUserClick={setSelectedUser} />
           </TabsContent>
           <TabsContent value="level">
-            <LeaderboardTab endpoint="level" type="level" onUserClick={setSelectedUser} />
+            <LeaderboardTab endpoint="level" type="level" me={me} onUserClick={setSelectedUser} />
+          </TabsContent>
+          <TabsContent value="networth">
+            <LeaderboardTab endpoint="networth" type="networth" me={me} onUserClick={setSelectedUser} />
           </TabsContent>
         </Tabs>
       </div>
@@ -193,7 +194,7 @@ function Header({ onRefresh, refreshing }) {
             قائمة المتصدرين العالمية
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            أقوى 100 لاعب في عالم Lyn — كل السيرفرات في مكان واحد ✨
+            إحصائياتك الشخصية + أقوى 100 لاعب في عالم Lyn ✨
           </p>
         </div>
       </div>
@@ -206,11 +207,11 @@ function Header({ onRefresh, refreshing }) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  Stats Bar
+//  Personal Stats Bar (5 cards — تعرض إحصائياتي)
 // ════════════════════════════════════════════════════════════
 
-function StatsBar({ stats, onStatClick, activeTab }) {
-  if (stats === null) {
+function PersonalStatsBar({ me, onStatClick, activeTab }) {
+  if (me === null) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[1, 2, 3, 4, 5].map((i) => (
@@ -220,49 +221,56 @@ function StatsBar({ stats, onStatClick, activeTab }) {
     )
   }
 
+  const stats = me?.stats || {}
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-      <StatCard
-        statKey="topLevel"
+      <PersonalStatCard
+        statKey="level"
         icon={<Star />}
-        label="أعلى مستوى"
-        value={stats?.xp?.highest_level || 0}
+        label="مستوى"
+        value={stats.level?.value || 0}
+        rank={stats.level?.rank}
         color="sky"
         onClick={onStatClick}
-        isActive={activeTab === STAT_TO_TAB.topLevel}
+        isActive={activeTab === STAT_TO_TAB.level}
       />
-      <StatCard
+      <PersonalStatCard
         statKey="items"
         icon={<Package />}
         label="الممتلكات"
-        value={formatCompact(stats?.items?.total_items || 0)}
+        value={formatCompact(stats.items?.value || 0)}
+        rank={stats.items?.rank}
         color="rose"
         onClick={onStatClick}
         isActive={activeTab === STAT_TO_TAB.items}
       />
-      <StatCard
-        statKey="money"
+      <PersonalStatCard
+        statKey="coins"
         icon={<Coins />}
-        label="إجمالي الفلوس"
-        value={formatCompact(stats?.economy?.total_money || 0)}
+        label="فلوس"
+        value={formatCompact(stats.coins?.value || 0)}
+        rank={stats.coins?.rank}
         color="amber"
         onClick={onStatClick}
-        isActive={activeTab === STAT_TO_TAB.money}
+        isActive={activeTab === STAT_TO_TAB.coins}
       />
-      <StatCard
-        statKey="topXp"
+      <PersonalStatCard
+        statKey="xp"
         icon={<Star />}
-        label="أعلى XP"
-        value={formatCompact(stats?.xp?.total_xp || 0)}
+        label="الخبرة"
+        value={formatCompact(stats.xp?.value || 0)}
+        rank={stats.xp?.rank}
         color="emerald"
         onClick={onStatClick}
-        isActive={activeTab === STAT_TO_TAB.topXp}
+        isActive={activeTab === STAT_TO_TAB.xp}
       />
-      <StatCard
+      <PersonalStatCard
         statKey="networth"
         icon={<Gem />}
         label="الثروة الكاملة"
-        value={formatCompact(stats?.economy?.total_net_worth || 0)}
+        value={formatCompact(stats.networth?.value || 0)}
+        rank={stats.networth?.rank}
         color="violet"
         onClick={onStatClick}
         isActive={activeTab === STAT_TO_TAB.networth}
@@ -271,7 +279,7 @@ function StatsBar({ stats, onStatClick, activeTab }) {
   )
 }
 
-function StatCard({ icon, label, value, color, statKey, onClick, isActive, clickable = true }) {
+function PersonalStatCard({ icon, label, value, rank, color, statKey, onClick, isActive }) {
   const colors = {
     violet:  'from-violet-500/20 to-violet-500/5 border-violet-500/30 text-violet-400',
     emerald: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30 text-emerald-400',
@@ -289,17 +297,15 @@ function StatCard({ icon, label, value, color, statKey, onClick, isActive, click
   }
 
   const handleClick = () => {
-    if (clickable && onClick) onClick(statKey)
+    if (onClick) onClick(statKey)
   }
 
   return (
     <Card
       onClick={handleClick}
       className={cn(
-        'p-4 bg-gradient-to-br border transition-all',
+        'p-4 bg-gradient-to-br border transition-all cursor-pointer hover:scale-105 active:scale-100',
         colors[color],
-        clickable && 'cursor-pointer hover:scale-105 active:scale-100',
-        !clickable && 'cursor-default opacity-90',
         isActive && activeRing[color],
       )}
     >
@@ -310,6 +316,11 @@ function StatCard({ icon, label, value, color, statKey, onClick, isActive, click
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground truncate">{label}</p>
           <p className="text-xl font-bold truncate font-mono">{value}</p>
+          {rank && (
+            <p className="text-[10px] text-muted-foreground/70 font-mono mt-0.5">
+              ترتيبك #{rank}
+            </p>
+          )}
         </div>
       </div>
     </Card>
@@ -317,10 +328,10 @@ function StatCard({ icon, label, value, color, statKey, onClick, isActive, click
 }
 
 // ════════════════════════════════════════════════════════════
-//  Leaderboard Tab (الـ tab الموحد — بدون فلتر زمني)
+//  Leaderboard Tab (Top 100 + صف ترتيبي لو خارجها)
 // ════════════════════════════════════════════════════════════
 
-function LeaderboardTab({ endpoint, type, onUserClick }) {
+function LeaderboardTab({ endpoint, type, me, onUserClick }) {
   const [data, setData] = useState(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -375,11 +386,6 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
             ? 'فشل تحميل البيانات — البوت غير متاح حالياً'
             : emptyConfig.text}
         </p>
-        {data.error && (
-          <p className="text-xs text-muted-foreground/60 mt-2">
-            هذا النوع يحتاج البوت يكون شغّال. حاول لاحقاً.
-          </p>
-        )}
       </Card>
     )
   }
@@ -389,6 +395,12 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
   const safePage = Math.min(page, totalPages)
   const startIdx = (safePage - 1) * PAGE_SIZE
   const pageItems = restList.slice(startIdx, startIdx + PAGE_SIZE)
+
+  // ─── حساب صف "ترتيبي" لو خارج التوب 100 ───
+  const myUserId = me?.user_id
+  const amIInList = myUserId && fullList.some((r) => r.user_id === myUserId)
+  const myStats = me?.stats
+  const showMyRowAtBottom = !search && myUserId && !amIInList && myStats && getMyValueForType(myStats, type) > 0
 
   return (
     <div className="space-y-6 mt-6">
@@ -432,6 +444,7 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
             key={row.user_id + (row.guild_id || '')}
             row={row}
             type={type}
+            isMe={row.user_id === myUserId}
             onClick={() => onUserClick(row.user_id)}
           />
         ))}
@@ -451,8 +464,116 @@ function LeaderboardTab({ endpoint, type, onUserClick }) {
           totalItems={restList.length + 3}
         />
       )}
+
+      {/* صف "ترتيبي" لو خارج التوب 100 */}
+      {showMyRowAtBottom && (
+        <div className="pt-4 border-t border-border/50">
+          <p className="text-xs text-muted-foreground mb-2 text-center">
+            ◆ ترتيبك خارج التوب 100 ◆
+          </p>
+          <MyRankRow me={me} type={type} />
+        </div>
+      )}
     </div>
   )
+}
+
+// ════════════════════════════════════════════════════════════
+//  My Rank Row — يظهر بالأسفل لو ترتيبي خارج التوب 100
+// ════════════════════════════════════════════════════════════
+
+function MyRankRow({ me, type }) {
+  const stats = me?.stats || {}
+  const myRank = getMyRankForType(stats, type)
+  const myValue = getMyValueForType(stats, type)
+
+  return (
+    <Card className="p-3 border-2 border-primary/40 bg-primary/5">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center font-bold text-primary flex-shrink-0 font-mono">
+          {myRank ? `#${myRank}` : '?'}
+        </div>
+
+        <img
+          src={me.avatar}
+          alt=""
+          className="w-10 h-10 rounded-full flex-shrink-0"
+          loading="lazy"
+          onError={(e) => {
+            e.target.src = `https://cdn.discordapp.com/embed/avatars/0.png`
+          }}
+        />
+
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold truncate">
+            {me.username || 'أنت'}
+            <span className="mr-2 text-xs text-primary font-normal">(أنت)</span>
+          </p>
+        </div>
+
+        <div className="text-left flex-shrink-0">
+          <ValueDisplay row={buildMyRow(stats, type)} type={type} />
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function getMyValueForType(stats, type) {
+  switch (type) {
+    case 'economy':  return stats.coins?.value || 0
+    case 'networth': return stats.networth?.value || 0
+    case 'items':    return stats.items?.value || 0
+    case 'xp':       return stats.xp?.value || 0
+    case 'level':    return stats.level?.value || 0
+    default:         return 0
+  }
+}
+
+function getMyRankForType(stats, type) {
+  switch (type) {
+    case 'economy':  return stats.coins?.rank
+    case 'networth': return stats.networth?.rank
+    case 'items':    return stats.items?.rank
+    case 'xp':       return stats.xp?.rank
+    case 'level':    return stats.level?.rank
+    default:         return null
+  }
+}
+
+function buildMyRow(stats, type) {
+  switch (type) {
+    case 'economy':
+      return {
+        coins: stats.coins?.value || 0,
+        total: stats.coins?.value || 0,
+      }
+    case 'networth':
+      return {
+        net_worth: stats.networth?.value || 0,
+        cash_total: stats.coins?.value || 0,
+        total_items: stats.items?.value || 0,
+      }
+    case 'items':
+      return {
+        total_items: stats.items?.value || 0,
+        unique_items: 0,
+        items_value: 0,
+      }
+    case 'xp':
+      return {
+        total_xp: stats.xp?.value || 0,
+        servers_count: stats.xp?.servers_count || 0,
+        highest_level: stats.level?.value || 0,
+      }
+    case 'level':
+      return {
+        level: stats.level?.value || 0,
+        total_xp: stats.xp?.value || 0,
+      }
+    default:
+      return {}
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -521,10 +642,10 @@ function Pagination({ page, totalPages, onChange, totalItems }) {
 
 function getEmptyConfig(type) {
   const map = {
-    economy:  { icon: <Coins className="w-16 h-16" />,   text: 'ما فيه لاعبين في الاقتصاد بعد' },
+    economy:  { icon: <Coins className="w-16 h-16" />,   text: 'ما فيه لاعبين بعد' },
     networth: { icon: <Gem className="w-16 h-16" />,     text: 'ما فيه ثروة بعد' },
     items:    { icon: <Package className="w-16 h-16" />, text: 'ما فيه ممتلكات بعد' },
-    xp:       { icon: <Star className="w-16 h-16" />,    text: 'ما فيه XP بعد' },
+    xp:       { icon: <Star className="w-16 h-16" />,    text: 'ما فيه خبرة بعد' },
     level:    { icon: <Award className="w-16 h-16" />,   text: 'ما فيه مستويات بعد' },
   }
   return map[type] || map.economy
@@ -642,10 +763,13 @@ function PodiumCard({ row, type, onClick }) {
   )
 }
 
-function LeaderboardRow({ row, type, onClick }) {
+function LeaderboardRow({ row, type, isMe, onClick }) {
   return (
     <Card
-      className="p-3 hover:bg-card/80 cursor-pointer transition-colors hover:border-primary/30"
+      className={cn(
+        'p-3 hover:bg-card/80 cursor-pointer transition-colors hover:border-primary/30',
+        isMe && 'border-2 border-primary/40 bg-primary/5',
+      )}
       onClick={onClick}
     >
       <div className="flex items-center gap-3">
@@ -664,7 +788,10 @@ function LeaderboardRow({ row, type, onClick }) {
         />
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold truncate">{row.username}</p>
+          <p className="font-semibold truncate">
+            {row.username}
+            {isMe && <span className="mr-2 text-xs text-primary font-normal">(أنت)</span>}
+          </p>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
             {row.badges?.slice(0, 2).map((b, i) => <BadgePill key={i} badge={b} small />)}
           </div>
@@ -685,7 +812,7 @@ function ValueDisplay({ row, type, large }) {
     return (
       <div className="text-left">
         <p className={cn('font-bold text-amber-400 font-mono', size)}>
-          {formatCompact(row.total)}
+          {formatCompact(row.total || row.coins)}
         </p>
         <p className="text-[10px] text-muted-foreground mt-0.5">🪙 كوين</p>
       </div>
@@ -712,7 +839,8 @@ function ValueDisplay({ row, type, large }) {
           {formatCompact(row.total_items)}
         </p>
         <p className="text-[10px] text-muted-foreground mt-0.5">
-          🌟 {row.unique_items} نوع • 💎 {formatCompact(row.items_value)}
+          {row.unique_items > 0 && <>🌟 {row.unique_items} نوع • </>}
+          💎 {formatCompact(row.items_value)}
         </p>
       </div>
     )
@@ -829,7 +957,7 @@ function UserProfileModal({ userId, onClose }) {
               <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
                 <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold mb-2">
                   <Coins className="w-3.5 h-3.5" />
-                  <span>الاقتصاد</span>
+                  <span>الفلوس</span>
                 </div>
                 <p className="text-xl font-bold font-mono">{formatCompact(profile.economy?.total || 0)}</p>
                 <p className="text-xs text-muted-foreground mt-1">🪙 كوين</p>
@@ -852,7 +980,7 @@ function UserProfileModal({ userId, onClose }) {
               <div className="p-4 rounded-xl bg-violet-500/5 border border-violet-500/20">
                 <div className="flex items-center gap-2 text-violet-400 text-xs font-semibold mb-2">
                   <Star className="w-3.5 h-3.5" />
-                  <span>الـ XP</span>
+                  <span>الخبرة</span>
                 </div>
                 <p className="text-xl font-bold font-mono">{formatCompact(profile.xp?.total_xp || 0)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -866,7 +994,7 @@ function UserProfileModal({ userId, onClose }) {
               <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
                 <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold mb-2">
                   <Award className="w-3.5 h-3.5" />
-                  <span>أعلى مستوى</span>
+                  <span>المستوى</span>
                 </div>
                 <p className="text-xl font-bold font-mono">Lv.{profile.xp?.highest_level || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">في سيرفر واحد</p>
