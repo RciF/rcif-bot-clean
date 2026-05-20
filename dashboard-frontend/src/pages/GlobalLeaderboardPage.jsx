@@ -14,7 +14,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Trophy, Crown, Coins, Star, Award, Gem, Package,
-  Globe, Users, RefreshCw, Search, X, ChevronRight, ChevronLeft,
+  Users, RefreshCw, Search, X, ChevronRight, ChevronLeft,
   Sparkles, AlertCircle,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -68,7 +68,7 @@ const BADGE_COLORS = {
 }
 
 const STAT_TO_TAB = {
-  servers:  null,
+  networth: 'networth',
   players:  'xp',
   money:    'economy',
   items:    'items',
@@ -129,10 +129,6 @@ export default function GlobalLeaderboardPage() {
               <Coins className="w-4 h-4" />
               <span>الأغنى</span>
             </TabsTrigger>
-            <TabsTrigger value="networth" variant="pills">
-              <Gem className="w-4 h-4" />
-              <span>الثروة الكاملة</span>
-            </TabsTrigger>
             <TabsTrigger value="items" variant="pills">
               <Package className="w-4 h-4" />
               <span>أكثر ممتلكات</span>
@@ -144,6 +140,10 @@ export default function GlobalLeaderboardPage() {
             <TabsTrigger value="level" variant="pills">
               <Award className="w-4 h-4" />
               <span>أعلى مستوى</span>
+            </TabsTrigger>
+            <TabsTrigger value="networth" variant="pills">
+              <Gem className="w-4 h-4" />
+              <span>الثروة الكاملة</span>
             </TabsTrigger>
           </TabsList>
 
@@ -259,14 +259,13 @@ function StatsBar({ stats, onStatClick, activeTab }) {
         isActive={activeTab === STAT_TO_TAB.players}
       />
       <StatCard
-        statKey="servers"
-        icon={<Globe />}
-        label="السيرفرات"
-        value={formatCompact(stats?.guilds?.total || 0)}
+        statKey="networth"
+        icon={<Gem />}
+        label="الثروة الكاملة"
+        value={formatCompact(stats?.economy?.total_money || 0)}
         color="violet"
         onClick={onStatClick}
-        isActive={false}
-        clickable={false}
+        isActive={activeTab === STAT_TO_TAB.networth}
       />
     </div>
   )
