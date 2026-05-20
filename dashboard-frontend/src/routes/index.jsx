@@ -70,6 +70,7 @@ const router = createBrowserRouter([
           { path: 'templates', element: <TemplatesPage /> },
           { path: 'commands', element: <CommandsPage /> },
           { path: 'card', element: <CardCustomizationPage /> },
+          { path: 'subscription', element: <SubscriptionPage /> },
           { path: 'card/subscription', element: <CardSubscriptionPage /> },
           { path: 'card-admin', element: <CardAdminPage /> },
           { path: 'events', element: <EventsPage /> },
