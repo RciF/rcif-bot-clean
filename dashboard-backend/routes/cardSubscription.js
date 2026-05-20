@@ -264,7 +264,16 @@ router.put(
         { allowed: tierData.features.badges, requested: badges.length }
       )
     }
-
+// ─── التحقق من الصورة الشخصية (Advanced/Legendary فقط) ───
+    if (avatar_url && !tierData.features.customBackground) {
+      throw new ApiError(
+        "الصورة الشخصية المخصصة غير متاحة في فئتك",
+        403,
+        "TIER_RESTRICTED",
+        { requiredTier: "advanced" }
+      )
+    }
+    
     if (effects && typeof effects === "object") {
       const activeEffects = Object.values(effects).filter(Boolean).length
       if (activeEffects > tierData.features.effects) {

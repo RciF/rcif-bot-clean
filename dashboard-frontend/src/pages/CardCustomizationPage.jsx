@@ -19,6 +19,7 @@ import {
   Image as ImageIcon,
   Award,
   Sparkles,
+  User,
   RotateCcw,
   Save,
   Crown,
@@ -50,6 +51,7 @@ import { BackgroundPicker } from '@/components/card/BackgroundPicker';
 import { ThemePicker } from '@/components/card/ThemePicker';
 import { BadgePicker } from '@/components/card/BadgePicker';
 import { EffectsPicker } from '@/components/card/EffectsPicker';
+import { AvatarUploader } from '@/components/card/AvatarUploader';
 import {
   useCardMe,
   useSaveCardSettings,
@@ -91,6 +93,7 @@ export default function CardCustomizationPage() {
           typeof cardData.settings.effects === 'object'
             ? cardData.settings.effects
             : {},
+        avatar_url: cardData.settings.avatar_url || null,
       });
     }
   }, [cardData?.settings]);
@@ -109,7 +112,8 @@ export default function CardCustomizationPage() {
       JSON.stringify(localSettings.badges) !==
         JSON.stringify(original.badges || []) ||
       JSON.stringify(localSettings.effects) !==
-        JSON.stringify(original.effects || {})
+        JSON.stringify(original.effects || {}) ||
+      localSettings.avatar_url !== (original.avatar_url || null)
     );
   }, [localSettings, cardData?.settings]);
 
@@ -254,6 +258,7 @@ export default function CardCustomizationPage() {
                       typeof cardData.settings.effects === 'object'
                         ? cardData.settings.effects
                         : {},
+                    avatar_url: cardData.settings.avatar_url || null,
                   });
                 }
               }}
@@ -313,6 +318,16 @@ export default function CardCustomizationPage() {
                     .length
                 }
                 /{tierData.features.effects}
+              </Badge>
+            )}
+          </TabsTrigger>
+
+          <TabsTrigger value="avatar" variant="pills">
+            <User className="w-4 h-4" />
+            <span>الصورة الشخصية</span>
+            {localSettings.avatar_url && (
+              <Badge variant="default" size="sm" className="ms-1 bg-violet-500/15 text-violet-500">
+                مخصصة
               </Badge>
             )}
           </TabsTrigger>
@@ -381,6 +396,17 @@ export default function CardCustomizationPage() {
               effects={localSettings.effects}
               userTier={currentTier}
               onChange={(effects) => updateField('effects', effects)}
+            />
+          </Card>
+        </TabsContent>
+
+        {/* ─── الصورة الشخصية ─── */}
+        <TabsContent value="avatar">
+          <Card className="p-5">
+            <AvatarUploader
+              currentAvatarUrl={localSettings.avatar_url}
+              userTier={currentTier}
+              onChange={(url) => updateField('avatar_url', url)}
             />
           </Card>
         </TabsContent>
