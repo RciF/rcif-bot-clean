@@ -1,38 +1,21 @@
 // ══════════════════════════════════════════════════════════════════
-//  RANK CARD SYSTEM v3.0
+//  RANK CARD SYSTEM v4.0 — مع دعم GIF متحرك للأسطورية
 //  المسار: systems/rankCardSystem.js
 //
-//  ✨ التحسينات في هذه النسخة:
-//   - شارات بتصميم gradient + shine + drop shadow + border
-//   - Particles effect ثابت (نقاط متناثرة مرسومة)
-//   - Glow أقوى وأكثر واقعية
-//   - Shine effect ثابت على شريط XP
-//   - Pulse effect حقيقي (دوائر متعددة بحجم متدرج)
+//  ✨ الجديد:
+//   - generateRankCardGIF() — يولّد GIF متحرك 16 frame
+//   - الأسطورية فقط تحصل على GIF
+//   - باقي الفئات PNG ثابت (سريع وخفيف)
+//   - cache مؤقت 5 دقائق لتخفيف الحمل
 // ══════════════════════════════════════════════════════════════════
 
 const { createCanvas, loadImage } = require("@napi-rs/canvas")
-const GIFEncoder = require("gif-encoder-2")
+const GIFEncoder = require("gifencoder")
 const {
   getTheme,
-  getThemeById,
   getBackgroundById,
   getBadgeById,
-  getEffectById,
 } = require("./cardCustomizationSystem")
-
-// ─── GIF Settings ───
-const GIF_FRAMES = 16
-const GIF_DELAY = 80
-const GIF_QUALITY = 10
-const gifCache = new Map()
-const GIF_CACHE_TTL = 5 * 60_000
-
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, entry] of gifCache.entries()) {
-    if (now - entry.createdAt > GIF_CACHE_TTL) gifCache.delete(key)
-  }
-}, 60_000)
 
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG
@@ -58,6 +41,22 @@ const TIER_BADGE_DATA = {
   advanced:  { icon: "🥈", color: "#c0c0c0", glowColor: "rgba(192, 192, 192, 0.6)" },
   legendary: { icon: "👑", color: "#ffd700", glowColor: "rgba(255, 215, 0, 0.8)" }
 }
+
+// GIF settings
+const GIF_FRAMES = 16
+const GIF_DELAY = 80  // ms between frames
+const GIF_QUALITY = 10  // 1-30, lower = better
+
+// ─── Cache للـ GIFs (key: userId+settings hash, value: buffer) ───
+const gifCache = new Map()
+const GIF_CACHE_TTL = 5 * 60_000  // 5 دقائق
+
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of gifCache.entries()) {
+    if (now - entry.createdAt > GIF_CACHE_TTL) gifCache.delete(key)
+  }
+}, 60_000)
 
 // ══════════════════════════════════════════════════════════════════
 //  HELPERS
@@ -138,10 +137,6 @@ function resolveTheme(customization) {
   return { ...DEFAULT_THEME }
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  EFFECT RENDERERS
-// ══════════════════════════════════════════════════════════════════
-
 function applyGlow(ctx, color, intensity = 12) {
   ctx.shadowColor = color
   ctx.shadowBlur = intensity
@@ -162,156 +157,6 @@ function fillTextGradient(ctx, text, x, y, color1, color2) {
   ctx.fillText(text, x, y)
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  ✨ PARTICLES EFFECT (ثابت - مرسوم على الـ canvas)
-// ══════════════════════════════════════════════════════════════════
-
-function drawParticles(ctx, theme, width, height) {
-  ctx.save()
-
-  const particles = [
-    { x: 220, y: 25,  size: 2.5, opacity: 0.7 },
-    { x: 350, y: 18,  size: 1.8, opacity: 0.5 },
-    { x: 480, y: 35,  size: 3,   opacity: 0.8 },
-    { x: 580, y: 22,  size: 2,   opacity: 0.6 },
-    { x: 700, y: 30,  size: 2.5, opacity: 0.7 },
-    { x: 820, y: 20,  size: 1.5, opacity: 0.4 },
-    { x: 270, y: 215, size: 2,   opacity: 0.5 },
-    { x: 420, y: 225, size: 2.5, opacity: 0.6 },
-    { x: 560, y: 218, size: 1.8, opacity: 0.5 },
-    { x: 680, y: 228, size: 2.2, opacity: 0.7 },
-    { x: 810, y: 220, size: 2,   opacity: 0.5 },
-    { x: 380, y: 145, size: 1.5, opacity: 0.4 },
-    { x: 620, y: 155, size: 2,   opacity: 0.5 },
-    { x: 750, y: 140, size: 1.8, opacity: 0.5 }
-  ]
-
-  for (const p of particles) {
-    // ضوء حول النقطة
-    const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3)
-    gradient.addColorStop(0, theme.accent + "ff")
-    gradient.addColorStop(1, theme.accent + "00")
-    ctx.fillStyle = gradient
-    ctx.globalAlpha = p.opacity
-    ctx.beginPath()
-    ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2)
-    ctx.fill()
-
-    // النقطة نفسها
-    ctx.globalAlpha = p.opacity * 1.5
-    ctx.fillStyle = "#ffffff"
-    ctx.beginPath()
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  ctx.restore()
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  ✨ PULSE EFFECT (هالات متعددة حول الصورة)
-// ══════════════════════════════════════════════════════════════════
-
-function drawPulse(ctx, cx, cy, baseRadius, color) {
-  ctx.save()
-
-  // 3 هالات متدرجة
-  const layers = [
-    { offset: 6,  opacity: 0.5, width: 2 },
-    { offset: 12, opacity: 0.3, width: 1.5 },
-    { offset: 18, opacity: 0.15, width: 1 }
-  ]
-
-  for (const layer of layers) {
-    ctx.beginPath()
-    ctx.arc(cx, cy, baseRadius + layer.offset, 0, Math.PI * 2)
-    ctx.strokeStyle = color
-    ctx.lineWidth = layer.width
-    ctx.globalAlpha = layer.opacity
-    ctx.stroke()
-  }
-
-  ctx.restore()
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  ✨ ENHANCED BADGE DRAWING (تصميم أسطوري)
-// ══════════════════════════════════════════════════════════════════
-
-function drawEnhancedBadge(ctx, x, y, size, badgeData) {
-  ctx.save()
-
-  const cx = x + size / 2
-  const cy = y + size / 2
-
-  // ─── 1. Outer Glow Halo ───
-  const haloGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 1.2)
-  haloGrad.addColorStop(0, badgeData.color + "40")
-  haloGrad.addColorStop(0.5, badgeData.color + "20")
-  haloGrad.addColorStop(1, badgeData.color + "00")
-  ctx.fillStyle = haloGrad
-  ctx.beginPath()
-  ctx.arc(cx, cy, size * 1.2, 0, Math.PI * 2)
-  ctx.fill()
-
-  // ─── 2. Drop Shadow ───
-  ctx.shadowColor = "rgba(0, 0, 0, 0.5)"
-  ctx.shadowBlur = 4
-  ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 2
-
-  // ─── 3. Main Badge Circle مع Gradient ───
-  const badgeGrad = ctx.createRadialGradient(cx - size * 0.2, cy - size * 0.2, 0, cx, cy, size / 2)
-  badgeGrad.addColorStop(0, lightenColor(badgeData.color, 20))
-  badgeGrad.addColorStop(0.6, badgeData.color)
-  badgeGrad.addColorStop(1, darkenColor(badgeData.color, 15))
-
-  ctx.fillStyle = badgeGrad
-  ctx.beginPath()
-  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2)
-  ctx.fill()
-
-  // ─── إيقاف shadow ───
-  ctx.shadowColor = "transparent"
-  ctx.shadowBlur = 0
-  ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 0
-
-  // ─── 4. Inner Shine (highlight) ───
-  const shineGrad = ctx.createRadialGradient(
-    cx - size * 0.25,
-    cy - size * 0.25,
-    0,
-    cx - size * 0.25,
-    cy - size * 0.25,
-    size * 0.6
-  )
-  shineGrad.addColorStop(0, "rgba(255, 255, 255, 0.5)")
-  shineGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.1)")
-  shineGrad.addColorStop(1, "rgba(255, 255, 255, 0)")
-  ctx.fillStyle = shineGrad
-  ctx.beginPath()
-  ctx.arc(cx, cy, size / 2 - 1, 0, Math.PI * 2)
-  ctx.fill()
-
-  // ─── 5. Border ───
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)"
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
-  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2)
-  ctx.stroke()
-
-  // ─── 6. Emoji/Icon ───
-  ctx.fillStyle = "#000000"
-  ctx.font = `bold ${size * 0.55}px sans-serif`
-  ctx.textAlign = "center"
-  ctx.textBaseline = "middle"
-  ctx.fillText(badgeData.icon || badgeData.emoji || "•", cx, cy + 1)
-
-  ctx.restore()
-}
-
-// ─── Helper: تفتيح/تغميق اللون ───
 function lightenColor(hex, percent) {
   const num = parseInt(hex.replace("#", ""), 16)
   const r = Math.min(255, ((num >> 16) & 0xff) + Math.round(255 * (percent / 100)))
@@ -329,88 +174,18 @@ function darkenColor(hex, percent) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  ✨ TIER BADGE (الشارة الكبيرة على الصورة)
+//  RENDER FUNCTIONS (مشتركة بين PNG و GIF)
 // ══════════════════════════════════════════════════════════════════
 
-function drawTierBadge(ctx, x, y, tier) {
-  const tierData = TIER_BADGE_DATA[tier]
-  if (!tierData) return
-
-  const isLegendary = tier === "legendary"
-  const size = 18
-  const cx = x
-  const cy = y
-
-  ctx.save()
-
-  // ─── Outer glow (أقوى للأسطورية) ───
-  if (isLegendary) {
-    for (let i = 3; i > 0; i--) {
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size + i * 4)
-      grad.addColorStop(0, tierData.color + "00")
-      grad.addColorStop(0.5, tierData.color + Math.floor(80 / i).toString(16).padStart(2, "0"))
-      grad.addColorStop(1, tierData.color + "00")
-      ctx.fillStyle = grad
-      ctx.beginPath()
-      ctx.arc(cx, cy, size + i * 4, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  }
-
-  // ─── Drop shadow ───
-  ctx.shadowColor = "rgba(0, 0, 0, 0.6)"
-  ctx.shadowBlur = 6
-  ctx.shadowOffsetY = 2
-
-  // ─── الدائرة الأساسية مع gradient ───
-  const grad = ctx.createRadialGradient(cx - 5, cy - 5, 0, cx, cy, size)
-  grad.addColorStop(0, lightenColor(tierData.color, 25))
-  grad.addColorStop(0.7, tierData.color)
-  grad.addColorStop(1, darkenColor(tierData.color, 20))
-  ctx.fillStyle = grad
-  ctx.beginPath()
-  ctx.arc(cx, cy, size, 0, Math.PI * 2)
-  ctx.fill()
-
-  // ─── Reset shadow ───
-  ctx.shadowColor = "transparent"
-  ctx.shadowBlur = 0
-  ctx.shadowOffsetY = 0
-
-  // ─── Inner shine ───
-  const shine = ctx.createRadialGradient(cx - 6, cy - 6, 0, cx - 6, cy - 6, size * 0.9)
-  shine.addColorStop(0, "rgba(255, 255, 255, 0.6)")
-  shine.addColorStop(1, "rgba(255, 255, 255, 0)")
-  ctx.fillStyle = shine
-  ctx.beginPath()
-  ctx.arc(cx, cy, size - 1, 0, Math.PI * 2)
-  ctx.fill()
-
-  // ─── Border ───
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.55)"
-  ctx.lineWidth = 2
-  ctx.beginPath()
-  ctx.arc(cx, cy, size, 0, Math.PI * 2)
-  ctx.stroke()
-
-  // ─── Icon ───
-  ctx.fillStyle = "#000"
-  ctx.font = "bold 22px sans-serif"
-  ctx.textAlign = "center"
-  ctx.textBaseline = "middle"
-  ctx.fillText(tierData.icon, cx, cy + 1)
-
-  ctx.restore()
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  MAIN FUNCTION
-// ══════════════════════════════════════════════════════════════════
-
-async function generateRankCard(data) {
+/**
+ * يرسم البطاقة الكاملة على ctx مع animation phase
+ *
+ * @param {number} frameIndex - 0 to GIF_FRAMES-1 (للأنيميشن)
+ * @param {number} totalFrames - عدد الـ frames الكلي
+ */
+async function drawCardFrame(ctx, W, H, data, frameIndex = 0, totalFrames = 1) {
   const {
     username,
-    discriminator,
     avatarURL,
     level,
     rank,
@@ -419,7 +194,9 @@ async function generateRankCard(data) {
     totalXP,
     progressPercent,
     customization = null,
-    tier = "free"
+    tier = "free",
+    avatarImage = null,
+    bgImage = null,
   } = data
 
   const THEME = resolveTheme(customization)
@@ -428,59 +205,57 @@ async function generateRankCard(data) {
     ? customization.effects
     : {}
 
-  const hasGlow      = !!effects.glow
-  const hasGradient  = !!effects.gradient
-  const hasPulse     = !!effects.pulse
-  const hasShine     = !!effects.shine
-  const hasParticles = !!effects.particles
+  const hasGlow            = !!effects.glow
+  const hasGradient        = !!effects.gradient
+  const hasPulse           = !!effects.pulse
+  const hasShine           = !!effects.shine
+  const hasParticles       = !!effects.particles
+  const hasAnimatedBorder  = !!effects.animated_border
 
   const isPremium = tier !== "free"
   const isLegendary = tier === "legendary"
+  const isAnimated = totalFrames > 1
 
-  // Canvas
-  const W = 900
-  const H = 250
-  const canvas = createCanvas(W, H)
-  const ctx = canvas.getContext("2d")
+  // ─── حساب progress للأنيميشن (0 → 1 → 0) ───
+  const animProgress = isAnimated ? (frameIndex / totalFrames) : 0
+  const sineWave = Math.sin(animProgress * Math.PI * 2)
+  const halfSine = Math.sin(animProgress * Math.PI)
+  const linearLoop = (frameIndex % totalFrames) / totalFrames
 
-  // ─── الخلفية ───
+  // ═══════════════════════════════════════════
+  //  الخلفية الرئيسية
+  // ═══════════════════════════════════════════
   roundRect(ctx, 0, 0, W, H, 20)
   ctx.fillStyle = THEME.bg
   ctx.fill()
 
   // ─── خلفية مخصصة ───
-  const backgroundUrl = resolveBackgroundUrl(customization)
-  if (backgroundUrl) {
-    try {
-      const bgImage = await loadImage(backgroundUrl)
-      ctx.save()
-      roundRect(ctx, 0, 0, W, H, 20)
-      ctx.clip()
+  if (bgImage) {
+    ctx.save()
+    roundRect(ctx, 0, 0, W, H, 20)
+    ctx.clip()
 
-      const imgRatio = bgImage.width / bgImage.height
-      const canvasRatio = W / H
+    const imgRatio = bgImage.width / bgImage.height
+    const canvasRatio = W / H
 
-      let drawW, drawH, drawX, drawY
-      if (imgRatio > canvasRatio) {
-        drawH = H
-        drawW = H * imgRatio
-        drawX = (W - drawW) / 2
-        drawY = 0
-      } else {
-        drawW = W
-        drawH = W / imgRatio
-        drawX = 0
-        drawY = (H - drawH) / 2
-      }
+    let drawW, drawH, drawX, drawY
+    if (imgRatio > canvasRatio) {
+      drawH = H
+      drawW = H * imgRatio
+      drawX = (W - drawW) / 2
+      drawY = 0
+    } else {
+      drawW = W
+      drawH = W / imgRatio
+      drawX = 0
+      drawY = (H - drawH) / 2
+    }
 
-      ctx.drawImage(bgImage, drawX, drawY, drawW, drawH)
-      ctx.fillStyle = "rgba(0, 0, 0, 0.55)"
-      ctx.fillRect(0, 0, W, H)
-      ctx.restore()
-    } catch {}
-  }
-
-  if (!backgroundUrl) {
+    ctx.drawImage(bgImage, drawX, drawY, drawW, drawH)
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)"
+    ctx.fillRect(0, 0, W, H)
+    ctx.restore()
+  } else {
     roundRect(ctx, 10, 10, W - 20, H - 20, 16)
     ctx.fillStyle = THEME.bgCard
     ctx.fill()
@@ -495,10 +270,79 @@ async function generateRankCard(data) {
   ctx.fill()
 
   // ═══════════════════════════════════════════
-  //  ✨ Particles Effect (ثابت)
+  //  ✨ Animated Border (للأسطورية)
+  // ═══════════════════════════════════════════
+  if (hasAnimatedBorder && isPremium && isAnimated) {
+    ctx.save()
+    const borderPos = linearLoop * (W * 2 + H * 2)
+    const borderGrad = ctx.createLinearGradient(0, 0, W, 0)
+    const intensity = 0.5 + halfSine * 0.4
+    borderGrad.addColorStop(0, THEME.accent + Math.floor(intensity * 255).toString(16).padStart(2, "0"))
+    borderGrad.addColorStop(0.5, THEME.accentSecondary)
+    borderGrad.addColorStop(1, THEME.accent + Math.floor(intensity * 255).toString(16).padStart(2, "0"))
+    ctx.strokeStyle = borderGrad
+    ctx.lineWidth = 3
+    roundRect(ctx, 12, 12, W - 24, H - 24, 14)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  // ═══════════════════════════════════════════
+  //  ✨ Particles (متحركة في GIF)
   // ═══════════════════════════════════════════
   if (hasParticles && isPremium) {
-    drawParticles(ctx, THEME, W, H)
+    ctx.save()
+
+    const particles = [
+      { x: 220, y: 25,  size: 2.5, baseOpacity: 0.7, phase: 0    },
+      { x: 350, y: 18,  size: 1.8, baseOpacity: 0.5, phase: 0.15 },
+      { x: 480, y: 35,  size: 3,   baseOpacity: 0.8, phase: 0.3  },
+      { x: 580, y: 22,  size: 2,   baseOpacity: 0.6, phase: 0.45 },
+      { x: 700, y: 30,  size: 2.5, baseOpacity: 0.7, phase: 0.6  },
+      { x: 820, y: 20,  size: 1.5, baseOpacity: 0.4, phase: 0.75 },
+      { x: 270, y: 215, size: 2,   baseOpacity: 0.5, phase: 0.1  },
+      { x: 420, y: 225, size: 2.5, baseOpacity: 0.6, phase: 0.25 },
+      { x: 560, y: 218, size: 1.8, baseOpacity: 0.5, phase: 0.4  },
+      { x: 680, y: 228, size: 2.2, baseOpacity: 0.7, phase: 0.55 },
+      { x: 810, y: 220, size: 2,   baseOpacity: 0.5, phase: 0.7  },
+      { x: 380, y: 145, size: 1.5, baseOpacity: 0.4, phase: 0.85 },
+      { x: 620, y: 155, size: 2,   baseOpacity: 0.5, phase: 0.05 },
+      { x: 750, y: 140, size: 1.8, baseOpacity: 0.5, phase: 0.2  }
+    ]
+
+    for (const p of particles) {
+      // animation: opacity تتذبذب
+      const phaseOffset = (animProgress + p.phase) % 1
+      const opacity = isAnimated
+        ? p.baseOpacity * (0.3 + Math.abs(Math.sin(phaseOffset * Math.PI * 2)) * 0.7)
+        : p.baseOpacity
+
+      // animation: position تتحرك أفقياً قليلاً
+      const yOffset = isAnimated
+        ? Math.sin(phaseOffset * Math.PI * 2) * 3
+        : 0
+
+      const finalY = p.y + yOffset
+
+      // glow
+      const gradient = ctx.createRadialGradient(p.x, finalY, 0, p.x, finalY, p.size * 3)
+      gradient.addColorStop(0, THEME.accent + "ff")
+      gradient.addColorStop(1, THEME.accent + "00")
+      ctx.fillStyle = gradient
+      ctx.globalAlpha = opacity
+      ctx.beginPath()
+      ctx.arc(p.x, finalY, p.size * 3, 0, Math.PI * 2)
+      ctx.fill()
+
+      // النقطة
+      ctx.globalAlpha = Math.min(1, opacity * 1.5)
+      ctx.fillStyle = "#ffffff"
+      ctx.beginPath()
+      ctx.arc(p.x, finalY, p.size, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    ctx.restore()
   }
 
   // ─── الصورة الشخصية ───
@@ -515,25 +359,53 @@ async function generateRankCard(data) {
   ctx.fill()
 
   // ═══════════════════════════════════════════
-  //  ✨ Pulse Effect (هالات متعددة)
+  //  ✨ Pulse Effect (متحرك في GIF)
   // ═══════════════════════════════════════════
   if (hasPulse && isPremium) {
-    drawPulse(ctx, avatarCx, avatarCy, avatarSize / 2 + 4, THEME.accent)
+    ctx.save()
+
+    // pulse expand خلال animation
+    const pulseExpand = isAnimated ? (linearLoop * 18) : 0
+    const pulseOpacity = isAnimated ? (1 - linearLoop) : 0.5
+
+    // الهالة الكبيرة المتحركة (animated)
+    if (isAnimated) {
+      ctx.beginPath()
+      ctx.arc(avatarCx, avatarCy, avatarSize / 2 + 4 + pulseExpand, 0, Math.PI * 2)
+      ctx.strokeStyle = THEME.accent
+      ctx.lineWidth = 2
+      ctx.globalAlpha = pulseOpacity * 0.6
+      ctx.stroke()
+    }
+
+    // الطبقات الثابتة
+    const layers = [
+      { offset: 6,  opacity: 0.5, width: 2 },
+      { offset: 12, opacity: 0.3, width: 1.5 },
+      { offset: 18, opacity: 0.15, width: 1 }
+    ]
+
+    for (const layer of layers) {
+      ctx.beginPath()
+      ctx.arc(avatarCx, avatarCy, avatarSize / 2 + 4 + layer.offset, 0, Math.PI * 2)
+      ctx.strokeStyle = THEME.accent
+      ctx.lineWidth = layer.width
+      ctx.globalAlpha = layer.opacity
+      ctx.stroke()
+    }
+
+    ctx.restore()
   }
 
-  // تحميل الصورة
-  const finalAvatarURL = customization?.avatar_url || avatarURL
-  try {
-    const avatar = await loadImage(
-      finalAvatarURL + (customization?.avatar_url ? "" : "?size=256")
-    )
+  // ─── رسم الصورة ───
+  if (avatarImage) {
     ctx.save()
     ctx.beginPath()
     ctx.arc(avatarCx, avatarCy, avatarSize / 2, 0, Math.PI * 2)
     ctx.clip()
-    ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize)
+    ctx.drawImage(avatarImage, avatarX, avatarY, avatarSize, avatarSize)
     ctx.restore()
-  } catch {
+  } else {
     ctx.beginPath()
     ctx.arc(avatarCx, avatarCy, avatarSize / 2, 0, Math.PI * 2)
     ctx.fillStyle = THEME.accent + "44"
@@ -553,11 +425,9 @@ async function generateRankCard(data) {
   ctx.lineWidth = 3
   ctx.stroke()
 
-  // ═══════════════════════════════════════════
-  //  ✨ شارة الفئة (محسّنة)
-  // ═══════════════════════════════════════════
+  // ─── شارة الفئة ───
   if (isPremium && TIER_BADGE_DATA[tier]) {
-    drawTierBadge(ctx, avatarX + avatarSize - 8, avatarY + avatarSize - 8, tier)
+    drawTierBadge(ctx, avatarX + avatarSize - 8, avatarY + avatarSize - 8, tier, frameIndex, totalFrames)
   }
 
   // ─── اسم المستخدم ───
@@ -575,8 +445,10 @@ async function generateRankCard(data) {
   }
   if (displayName !== username) displayName += "..."
 
+  // glow effect (متذبذب في GIF)
   if (hasGlow && isPremium) {
-    applyGlow(ctx, THEME.accent, 18)
+    const glowIntensity = isAnimated ? (14 + halfSine * 8) : 18
+    applyGlow(ctx, THEME.accent, glowIntensity)
   }
 
   if (hasGradient && isPremium) {
@@ -588,11 +460,8 @@ async function generateRankCard(data) {
 
   clearGlow(ctx)
 
-  // ═══════════════════════════════════════════
-  //  ✨ شارات المستخدم (محسّنة)
-  // ═══════════════════════════════════════════
+  // ─── شارات المستخدم ───
   const userBadges = Array.isArray(customization?.badges) ? customization.badges : []
-
   if (userBadges.length > 0) {
     const badgeStartX = textStartX
     const badgeY = textTopY + 50
@@ -608,7 +477,7 @@ async function generateRankCard(data) {
     })
   }
 
-  // ─── الترتيب والمستوى (يمين) ───
+  // ─── الترتيب والمستوى ───
   const rightX = W - 40
 
   ctx.textAlign = "right"
@@ -625,7 +494,8 @@ async function generateRankCard(data) {
   ctx.fillText("المستوى", rightX - 110, textTopY)
 
   if (hasGlow && isPremium) {
-    applyGlow(ctx, THEME.accent, 14)
+    const glowIntensity = isAnimated ? (10 + halfSine * 6) : 14
+    applyGlow(ctx, THEME.accent, glowIntensity)
   }
   ctx.fillStyle = THEME.accent
   ctx.font = "bold 36px sans-serif"
@@ -662,13 +532,16 @@ async function generateRankCard(data) {
   ctx.fill()
 
   // ═══════════════════════════════════════════
-  //  ✨ Shine effect (ثابت - مع gradient ناعم)
+  //  ✨ Shine effect (متحرك في GIF)
   // ═══════════════════════════════════════════
   if (hasShine && isPremium && fillW > 30) {
-    const shineX = barX + fillW * 0.7
+    // في GIF: shine يتحرك عبر الشريط
+    // في PNG: shine ثابت في موقع 70%
+    const shineProgress = isAnimated ? linearLoop : 0.7
+    const shineX = barX + fillW * shineProgress
     const shineGrad = ctx.createLinearGradient(shineX - 25, 0, shineX + 25, 0)
     shineGrad.addColorStop(0, "rgba(255, 255, 255, 0)")
-    shineGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.5)")
+    shineGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.6)")
     shineGrad.addColorStop(1, "rgba(255, 255, 255, 0)")
 
     ctx.save()
@@ -707,12 +580,196 @@ async function generateRankCard(data) {
   ctx.fillStyle = THEME.textMuted
   ctx.font = "13px sans-serif"
   ctx.fillText(`إجمالي: ${formatNumber(totalXP)} XP`, barX + barW, barY + barH + 18)
+}
+
+// ──────────────────────────────────────────────────────────
+//  Badge drawing helpers
+// ──────────────────────────────────────────────────────────
+
+function drawEnhancedBadge(ctx, x, y, size, badgeData) {
+  ctx.save()
+  const cx = x + size / 2
+  const cy = y + size / 2
+
+  const haloGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 1.2)
+  haloGrad.addColorStop(0, badgeData.color + "40")
+  haloGrad.addColorStop(0.5, badgeData.color + "20")
+  haloGrad.addColorStop(1, badgeData.color + "00")
+  ctx.fillStyle = haloGrad
+  ctx.beginPath()
+  ctx.arc(cx, cy, size * 1.2, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.shadowColor = "rgba(0, 0, 0, 0.5)"
+  ctx.shadowBlur = 4
+  ctx.shadowOffsetY = 2
+
+  const badgeGrad = ctx.createRadialGradient(cx - size * 0.2, cy - size * 0.2, 0, cx, cy, size / 2)
+  badgeGrad.addColorStop(0, lightenColor(badgeData.color, 20))
+  badgeGrad.addColorStop(0.6, badgeData.color)
+  badgeGrad.addColorStop(1, darkenColor(badgeData.color, 15))
+  ctx.fillStyle = badgeGrad
+  ctx.beginPath()
+  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.shadowColor = "transparent"
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+
+  const shineGrad = ctx.createRadialGradient(
+    cx - size * 0.25, cy - size * 0.25, 0,
+    cx - size * 0.25, cy - size * 0.25, size * 0.6
+  )
+  shineGrad.addColorStop(0, "rgba(255, 255, 255, 0.5)")
+  shineGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.1)")
+  shineGrad.addColorStop(1, "rgba(255, 255, 255, 0)")
+  ctx.fillStyle = shineGrad
+  ctx.beginPath()
+  ctx.arc(cx, cy, size / 2 - 1, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.45)"
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2)
+  ctx.stroke()
+
+  ctx.fillStyle = "#000000"
+  ctx.font = `bold ${size * 0.55}px sans-serif`
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(badgeData.icon || badgeData.emoji || "•", cx, cy + 1)
+
+  ctx.restore()
+}
+
+function drawTierBadge(ctx, x, y, tier, frameIndex = 0, totalFrames = 1) {
+  const tierData = TIER_BADGE_DATA[tier]
+  if (!tierData) return
+
+  const isLegendary = tier === "legendary"
+  const size = 18
+  const cx = x
+  const cy = y
+  const isAnimated = totalFrames > 1
+
+  ctx.save()
+
+  // Glow pulse للأسطورية (متحرك في GIF)
+  if (isLegendary) {
+    const pulseScale = isAnimated
+      ? 1 + Math.abs(Math.sin((frameIndex / totalFrames) * Math.PI * 2)) * 0.3
+      : 1
+
+    for (let i = 3; i > 0; i--) {
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, (size + i * 4) * pulseScale)
+      grad.addColorStop(0, tierData.color + "00")
+      grad.addColorStop(0.5, tierData.color + Math.floor(80 / i).toString(16).padStart(2, "0"))
+      grad.addColorStop(1, tierData.color + "00")
+      ctx.fillStyle = grad
+      ctx.beginPath()
+      ctx.arc(cx, cy, (size + i * 4) * pulseScale, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  ctx.shadowColor = "rgba(0, 0, 0, 0.6)"
+  ctx.shadowBlur = 6
+  ctx.shadowOffsetY = 2
+
+  const grad = ctx.createRadialGradient(cx - 5, cy - 5, 0, cx, cy, size)
+  grad.addColorStop(0, lightenColor(tierData.color, 25))
+  grad.addColorStop(0.7, tierData.color)
+  grad.addColorStop(1, darkenColor(tierData.color, 20))
+  ctx.fillStyle = grad
+  ctx.beginPath()
+  ctx.arc(cx, cy, size, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.shadowColor = "transparent"
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+
+  const shine = ctx.createRadialGradient(cx - 6, cy - 6, 0, cx - 6, cy - 6, size * 0.9)
+  shine.addColorStop(0, "rgba(255, 255, 255, 0.6)")
+  shine.addColorStop(1, "rgba(255, 255, 255, 0)")
+  ctx.fillStyle = shine
+  ctx.beginPath()
+  ctx.arc(cx, cy, size - 1, 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.55)"
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(cx, cy, size, 0, Math.PI * 2)
+  ctx.stroke()
+
+  ctx.fillStyle = "#000"
+  ctx.font = "bold 22px sans-serif"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(tierData.icon, cx, cy + 1)
+
+  ctx.restore()
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PRELOAD IMAGES (مشترك بين PNG و GIF)
+// ══════════════════════════════════════════════════════════════════
+
+async function preloadImages(data) {
+  const result = { avatarImage: null, bgImage: null }
+
+  const finalAvatarURL = data.customization?.avatar_url || data.avatarURL
+  if (finalAvatarURL) {
+    try {
+      result.avatarImage = await loadImage(
+        finalAvatarURL + (data.customization?.avatar_url ? "" : "?size=256")
+      )
+    } catch (err) {
+      console.error("[CARD] Failed to load avatar:", err.message)
+    }
+  }
+
+  const backgroundUrl = resolveBackgroundUrl(data.customization)
+  if (backgroundUrl) {
+    try {
+      result.bgImage = await loadImage(backgroundUrl)
+    } catch (err) {
+      console.error("[CARD] Failed to load background:", err.message)
+    }
+  }
+
+  return result
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ✨ MAIN — PNG (للجميع)
+// ══════════════════════════════════════════════════════════════════
+
+async function generateRankCard(data) {
+  const W = 900
+  const H = 250
+  const canvas = createCanvas(W, H)
+  const ctx = canvas.getContext("2d")
+
+  const { avatarImage, bgImage } = await preloadImages(data)
+
+  await drawCardFrame(
+    ctx,
+    W,
+    H,
+    { ...data, avatarImage, bgImage },
+    0,
+    1  // frame واحد = static
+  )
 
   return canvas.toBuffer("image/png")
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  ✨ GENERATE GIF (للأسطورية فقط)
+//  ✨ MAIN — GIF (للأسطورية فقط)
 // ══════════════════════════════════════════════════════════════════
 
 async function generateRankCardGIF(data) {
@@ -734,38 +791,35 @@ async function generateRankCardGIF(data) {
   const W = 900
   const H = 250
 
-  // ─── إعداد GIF Encoder (gif-encoder-2) ───
-  const encoder = new GIFEncoder(W, H, "neuquant", true)
+  // ─── تحميل الصور مرة وحدة ───
+  const { avatarImage, bgImage } = await preloadImages(data)
+
+  // ─── إعداد GIF Encoder ───
+  const encoder = new GIFEncoder(W, H)
+  encoder.start()
+  encoder.setRepeat(0)        // 0 = infinite loop
   encoder.setDelay(GIF_DELAY)
   encoder.setQuality(GIF_QUALITY)
-  encoder.setRepeat(0)
-  encoder.start()
 
+  // ─── توليد كل الـ frames ───
   const canvas = createCanvas(W, H)
   const ctx = canvas.getContext("2d")
 
-  // ─── توليد frames ───
   for (let frame = 0; frame < GIF_FRAMES; frame++) {
+    // مسح الـ canvas
     ctx.clearRect(0, 0, W, H)
 
-    // animation phase
-    const animProgress = frame / GIF_FRAMES
-    const halfSine = Math.sin(animProgress * Math.PI)
+    // رسم الـ frame
+    await drawCardFrame(
+      ctx,
+      W,
+      H,
+      { ...data, avatarImage, bgImage },
+      frame,
+      GIF_FRAMES
+    )
 
-    // عدّل البيانات قليلاً لكل frame (للحركة)
-    const frameData = {
-      ...data,
-      _animFrame: frame,
-      _animTotal: GIF_FRAMES,
-      _animProgress: animProgress,
-      _halfSine: halfSine,
-    }
-
-    // ارسم الـ frame باستخدام generateRankCard internal logic
-    const frameBuffer = await generateRankCard(frameData)
-    const frameImg = await loadImage(frameBuffer)
-    ctx.drawImage(frameImg, 0, 0)
-
+    // إضافة للـ encoder
     encoder.addFrame(ctx)
   }
 
@@ -786,6 +840,10 @@ async function generateRankCardGIF(data) {
 
   return buffer
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  EXPORTS
+// ══════════════════════════════════════════════════════════════════
 
 module.exports = {
   generateRankCard,
