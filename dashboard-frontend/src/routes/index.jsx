@@ -28,6 +28,7 @@ import SchedulerPage from '@/pages/SchedulerPage';
 import GlobalLeaderboardPage from '@/pages/GlobalLeaderboardPage';
 import OwnerAdminPage from '@/pages/OwnerAdminPage';
 import OwnerServersPage from '@/pages/OwnerServersPage'
+import OwnerPlayersPage from '@/pages/OwnerPlayersPage';
 import CardCustomizationPage from '@/pages/CardCustomizationPage';
 import CardSubscriptionPage from '@/pages/CardSubscriptionPage';
 import CardAdminPage from '@/pages/CardAdminPage';
@@ -93,6 +94,7 @@ const router = createBrowserRouter([
           // ✅ NEW: Owner Admin (محمي بـ Owner guard داخل الصفحة نفسها)
           { path: 'owner-admin', element: <OwnerAdminPage /> },
           { path: 'owner-servers', element: <OwnerServersPage /> },
+          { path: 'owner-players', element: <OwnerPlayersPage /> },
         ],
       },
       { path: '*', element: <NotFoundPage /> },

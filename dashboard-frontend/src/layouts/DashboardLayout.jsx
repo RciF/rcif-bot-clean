@@ -89,6 +89,7 @@ const OWNER_NAV_SECTION = {
   items: [
     { to: '/dashboard/owner-admin',   label: 'لوحة المالك',         icon: Crown },
     { to: '/dashboard/owner-servers', label: 'السيرفرات',           icon: Globe },
+    { to: '/dashboard/owner-players', label: 'اللاعبين',            icon: Users },
     { to: '/dashboard/card-admin',    label: 'إدارة Premium البطاقة', icon: Palette },
   ],
 };

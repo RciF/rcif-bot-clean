@@ -729,7 +729,76 @@ function startApiServer(client) {
       return res.status(500).json({ success: false, error: "internal_error" })
     }
   })
+  // ─── 5) إرسال DM لأي مستخدم (Owner only) ───
+  app.post("/api/internal/owner/dm-user", requireBotSecret, async (req, res) => {
+    try {
+      const { userId, message, fromOwnerId } = req.body || {}
 
+      if (!userId || !/^\d{15,22}$/.test(userId)) {
+        return res.status(400).json({ success: false, error: "invalid_user_id" })
+      }
+
+      if (!message || typeof message !== "string") {
+        return res.status(400).json({ success: false, error: "message_required" })
+      }
+
+      if (message.length > 2000) {
+        return res.status(400).json({ success: false, error: "message_too_long" })
+      }
+
+      // محاولة جلب المستخدم
+      let user
+      try {
+        user = await client.users.fetch(userId)
+      } catch {
+        return res.status(404).json({ success: false, error: "user_not_found" })
+      }
+
+      if (!user) {
+        return res.status(404).json({ success: false, error: "user_not_found" })
+      }
+
+      // ─── إرسال DM ───
+      const { EmbedBuilder } = require("discord.js")
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setAuthor({
+          name: "رسالة من إدارة Lyn",
+          iconURL: client.user.displayAvatarURL(),
+        })
+        .setDescription(message)
+        .setFooter({ text: "هذه رسالة رسمية من مالك البوت" })
+        .setTimestamp()
+
+      try {
+        await user.send({ embeds: [embed] })
+      } catch (err) {
+        logger.warn("OWNER_DM_USER_BLOCKED", {
+          userId,
+          error: err.message,
+        })
+        return res.status(400).json({
+          success: false,
+          error: "dm_blocked_or_failed",
+        })
+      }
+
+      logger.info("OWNER_DM_USER_SENT", {
+        userId,
+        fromOwnerId,
+        messageLength: message.length,
+      })
+
+      return res.json({
+        success: true,
+        recipient_id: userId,
+        recipient_name: user.globalName || user.username,
+      })
+    } catch (err) {
+      logger.error("OWNER_DM_USER_FAILED", { error: err.message })
+      return res.status(500).json({ success: false, error: "internal_error" })
+    }
+  })
   // ─── 4) خروج البوت من السيرفر ───
   app.post("/api/internal/owner/leave-guild", requireBotSecret, async (req, res) => {
     try {
